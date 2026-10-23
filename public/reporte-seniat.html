@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIBRO OFICIAL DE INVENTARIO SENIAT - INVERSIONES DG 67, C.A.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ucg-navy: #000080;
+      --ucg-blue: #0A5CF5;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --border-color: #cbd5e1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background-color: #f1f5f9;
+      color: var(--text-dark);
+      padding: 24px;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    /* Floating Action Bar (Hidden in Print) */
+    .print-actions-bar {
+      position: sticky;
+      top: 12px;
+      max-width: 1100px;
+      margin: 0 auto 16px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 128, 0.12);
+      border-radius: 10px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .btn-print {
+      background: linear-gradient(135deg, var(--ucg-navy), var(--ucg-blue));
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 128, 0.25);
+    }
+    .btn-print:hover { opacity: 0.95; }
+
+    .btn-excel {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+
+    .btn-back {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      color: var(--text-dark);
+    }
+
+    /* Report Sheet (Sheet of Paper) */
+    .report-sheet {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 32px 36px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      border-radius: 4px;
+    }
+
+    /* Fiscal Header */
+    .fiscal-header {
+      display: grid;
+      grid-template-columns: 140px 1fr 180px;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--ucg-navy);
+      margin-bottom: 14px;
+    }
+
+    .ucg-logo {
+      height: 60px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .header-center {
+      text-align: center;
+    }
+
+    .seniat-flag {
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .report-main-title {
+      font-size: 13.5px;
+      font-weight: 900;
+      color: var(--ucg-navy);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 3px 0;
+    }
+
+    .report-legal-ref {
+      font-size: 8.5px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .header-agency {
+      text-align: right;
+      font-size: 8.5px;
+      color: var(--text-muted);
+      border-left: 1px solid var(--border-color);
+      padding-left: 12px;
+    }
+
+    .agency-name {
+      font-size: 9.5px;
+      font-weight: 900;
+      color: var(--ucg-navy);
+      text-transform: uppercase;
+    }
+
+    /* Taxpayer Details Grid */
+    .taxpayer-box {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .data-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .data-label {
+      font-size: 7.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .data-value {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-dark);
+    }
+
+    .data-value.highlight {
+      color: var(--ucg-navy);
+      font-size: 11px;
+    }
+
+    /* Summary Bar */
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .summary-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-left: 3px solid var(--ucg-navy);
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+
+    .sc-label {
+      font-size: 7.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .sc-val {
+      font-size: 13px;
+      font-weight: 900;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--ucg-navy);
+    }
+
+    /* Table */
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 9px;
+    }
+
+    .report-table th {
+      background: #f1f5f9;
+      color: var(--ucg-navy);
+      font-size: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 6px 8px;
+      border: 1px solid var(--border-color);
+      text-align: left;
+    }
+
+    .report-table td {
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
+      color: #1e293b;
+    }
+
+    .report-table tbody tr:nth-child(even) {
+      background: #fbfcfd;
+    }
+
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .font-bold { font-weight: 700; }
+
+    /* Certification & Signatures */
+    .certification-block {
+      border: 1px solid var(--border-color);
+      background: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 8.5px;
+      color: #334155;
+      line-height: 1.45;
+      text-align: justify;
+    }
+
+    .signatures-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 36px;
+      page-break-inside: avoid;
+    }
+
+    .signature-card {
+      text-align: center;
+      border-top: 1px solid #64748b;
+      padding-top: 8px;
+    }
+
+    .sig-name {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: var(--text-dark);
+    }
+
+    .sig-role {
+      font-size: 8px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        padding: 0 !important;
+        background: #ffffff !important;
+      }
+      .print-actions-bar {
+        display: none !important;
+      }
+      .report-sheet {
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+      }
+      @page {
+        size: letter portrait;
+        margin: 8mm 10mm;
+      }
+      thead {
+        display: table-header-group;
+      }
+      tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating Print Toolbar -->
+  <div class="print-actions-bar">
+    <div style="font-weight: 800; color: var(--ucg-navy); font-size: 13px;">
+      📄 Informe Oficial de Inventario para el SENIAT
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-back" onclick="window.close()">Volver al Sistema</button>
+      <a href="/api/export/excel" id="excel-btn-link" class="btn btn-excel">Descargar en Excel</a>
+      <button class="btn btn-print" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Imprimir / Guardar PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Official Sheet -->
+  <div class="report-sheet" id="print-area">
+
+    <!-- Fiscal Header -->
+    <header class="fiscal-header">
+      <div>
+        <img src="LOGOUCG.png" alt="Unión Contable Global" class="ucg-logo">
+      </div>
+      <div class="header-center">
+        <div class="seniat-flag">República Bolivariana de Venezuela • SENIAT</div>
+        <div class="report-main-title">Libro de Inventario Físico y Movimientos</div>
+        <div class="report-legal-ref">Cumplimiento Providencia Administrativa SENIAT Nº 0257 / Art. 177 Ley de ISLR / Art. 32 Código de Comercio</div>
+      </div>
+      <div class="header-agency">
+        <div class="agency-name">Unión Contable Global</div>
+        <div>Asesoría Contable & Tributaria</div>
+        <div style="font-size: 7.5px; margin-top: 2px;">Caracas, Venezuela</div>
+      </div>
+    </header>
+
+    <!-- Taxpayer Details -->
+    <div class="taxpayer-box">
+      <div class="data-group">
+        <span class="data-label">Razón Social del Contribuyente</span>
+        <span class="data-value highlight">INVERSIONES DG 67, C.A.</span>
+        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
+          Domicilio Fiscal: Av. Sur 11 entre las esquinas Bolívar y Miranda, Casa N° 112, Local S/N, Urb. San Agustín del Norte, Caracas ZP 1010
+        </span>
+      </div>
+      <div class="data-group">
+        <span class="data-label">Registro de Información Fiscal (RIF)</span>
+        <span class="data-value font-mono highlight">J-50700865-7</span>
+        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
+          Sede Tributos Internos Libertador
+        </span>
+      </div>
+      <div class="data-group">
+        <span class="data-label">Período / Fecha de Corte</span>
+        <span class="data-value font-mono highlight" id="lbl-fecha-corte">Al Día (En Vivo)</span>
+        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
+          Moneda: USD (Referencial)
+        </span>
+      </div>
+    </div>
+
+    <!-- Summary Strip -->
+    <div class="summary-strip">
+      <div class="summary-card">
+        <div class="sc-label">Total Ítems en Catálogo</div>
+        <div class="sc-val" id="lbl-total-items">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="sc-label">Total Unidades Físicas en Existencia</div>
+        <div class="sc-val" id="lbl-total-unidades">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="sc-label">Valorización Total de Inventario</div>
+        <div class="sc-val" id="lbl-total-valor">$0.00 USD</div>
+      </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th style="width: 3%;" class="text-center">#</th>
+          <th style="width: 10%;">CÓDIGO</th>
+          <th style="width: 37%;">DESCRIPCIÓN DE LA MERCANCÍA / REPUESTO</th>
+          <th style="width: 5%;" class="text-center">UND</th>
+          <th style="width: 13%;">CATEGORÍA</th>
+          <th style="width: 8%;">ALMACÉN</th>
+          <th style="width: 7%;" class="text-right">STOCK MÍN.</th>
+          <th style="width: 8%;" class="text-right">STOCK FÍSICO</th>
+          <th style="width: 9%;" class="text-right">COSTO ($)</th>
+          <th style="width: 10%;" class="text-right">TOTAL ($)</th>
+        </tr>
+      </thead>
+      <tbody id="report-tbody">
+        <tr><td colspan="10" class="text-center">Cargando datos oficiales desde Turso Cloud...</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Legal Certification -->
+    <div class="certification-block">
+      <strong>CERTIFICACIÓN CONTABLE Y FISCAL:</strong> De conformidad con el Artículo 177 de la Ley de Impuesto Sobre la Renta (ISLR), las disposiciones del Código de Comercio de Venezuela (Artículos 32 y 33) y la Providencia Administrativa SENIAT N° 0257 reguladora de la emisión de facturas y libros contables, certificamos que el presente informe refleja con exactitud las existencias físicas reales, valuadas al costo promedio ponderado y soportadas en los registros de entradas por compras y salidas por ventas auditadas.
+    </div>
+
+    <!-- Signature Boxes -->
+    <div class="signatures-grid">
+      <div class="signature-card">
+        <div class="sig-name">DEPARTAMENTO DE ALMACÉN</div>
+        <div class="sig-role">Elaborado por / Responsable de Inventario</div>
+        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">C.I.: __________________________</div>
+      </div>
+
+      <div class="signature-card">
+        <div class="sig-name">UNIÓN CONTABLE GLOBAL</div>
+        <div class="sig-role">Revisado y Certificado por Contador Público</div>
+        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">C.P.C. N°: _____________________</div>
+      </div>
+
+      <div class="signature-card">
+        <div class="sig-name">INVERSIONES DG 67, C.A.</div>
+        <div class="sig-role">Representante Legal / Sello Húmedo</div>
+        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">RIF: J-50700865-7</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fechaCorte = urlParams.get('fecha_corte');
+
+      const lblFecha = document.getElementById('lbl-fecha-corte');
+      const excelBtn = document.getElementById('excel-btn-link');
+
+      if (fechaCorte === '2025-12-31') {
+        lblFecha.textContent = '31/12/2025 (Inventario Inicial)';
+      } else if (fechaCorte) {
+        lblFecha.textContent = `Corte al: ${fechaCorte}`;
+      } else {
+        lblFecha.textContent = 'Al Día (En Vivo)';
+      }
+
+      if (excelBtn && fechaCorte) {
+        excelBtn.href = `/api/export/excel?fecha_corte=${fechaCorte}`;
+      }
+
+      // Fetch products
+      try {
+        const query = fechaCorte ? `?fecha_corte=${fechaCorte}&limit=2000` : `?limit=2000`;
+        const res = await fetch(`/api/productos${query}`);
+        const products = await res.json();
+
+        let totalUnits = 0;
+        let totalVal = 0;
+
+        const tbody = document.getElementById('report-tbody');
+        tbody.innerHTML = products.map((p, idx) => {
+          totalUnits += (p.stock_actual || 0);
+          totalVal += (p.valor_total_usd || 0);
+
+          return `
+            <tr>
+              <td class="text-center font-mono">${idx + 1}</td>
+              <td class="font-mono font-bold" style="color: var(--ucg-navy);">${p.codigo}</td>
+              <td class="font-bold">${p.descripcion}</td>
+              <td class="text-center">${p.unidad_medida}</td>
+              <td>${p.categoria}</td>
+              <td>${p.almacen}</td>
+              <td class="text-right font-mono">${p.stock_minimo}</td>
+              <td class="text-right font-mono font-bold">${p.stock_actual}</td>
+              <td class="text-right font-mono">$${p.costo_referencial_usd.toFixed(2)}</td>
+              <td class="text-right font-mono font-bold">$${p.valor_total_usd.toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        // Summary labels
+        document.getElementById('lbl-total-items').textContent = products.length.toLocaleString();
+        document.getElementById('lbl-total-unidades').textContent = Math.round(totalUnits).toLocaleString();
+        document.getElementById('lbl-total-valor').textContent = `$${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+
+      } catch (err) {
+        document.getElementById('report-tbody').innerHTML = `<tr><td colspan="10" class="text-center" style="color: red;">Error al cargar datos del reporte: ${err.message}</td></tr>`;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INVERSIONES DG 67, C.A. | Sistema de Entradas y Salidas</title>
+  <meta name="description" content="Sistema integral en la nube para control de inventarios, kardex y registro de entradas y salidas de repuestos automotrices.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       ARQUITECTURA DE APLICACIÓN CON SIDEBAR LATERAL IZQUIERDA
+       ========================================================================== -->
+  <div class="app-layout">
+
+    <!-- BARRA LATERAL IZQUIERDA (SIDEBAR PROFESIONAL Y ESTÉTICA) -->
+    <aside class="app-sidebar" id="app-sidebar">
+      
+      <!-- 1. Encabezado de la Firma Asesora -->
+      <div class="sidebar-brand">
+        <img src="LOGOUCG.png" alt="Unión Contable Global" class="sidebar-logo">
+        <div class="sidebar-brand-text">
+          <span class="sidebar-agency-tag">AUDITORÍA & FISCALIDAD</span>
+          <div class="sidebar-agency-title">UNIÓN CONTABLE GLOBAL</div>
+        </div>
+      </div>
+
+      <!-- 2. Ficha Fiscal Oficial del Contribuyente (SENIAT RIF Digital) -->
+      <div class="sidebar-client-box" id="sidebar-client-fiscal-box">
+        <div class="client-box-header">
+          <span class="client-pill-badge">CLIENTE AUDITADO</span>
+          <span class="client-pill-status"><span class="pulse-dot"></span> RIF VIGENTE</span>
+        </div>
+        <div class="sidebar-client-name" title="INVERSIONES DG 67, C.A.">INVERSIONES DG 67, C.A.</div>
+        <div class="sidebar-client-meta font-mono">RIF: <strong>J-50700865-7</strong></div>
+        <div class="sidebar-client-condition">Contribuyente Ordinario IVA (Ret. 75%)</div>
+        <div class="sidebar-client-location">📍 San Agustín del Norte, Caracas D.C.</div>
+        <div class="sidebar-client-sede">🏛️ Región Libertador (SENIAT)</div>
+      </div>
+
+      <!-- 3. Menú de Navegación Lateral por Categorías -->
+      <nav class="sidebar-nav" id="main-nav">
+        
+        <div class="nav-section-title">GESTIÓN DE INVENTARIOS</div>
+        
+        <button class="nav-tab active" data-tab="tab-dashboard" id="btn-tab-dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+          <span>Dashboard</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-inventario" id="btn-tab-inventario">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          <span>Inventario al Día</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-entrada" id="btn-tab-entrada">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+          <span>Registrar Entrada</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-salida" id="btn-tab-salida">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+          <span>Registrar Salida</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-kardex" id="btn-tab-kardex">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          <span>Kardex por Repuesto</span>
+        </button>
+
+        <div class="nav-section-title">CONTROL FISCAL & SENIAT</div>
+
+        <button class="nav-tab" data-tab="tab-libro-compras" id="btn-tab-libro-compras">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          <span>Libro de Compras</span>
+          <span class="nav-badge-pill" style="background:#e0f2fe; color:#0369a1;">SENIAT</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-libro-ventas" id="btn-tab-libro-ventas">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+          <span>Libro de Ventas</span>
+          <span class="nav-badge-pill" style="background:#fef3c7; color:#92400e;">ZOA</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-declaraciones" id="btn-tab-declaraciones">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Declaración IVA (Forma 30)</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-proveedores" id="btn-tab-proveedores">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>Panel de Proveedores</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-fiscal" id="btn-tab-fiscal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Cruce Fiscal vs Almacén</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-mensual" id="btn-tab-mensual">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span>Cierre Físico Mes a Mes</span>
+        </button>
+
+        <button class="nav-tab" data-tab="tab-movimientos" id="btn-tab-movimientos">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>Auditoría Movimientos</span>
+        </button>
+      </nav>
+
+      <!-- 4. Pie de la Barra Lateral: Estado en la Nube -->
+      <div class="sidebar-footer">
+        <div class="cloud-badge-sidebar" id="cloud-badge" title="Turso Cloud libSQL Encriptado">
+          <span class="status-pulse"></span>
+          <div class="cloud-status-info">
+            <span class="cloud-title">Turso Cloud Activo</span>
+            <span class="cloud-sub">Base de datos sincronizada</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Fondo oscuro backdrop para móviles -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- ÁREA DE CONTENIDO PRINCIPAL (DERECHA) -->
+    <div class="app-main-wrapper">
+      
+      <!-- BARRA SUPERIOR EJECUTIVA (TOPBAR COMPACTA) -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="btn-toggle-sidebar" aria-label="Abrir Menú de Navegación">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <div class="topbar-client-tag">
+            <span class="tag-title">CONTRIBUYENTE:</span>
+            <span class="tag-name">INVERSIONES DG 67, C.A.</span>
+            <span class="tag-rif font-mono">RIF: J-50700865-7</span>
+            <span class="tag-loc font-mono" style="font-size: 0.72rem; color: #64748b; background: #e2e8f0; padding: 2px 7px; border-radius: 4px;">Caracas, D.C.</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <span class="topbar-period-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            Período Fiscal: <strong>31/12/2025 – Sep 2026</strong>
+          </span>
+
+          <a href="/api/export/excel" class="btn btn-action-excel" id="btn-export-excel" title="Exportar existencias y valoración a Excel">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Exportar Excel</span>
+          </a>
+
+          <a href="/reporte-seniat.html" target="_blank" class="btn btn-action-pdf" id="btn-export-pdf" title="Generar Libro Oficial SENIAT (PDF)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>Informe SENIAT (PDF)</span>
+          </a>
+        </div>
+      </header>
+
+      <!-- Main Container -->
+      <main class="main-content">
+
+    <!-- 1. TAB: DASHBOARD -->
+    <section id="tab-dashboard" class="tab-pane active">
+      <div class="page-header">
+        <div>
+          <h1>Panel de Control de Inventario</h1>
+          <p class="subtitle">Visión general en tiempo real de existencias, valorización y alertas de reposición.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-emerald" onclick="switchTab('tab-entrada')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Nueva Entrada (Compra)
+          </button>
+          <button class="btn btn-rose" onclick="switchTab('tab-salida')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
+            Nueva Salida (Venta)
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Cards Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card card-cyan">
+          <div class="kpi-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          </div>
+          <div class="kpi-info">
+            <span class="kpi-label">Total Repuestos</span>
+            <span class="kpi-value" id="kpi-total-productos">--</span>
+            <span class="kpi-detail">En 80 categorías activas</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-indigo">
+          <div class="kpi-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+          </div>
+          <div class="kpi-info">
+            <span class="kpi-label">Unidades en Existencia</span>
+            <span class="kpi-value" id="kpi-stock-unidades">--</span>
+            <span class="kpi-detail">Almacenes Multimarcas y Autoperiquitos</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-emerald">
+          <div class="kpi-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          </div>
+          <div class="kpi-info">
+            <span class="kpi-label">Valorización de Inventario</span>
+            <span class="kpi-value" id="kpi-valor-total">--</span>
+            <span class="kpi-detail">Calculado a costo referencial USD</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-amber">
+          <div class="kpi-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div class="kpi-info">
+            <span class="kpi-label">Alertas de Reposición</span>
+            <span class="kpi-value alert-text" id="kpi-alertas-stock">--</span>
+            <span class="kpi-detail">Stock ≤ Mínimo requerido</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Split: Top Categories & Recent Transactions -->
+      <div class="dashboard-split">
+        <!-- Top Categories Card -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>Distribución por Categorías Principales</h3>
+          </div>
+          <div class="category-list" id="category-bars">
+            <div class="loading-spinner">Cargando categorías...</div>
+          </div>
+        </div>
+
+        <!-- Recent Transactions Card -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>Últimos Movimientos Registrados</h3>
+            <button class="btn-text" onclick="switchTab('tab-movimientos')">Ver todos &rarr;</button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="table-recent-movs">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Documento</th>
+                  <th>Proveedor / Cliente</th>
+                  <th>Cant.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" class="text-center">Cargando movimientos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. TAB: INVENTARIO AL DÍA -->
+    <section id="tab-inventario" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Inventario en Existencia al Día</h1>
+          <p class="subtitle">Catálogo unificado y balance de existencias sincronizado en Turso Cloud.</p>
+        </div>
+        <div class="header-buttons">
+          <a href="/api/export/excel" class="btn btn-emerald" id="btn-tab-export-excel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Descargar Excel
+          </a>
+          <a href="/reporte-seniat.html" target="_blank" class="btn btn-outline-pdf" id="btn-tab-export-pdf" title="Generar Informe Oficial SENIAT en PDF">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Informe PDF (SENIAT)
+          </a>
+        </div>
+      </div>
+
+      <!-- Filter Controls Bar -->
+      <div class="filters-card">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="inv-search" placeholder="Buscar por código (ej: A1, 5338, SAE10W30) o descripción..." autocomplete="off">
+        </div>
+        <div class="select-group">
+          <select id="inv-periodo-corte" style="background: #eff6ff; border: 1.5px solid #bfdbfe; font-weight: 700; color: #000080;">
+            <option value="">📌 Inventario al Día (Tiempo Real)</option>
+            <option value="2025-12-31">🏁 Inventario Inicial (31/12/2025)</option>
+            <option value="2026-01-31">📅 Cierre Enero 2026</option>
+            <option value="2026-02-28">📅 Cierre Febrero 2026</option>
+            <option value="2026-03-31">📅 Cierre Marzo 2026</option>
+            <option value="2026-04-30">📅 Cierre Abril 2026</option>
+            <option value="2026-05-31">📅 Cierre Mayo 2026</option>
+            <option value="2026-06-30">📅 Cierre Junio 2026</option>
+            <option value="2026-07-31">📅 Cierre Julio 2026</option>
+            <option value="2026-08-31">📅 Cierre Agosto 2026</option>
+          </select>
+          <select id="inv-filter-cat">
+            <option value="TODAS">Todas las Categorías</option>
+          </select>
+          <select id="inv-filter-alm">
+            <option value="TODOS">Todos los Almacenes</option>
+          </select>
+          <select id="inv-filter-estado">
+            <option value="TODOS">Todos los Estados</option>
+            <option value="SOLICITAR MATERIAL">⚠️ Solicitar Material</option>
+            <option value="HAY SUFICIENTE">✅ Hay Suficiente</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Inventory Table -->
+      <div class="panel-card table-panel">
+        <div class="table-meta">
+          <span id="inv-count-badge">Mostrando 0 productos</span>
+        </div>
+        <div class="table-responsive table-scroll">
+          <table class="data-table" id="table-inventario">
+            <thead>
+              <tr>
+                <th>CÓDIGO</th>
+                <th>DESCRIPCIÓN</th>
+                <th>UND</th>
+                <th>CATEGORÍA</th>
+                <th>ALMACÉN</th>
+                <th class="text-right">STOCK MÍN.</th>
+                <th class="text-right">STOCK ACTUAL</th>
+                <th class="text-right">COSTO ($)</th>
+                <th class="text-right">VALOR ($)</th>
+                <th class="text-center">ESTADO</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-inventario">
+              <tr><td colspan="11" class="text-center">Cargando inventario...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. TAB: REGISTRAR ENTRADA (COMPRAS) -->
+    <section id="tab-entrada" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Registrar Entrada de Mercancía (Compras)</h1>
+          <p class="subtitle">Registra el ingreso de repuestos, vinculando proveedor, factura de compra y costos.</p>
+        </div>
+      </div>
+
+      <div class="form-container">
+        <form id="form-entrada" class="movement-form">
+          <!-- Document Header -->
+          <div class="form-section">
+            <h3 class="section-title">1. Datos del Documento</h3>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="ent-fecha">Fecha del Ingreso *</label>
+                <input type="date" id="ent-fecha" required>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-factura">Número de Factura / Control Fiscal *</label>
+                <input type="text" id="ent-factura" placeholder="Ej: FACT 4589" required>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-proveedor">Proveedor *</label>
+                <select id="ent-proveedor" required>
+                  <option value="">Seleccione Proveedor...</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-obs">Observaciones</label>
+                <input type="text" id="ent-obs" placeholder="Nota opcional o detalle del despacho">
+              </div>
+            </div>
+          </div>
+
+          <!-- Items Detail -->
+          <div class="form-section">
+            <div class="section-header-flex">
+              <h3 class="section-title">2. Lista de Repuestos</h3>
+              <button type="button" class="btn btn-sm btn-emerald" id="btn-add-item-ent">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                Agregar Ítem
+              </button>
+            </div>
+
+            <div class="items-table-wrapper">
+              <table class="items-entry-table" id="table-items-entrada">
+                <thead>
+                  <tr>
+                    <th style="width: 45%;">Producto / Repuesto</th>
+                    <th style="width: 15%;" class="text-right">Cantidad</th>
+                    <th style="width: 20%;" class="text-right">Costo Unitario ($)</th>
+                    <th style="width: 15%;" class="text-right">Subtotal ($)</th>
+                    <th style="width: 5%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-items-entrada">
+                  <!-- Dynamic rows added by JS -->
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="3" class="text-right font-bold">TOTAL COMPRA ($ USD):</td>
+                    <td class="text-right font-bold" id="total-entrada-usd">$0.00</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- Submit Buttons -->
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="resetForm('form-entrada')">Limpiar Formulario</button>
+            <button type="submit" class="btn btn-emerald btn-lg" id="btn-submit-entrada">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Guardar Entrada en Turso Cloud
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 4. TAB: REGISTRAR SALIDA (VENTAS) -->
+    <section id="tab-salida" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Registrar Salida de Mercancía (Ventas / Despachos)</h1>
+          <p class="subtitle">Registra ventas con validación en tiempo real de existencias para prevenir stock negativo.</p>
+        </div>
+      </div>
+
+      <div class="form-container">
+        <form id="form-salida" class="movement-form">
+          <!-- Document Header -->
+          <div class="form-section">
+            <h3 class="section-title">1. Datos de la Venta / Factura</h3>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="sal-fecha">Fecha de Salida *</label>
+                <input type="date" id="sal-fecha" required>
+              </div>
+
+              <div class="form-field">
+                <label for="sal-factura">Número de Factura de Venta *</label>
+                <input type="text" id="sal-factura" placeholder="Ej: FACT 2223" required>
+              </div>
+
+              <div class="form-field">
+                <label for="sal-obs">Cliente / Observaciones</label>
+                <input type="text" id="sal-obs" placeholder="Cliente o nota de entrega">
+              </div>
+            </div>
+          </div>
+
+          <!-- Items Detail -->
+          <div class="form-section">
+            <div class="section-header-flex">
+              <h3 class="section-title">2. Repuestos a Despachar</h3>
+              <button type="button" class="btn btn-sm btn-rose" id="btn-add-item-sal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                Agregar Ítem
+              </button>
+            </div>
+
+            <div class="items-table-wrapper">
+              <table class="items-entry-table" id="table-items-salida">
+                <thead>
+                  <tr>
+                    <th style="width: 50%;">Producto / Repuesto</th>
+                    <th style="width: 20%;" class="text-center">Stock Disponible</th>
+                    <th style="width: 25%;" class="text-right">Cantidad a Despachar</th>
+                    <th style="width: 5%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-items-salida">
+                  <!-- Dynamic rows added by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Submit Buttons -->
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="resetForm('form-salida')">Limpiar Formulario</button>
+            <button type="submit" class="btn btn-rose btn-lg" id="btn-submit-salida">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Guardar Salida en Turso Cloud
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 5. TAB: KARDEX -->
+    <section id="tab-kardex" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Consulta de Kardex por Repuesto</h1>
+          <p class="subtitle">Historial cronológico completo de entradas, salidas y saldos acumulados de cualquier producto.</p>
+        </div>
+      </div>
+
+      <div class="filters-card">
+        <div class="search-box" style="flex: 2;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="kardex-search-input" placeholder="Escribe el código exacto o selecciona un repuesto (ej: A1, 513, 5338)...">
+        </div>
+        <button class="btn btn-emerald" id="btn-search-kardex">Consultar Kardex</button>
+      </div>
+
+      <!-- Kardex Summary Header Card -->
+      <div class="panel-card kardex-header-card" id="kardex-product-info" style="display: none;">
+        <div class="kardex-prod-details">
+          <div class="badge-code" id="kardex-code">--</div>
+          <div>
+            <h2 id="kardex-desc">--</h2>
+            <div class="meta-tags">
+              <span class="meta-tag" id="kardex-cat">Categoría: --</span>
+              <span class="meta-tag" id="kardex-alm">Almacén: --</span>
+              <span class="meta-tag" id="kardex-und">Unidad: --</span>
+            </div>
+          </div>
+        </div>
+        <div class="kardex-metrics">
+          <div class="kardex-metric">
+            <span class="k-label">Stock Actual</span>
+            <span class="k-value" id="kardex-stock">--</span>
+          </div>
+          <div class="kardex-metric">
+            <span class="k-label">Costo Referencial</span>
+            <span class="k-value" id="kardex-cost">$0.00</span>
+          </div>
+          <div class="kardex-metric">
+            <span class="k-label">Estado</span>
+            <span class="k-badge" id="kardex-status">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kardex Ledger Table -->
+      <div class="panel-card table-panel" id="kardex-table-container" style="display: none;">
+        <div class="table-responsive">
+          <table class="data-table" id="table-kardex">
+            <thead>
+              <tr>
+                <th>FECHA</th>
+                <th>TIPO</th>
+                <th>DOCUMENTO</th>
+                <th>TERCERO / PROVEEDOR</th>
+                <th class="text-right">ENTRADAS</th>
+                <th class="text-right">SALIDAS</th>
+                <th class="text-right">SALDO RESULTANTE</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-kardex">
+              <!-- Filled dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5.1 TAB: CIERRE MES A MES -->
+    <section id="tab-mensual" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Conciliación y Cierre de Inventario Mes a Mes</h1>
+          <p class="subtitle">Evolución contable desde el inventario inicial al 31/12/2025 hasta agosto 2026.</p>
+        </div>
+      </div>
+
+      <!-- Monthly Summary Table -->
+      <div class="panel-card table-panel">
+        <div class="table-responsive">
+          <table class="data-table" id="table-mensual">
+            <thead>
+              <tr>
+                <th>PERÍODO / MES</th>
+                <th class="text-right">SALDO INICIAL</th>
+                <th class="text-right" style="color: #34d399;">COMPRAS / ENTRADAS</th>
+                <th class="text-right">COMPRAS ($ USD)</th>
+                <th class="text-right" style="color: #fb7185;">VENTAS / SALIDAS</th>
+                <th class="text-right" style="color: #818cf8;">SALDO FINAL (UND)</th>
+                <th class="text-center">DOCS</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-mensual">
+              <tr><td colspan="8" class="text-center">Cargando reporte mensual...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Explanatory Alert Card -->
+      <div class="panel-card" style="margin-top: 24px; border-left: 4px solid var(--ucg-navy); background: #f8fafc;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 6px; color: var(--ucg-navy);">💡 Cómo funciona el Cierre Mes a Mes:</h3>
+        <p style="font-size: 0.83rem; color: var(--text-secondary); line-height: 1.5;">
+          • <strong>Inventario Inicial 2026:</strong> Corresponde con exactitud al corte del <strong>31/12/2025</strong> con <strong>4.451 unidades</strong> en 658 repuestos valorados.<br>
+          • <strong>Conciliación Continua:</strong> En cada mes, el <code>Saldo Final = Saldo Inicial + Entradas - Salidas</code>. Al hacer clic en <em>"Ver Productos al Corte"</em>, la tabla de inventario se ajusta automáticamente a ese día exacto, permitiéndote exportar el libro oficial de ese mes a Excel.
+        </p>
+      </div>
+    </section>
+
+    <!-- 6. TAB: HISTORIAL DE MOVIMIENTOS -->
+    <section id="tab-movimientos" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Histórico de Movimientos de Inventario</h1>
+          <p class="subtitle">Auditoría completa de compras, ventas y ajustes desde el 31/12/2025.</p>
+        </div>
+      </div>
+
+      <div class="filters-card">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="mov-search" placeholder="Buscar por número de factura o proveedor...">
+        </div>
+        <div class="select-group">
+          <select id="mov-filter-tipo">
+            <option value="TODOS">Todos los Tipos</option>
+            <option value="ENTRADA_COMPRA">📥 Compras / Entradas</option>
+            <option value="SALIDA_VENTA">📤 Ventas / Salidas</option>
+            <option value="INVENTARIO_INICIAL">🏁 Inventario Inicial</option>
+          </select>
+          <input type="date" id="mov-filter-desde" title="Fecha Desde">
+          <input type="date" id="mov-filter-hasta" title="Fecha Hasta">
+        </div>
+      </div>
+
+      <div class="panel-card table-panel">
+        <div class="table-responsive table-scroll">
+          <table class="data-table" id="table-movimientos">
+            <thead>
+              <tr>
+                <th>FECHA</th>
+                <th>TIPO</th>
+                <th>DOCUMENTO</th>
+                <th>PROVEEDOR / CLIENTE</th>
+                <th class="text-right">ÍTEMS</th>
+                <th class="text-right">TOTAL UNIDADES</th>
+                <th>OBSERVACIONES</th>
+                <th class="text-center">DETALLES</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-movimientos">
+              <tr><td colspan="8" class="text-center">Cargando histórico...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 7. TAB: LIBRO DE COMPRAS SENIAT                                        -->
+    <!-- ====================================================================== -->
+    <section id="tab-libro-compras" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Libro de Compras Fiscal SENIAT</h1>
+          <p class="subtitle">Registro oficial según Art. 75 y 76 del Reglamento del IVA. Carga directa de facturas para sustituir el XLS.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-navy" onclick="openModalNuevaCompra()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            + Nueva Factura de Compra
+          </button>
+          <button class="btn btn-secondary" onclick="imprimirLibroCompras()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            🖨️ Imprimir Libro Oficial
+          </button>
+          <button class="btn btn-action-excel" onclick="exportarLibroComprasExcel()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card card-cyan">
+          <div class="kpi-label">TOTAL FACTURAS</div>
+          <div class="kpi-value" id="kpi-compras-count">0</div>
+          <div class="kpi-sub" id="kpi-compras-periodo-sub">Período Seleccionado</div>
+        </div>
+        <div class="kpi-card card-indigo">
+          <div class="kpi-label">BASE IMPONIBLE (BS)</div>
+          <div class="kpi-value" id="kpi-compras-base">0,00 Bs.</div>
+          <div class="kpi-sub">Compras Internas Gravadas 16%</div>
+        </div>
+        <div class="kpi-card card-emerald">
+          <div class="kpi-label">CRÉDITO FISCAL IVA (BS)</div>
+          <div class="kpi-value" id="kpi-compras-iva">0,00 Bs.</div>
+          <div class="kpi-sub">Crédito deducible ante el SENIAT</div>
+        </div>
+        <div class="kpi-card card-amber">
+          <div class="kpi-label">IVA RETENIDO (BS)</div>
+          <div class="kpi-value" id="kpi-compras-ret">0,00 Bs.</div>
+          <div class="kpi-sub">Retenciones soportadas (75% / 100%)</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-card">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="compras-search" placeholder="Buscar por RIF, proveedor o número de factura..." oninput="filterLibroComprasLocal()">
+        </div>
+        <div class="select-group">
+          <select id="compras-periodo-select" onchange="loadLibroCompras()">
+            <option value="2026-10">📅 Octubre 2026 (Mes en Proceso)</option>
+            <option value="2026-09">Septiembre 2026</option>
+            <option value="2026-08">Agosto 2026</option>
+            <option value="2026-07">Julio 2026</option>
+            <option value="2026-06">Junio 2026</option>
+            <option value="2026-05">Mayo 2026</option>
+            <option value="2026-04">Abril 2026</option>
+            <option value="2026-03">Marzo 2026</option>
+            <option value="2026-02">Febrero 2026</option>
+            <option value="2026-01">Enero 2026</option>
+            <option value="TODOS">Ver Todo el Histórico 2026</option>
+          </select>
+          <select id="compras-tipo-select" onchange="loadLibroCompras()">
+            <option value="TODOS">Todos los Tipos de Servicio</option>
+            <option value="MERCANCIA_REPUESTOS">📦 Mercancía / Repuestos</option>
+            <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Asesoría</option>
+            <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas / Máquinas Fiscales</option>
+            <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+            <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Alimentación / Consumo</option>
+            <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="panel-card table-panel">
+        <div class="table-responsive table-scroll">
+          <table class="data-table" id="table-libro-compras-seniat">
+            <thead>
+              <tr>
+                <th style="width: 50px;">N° OP</th>
+                <th>FECHA</th>
+                <th>RIF</th>
+                <th>PROVEEDOR / RAZÓN SOCIAL</th>
+                <th>FACTURA</th>
+                <th>CONTROL</th>
+                <th class="text-right">BASE IMP. (BS)</th>
+                <th class="text-center">ALÍCUOTA</th>
+                <th class="text-right">IVA (BS)</th>
+                <th class="text-right">TOTAL FACTURA (BS)</th>
+                <th class="text-right">IVA RETENIDO (BS)</th>
+                <th>CLASIFICACIÓN</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-libro-compras">
+              <tr><td colspan="13" class="text-center">Cargando libro de compras fiscal...</td></tr>
+            </tbody>
+            <tfoot id="tfoot-libro-compras" style="background: #f8fafc; font-weight: 800;">
+              <tr>
+                <td colspan="6" class="text-right">TOTALES DEL PERÍODO:</td>
+                <td class="text-right" id="tot-compras-base">0,00</td>
+                <td></td>
+                <td class="text-right" id="tot-compras-iva">0,00</td>
+                <td class="text-right" id="tot-compras-total">0,00</td>
+                <td class="text-right" id="tot-compras-ret">0,00</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 8. TAB: LIBRO DE VENTAS SENIAT                                         -->
+    <!-- ====================================================================== -->
+    <section id="tab-libro-ventas" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Libro de Ventas Fiscal SENIAT</h1>
+          <p class="subtitle">Registro fiscal de operaciones de venta diaria e impresora ZOA0000176 según Art. 77 del Reglamento de IVA.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-navy" onclick="openModalNuevaVenta()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            + Registrar Venta / Reporte Z
+          </button>
+          <button class="btn btn-secondary" onclick="imprimirLibroVentas()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            🖨️ Imprimir Libro Oficial
+          </button>
+          <button class="btn btn-action-excel" onclick="exportarLibroVentasExcel()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card card-cyan">
+          <div class="kpi-label">TOTAL REGISTROS / REPORTES</div>
+          <div class="kpi-value" id="kpi-ventas-count">0</div>
+          <div class="kpi-sub" id="kpi-ventas-periodo-sub">Período Seleccionado</div>
+        </div>
+        <div class="kpi-card card-indigo">
+          <div class="kpi-label">COMPROBANTES EMITIDOS</div>
+          <div class="kpi-value" id="kpi-ventas-comprobantes">0</div>
+          <div class="kpi-sub">Tickets / Facturas Fiscales</div>
+        </div>
+        <div class="kpi-card card-emerald">
+          <div class="kpi-label">BASE IMPONIBLE (BS)</div>
+          <div class="kpi-value" id="kpi-ventas-base">0,00 Bs.</div>
+          <div class="kpi-sub">Ventas Internas Gravadas 16%</div>
+        </div>
+        <div class="kpi-card card-rose">
+          <div class="kpi-label">DÉBITO FISCAL IVA (BS)</div>
+          <div class="kpi-value" id="kpi-ventas-iva">0,00 Bs.</div>
+          <div class="kpi-sub">Impuesto generado (16%)</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-card">
+        <div class="select-group">
+          <select id="ventas-periodo-select" onchange="loadLibroVentas()">
+            <option value="2026-10">📅 Octubre 2026 (Mes en Proceso)</option>
+            <option value="2026-09">Septiembre 2026</option>
+            <option value="2026-08">Agosto 2026</option>
+            <option value="2026-07">Julio 2026</option>
+            <option value="2026-06">Junio 2026</option>
+            <option value="2026-05">Mayo 2026</option>
+            <option value="2026-04">Abril 2026</option>
+            <option value="2026-03">Marzo 2026</option>
+            <option value="2026-02">Febrero 2026</option>
+            <option value="2026-01">Enero 2026</option>
+            <option value="TODOS">Ver Todo el Histórico 2026</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="panel-card table-panel">
+        <div class="table-responsive table-scroll">
+          <table class="data-table" id="table-libro-ventas-seniat">
+            <thead>
+              <tr>
+                <th style="width: 50px;">N° OP</th>
+                <th>FECHA REPORTE</th>
+                <th>DESDE FACTURA</th>
+                <th>HASTA FACTURA</th>
+                <th class="text-center">COMPROBANTES</th>
+                <th class="text-right">EXENTO (BS)</th>
+                <th class="text-right">BASE IMPONIBLE (BS)</th>
+                <th class="text-center">ALÍCUOTA</th>
+                <th class="text-right">DÉBITO FISCAL (BS)</th>
+                <th class="text-right">TOTAL VENTAS (BS)</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-libro-ventas">
+              <tr><td colspan="11" class="text-center">Cargando libro de ventas fiscal...</td></tr>
+            </tbody>
+            <tfoot id="tfoot-libro-ventas" style="background: #f8fafc; font-weight: 800;">
+              <tr>
+                <td colspan="4" class="text-right">TOTALES DEL PERÍODO:</td>
+                <td class="text-center" id="tot-ventas-cant">0</td>
+                <td class="text-right" id="tot-ventas-exento">0,00</td>
+                <td class="text-right" id="tot-ventas-base">0,00</td>
+                <td></td>
+                <td class="text-right" id="tot-ventas-iva">0,00</td>
+                <td class="text-right" id="tot-ventas-total">0,00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 9. TAB: DECLARACIONES Y RESUMEN IVA FORMA 30 SENIAT                    -->
+    <!-- ====================================================================== -->
+    <section id="tab-declaraciones" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Declaración Mensual de IVA (Forma 30 SENIAT)</h1>
+          <p class="subtitle">Autoliquidación del impuesto, cruce de débitos vs. créditos, arrastre de excedentes y cuota tributaria.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-navy" onclick="imprimirDeclaracionForma30()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            🖨️ Imprimir Forma 30 Oficial
+          </button>
+        </div>
+      </div>
+
+      <!-- Period selector for declaration -->
+      <div class="filters-card" style="margin-bottom: 20px;">
+        <div style="font-weight: 800; color: var(--ucg-navy); font-size: 0.95rem;">Seleccionar Mes a Declarar / Auditar:</div>
+        <div class="select-group">
+          <select id="decl-periodo-select" onchange="loadDeclaracionDetalle()" style="min-width: 260px; font-weight: 700;">
+            <option value="2026-10">📅 Octubre 2026 (Mes Actual - En Preparación)</option>
+            <option value="2026-09">Septiembre 2026 (Declarado)</option>
+            <option value="2026-08">Agosto 2026 (Declarado)</option>
+            <option value="2026-07">Julio 2026 (Declarado)</option>
+            <option value="2026-06">Junio 2026 (Declarado)</option>
+            <option value="2026-05">Mayo 2026 (Declarado)</option>
+            <option value="2026-04">Abril 2026 (Declarado)</option>
+            <option value="2026-03">Marzo 2026 (Declarado)</option>
+            <option value="2026-02">Febrero 2026 (Declarado)</option>
+            <option value="2026-01">Enero 2026 (Declarado)</option>
+          </select>
+          <span class="nav-badge-pill" id="decl-status-badge" style="padding: 6px 14px; font-size: 0.82rem; background: #dbeafe; color: #1e40af;">EN PROCESO</span>
+        </div>
+      </div>
+
+      <!-- FORMA 30 3-COLUMN CARDS -->
+      <div class="forma30-grid">
+        <!-- Panel 1: Débitos Fiscales (Ventas) -->
+        <div class="forma30-card" style="border-top: 4px solid #0A5CF5;">
+          <div class="forma30-card-header">
+            <span class="forma30-title">I. DÉBITOS FISCALES (VENTAS)</span>
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--ucg-blue-accent);">Ventas Facturadas</span>
+          </div>
+          <div class="forma30-row">
+            <span>Ventas Internas Gravadas (16%):</span>
+            <span class="forma30-val" id="f30-ventas-base">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Débito Fiscal IVA (16%):</span>
+            <span class="forma30-val" id="f30-ventas-debito" style="color: #0A5CF5;">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Ventas Exentas / No Gravadas:</span>
+            <span class="forma30-val" id="f30-ventas-exento">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Días / Reportes de Venta Registrados:</span>
+            <span class="forma30-val" id="f30-ventas-dias">0 días</span>
+          </div>
+          <div class="forma30-row total-row">
+            <span>TOTAL DÉBITOS FISCALES:</span>
+            <span class="forma30-val" id="f30-total-debitos" style="color: #0A5CF5;">0,00 Bs.</span>
+          </div>
+        </div>
+
+        <!-- Panel 2: Créditos Fiscales (Compras) -->
+        <div class="forma30-card" style="border-top: 4px solid #166534;">
+          <div class="forma30-card-header">
+            <span class="forma30-title">II. CRÉDITOS FISCALES (COMPRAS)</span>
+            <span style="font-size: 0.8rem; font-weight: 700; color: #166534;">Compras & Arrastre</span>
+          </div>
+          <div class="forma30-row">
+            <span>Compras Internas Gravadas (16%):</span>
+            <span class="forma30-val" id="f30-compras-base">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Crédito Fiscal del Mes (16%):</span>
+            <span class="forma30-val" id="f30-compras-credito" style="color: #166534;">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Excedente Crédito Mes Anterior:</span>
+            <span class="forma30-val" id="f30-excedente-anterior" style="color: #0284c7;">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Facturas de Compra Declaradas:</span>
+            <span class="forma30-val" id="f30-compras-facs">0 facturas</span>
+          </div>
+          <div class="forma30-row total-row">
+            <span>TOTAL CRÉDITO FISCAL DEDUCIBLE:</span>
+            <span class="forma30-val" id="f30-total-creditos" style="color: #166534;">0,00 Bs.</span>
+          </div>
+        </div>
+
+        <!-- Panel 3: Determinación y Resultado Fiscal -->
+        <div class="forma30-card" id="f30-card-resultado" style="border-top: 4px solid var(--ucg-navy);">
+          <div class="forma30-card-header">
+            <span class="forma30-title">III. LIQUIDACIÓN DEL IMPUESTO</span>
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--ucg-navy);">Resultado SENIAT</span>
+          </div>
+          <div class="forma30-row">
+            <span>Débitos Fiscales del Período:</span>
+            <span class="forma30-val" id="f30-res-debitos">0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Menos Créditos Deducibles:</span>
+            <span class="forma30-val" id="f30-res-creditos">- 0,00 Bs.</span>
+          </div>
+          <div class="forma30-row">
+            <span>Retenciones IVA Soportadas:</span>
+            <span class="forma30-val" id="f30-res-retenciones">- 0,00 Bs.</span>
+          </div>
+          
+          <!-- Box Highlight Result -->
+          <div id="f30-box-resultado" class="highlight-box-favor">
+            <div id="f30-lbl-resultado" style="font-size: 0.85rem; font-weight: 800; text-transform: uppercase;">EXCEDENTE DE CRÉDITO PARA EL MES SIGUIENTE:</div>
+            <div class="highlight-num" id="f30-val-resultado">0,00 Bs.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary History Table (All 2026 Months Side by Side) -->
+      <div class="panel-card table-panel" style="margin-top: 24px;">
+        <div style="padding: 18px 20px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--ucg-navy);">Histórico Consolidado de Declaraciones IVA 2026 (Enero a Octubre)</h3>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Valores oficiales auditados</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="table-declaraciones-historico">
+            <thead>
+              <tr>
+                <th>PERÍODO</th>
+                <th class="text-right">VENTAS BASE (BS)</th>
+                <th class="text-right">DÉBITO FISCAL (BS)</th>
+                <th class="text-right">COMPRAS BASE (BS)</th>
+                <th class="text-right">CRÉDITO FISCAL (BS)</th>
+                <th class="text-right">EXCEDENTE ANTERIOR (BS)</th>
+                <th class="text-right">EXCEDENTE SIGUIENTE (BS)</th>
+                <th class="text-right">TOTAL A PAGAR (BS)</th>
+                <th class="text-center">ESTATUS</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-declaraciones-historico">
+              <tr><td colspan="9" class="text-center">Cargando histórico anual...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 10. TAB: PANEL DE PROVEEDORES                                          -->
+    <!-- ====================================================================== -->
+    <section id="tab-proveedores" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Directorio y Panel de Proveedores</h1>
+          <p class="subtitle">Directorio de proveedores registrados, RIF fiscal, retenciones aplicables y clasificación de servicio.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-navy" onclick="openModalNuevoProveedor()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            + Registrar Nuevo Proveedor
+          </button>
+        </div>
+      </div>
+
+      <div class="filters-card">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="prov-panel-search" placeholder="Buscar por RIF o Razón Social..." oninput="filterProveedoresPanel()">
+        </div>
+        <div class="select-group">
+          <select id="prov-panel-tipo" onchange="filterProveedoresPanel()">
+            <option value="TODOS">Todos los Tipos de Servicio</option>
+            <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
+            <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
+            <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
+            <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+            <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
+            <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+            <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-card table-panel">
+        <div class="table-responsive table-scroll">
+          <table class="data-table" id="table-proveedores-panel">
+            <thead>
+              <tr>
+                <th style="width: 14%;">RIF</th>
+                <th style="width: 30%;">PROVEEDOR / RAZÓN SOCIAL</th>
+                <th style="width: 25%;">CLASIFICACIÓN DE SERVICIO</th>
+                <th style="width: 12%;" class="text-center">¿AFECTA INVENTARIO?</th>
+                <th style="width: 10%;" class="text-center">% RETENCIÓN</th>
+                <th style="width: 9%;" class="text-center">ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-proveedores-panel">
+              <tr><td colspan="6" class="text-center">Cargando directorio de proveedores...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. TAB: AUDITORÍA Y CRUCE FISCAL (LIBROS IVA VS INVENTARIO) -->
+    <section id="tab-fiscal" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Auditoría y Cruce Fiscal (Libros IVA vs. Entradas y Salidas)</h1>
+          <p class="subtitle">Conciliación tributaria de facturas de compras, ventas fiscales e inventario con clasificación de proveedores.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-navy" onclick="loadFiscalReconciliation()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Refrescar Cruce
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div class="kpi-card card-cyan">
+          <div class="kpi-label">TOTAL FACTURAS DECLARADAS</div>
+          <div class="kpi-value" id="kpi-fiscal-total-facturas">74</div>
+          <div class="kpi-sub">Libros de Compras (Ene - Sep 2026)</div>
+        </div>
+
+        <div class="kpi-card card-emerald">
+          <div class="kpi-label">COMPRAS CUADRADAS CON ALMACÉN</div>
+          <div class="kpi-value" id="kpi-fiscal-cuadradas">6</div>
+          <div class="kpi-sub" style="color: #166534; font-weight: 700;">✅ Conciliadas con entradas de inventario</div>
+        </div>
+
+        <div class="kpi-card card-rose">
+          <div class="kpi-label">FACTURAS MERCANCÍA PENDIENTES</div>
+          <div class="kpi-value" id="kpi-fiscal-pendientes">42</div>
+          <div class="kpi-sub" style="color: #be123c; font-weight: 700;">❌ Declaradas pero omitidas en inventario</div>
+        </div>
+
+        <div class="kpi-card card-amber">
+          <div class="kpi-label">GASTOS Y SERVICIOS (NO INVENTARIO)</div>
+          <div class="kpi-value" id="kpi-fiscal-gastos">26</div>
+          <div class="kpi-sub">📑 Servicios contables, soporte y consumos</div>
+        </div>
+      </div>
+
+      <!-- Subtabs Bar -->
+      <div class="fiscal-subtabs-bar">
+        <button class="fiscal-subtab active" id="btn-subtab-prov" onclick="switchFiscalSubtab('subtab-proveedores')">
+          🏢 1. Clasificación de Proveedores por Tipo de Servicio
+        </button>
+        <button class="fiscal-subtab" id="btn-subtab-comp" onclick="switchFiscalSubtab('subtab-compras')">
+          📥 2. Cruce Libro de Compras vs. Entradas de Almacén
+        </button>
+        <button class="fiscal-subtab" id="btn-subtab-vent" onclick="switchFiscalSubtab('subtab-ventas')">
+          📤 3. Ventas Fiscales (Máquina ZOA0000176)
+        </button>
+      </div>
+
+      <!-- SUBTAB 1: Proveedores & Clasificación por Tipo de Servicio -->
+      <div id="subtab-proveedores" class="fiscal-subpane active">
+        <div class="panel-card" style="margin-bottom: 20px; border-left: 4px solid var(--ucg-navy); background: #f8fafc;">
+          <h3 style="font-size: 0.95rem; color: var(--ucg-navy); margin-bottom: 4px;">💡 Opción para Clasificar Proveedores por Tipo de Servicio:</h3>
+          <p style="font-size: 0.83rem; color: var(--text-secondary); line-height: 1.5;">
+            Aquí puedes reclasificar a cualquier proveedor en tiempo real. Si un proveedor es de <strong>Servicios Contables, Honorarios, Soporte Técnico o Gastos de Oficina</strong>, márcalo como tal: quedará reconocido para crédito fiscal de IVA pero <strong>excluido del cruce físico de repuestos</strong>, permitiendo que las entradas y salidas de almacén cuadren sin mezclar gastos operativos.
+          </p>
+        </div>
+
+        <div class="filters-card">
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="prov-fiscal-search" placeholder="Buscar proveedor por nombre o RIF (ej: Disbattery, Samy, Union Global)..." oninput="filterProveedoresFiscalTable()">
+          </div>
+          <div class="select-group">
+            <select id="prov-filter-tipo" onchange="filterProveedoresFiscalTable()">
+              <option value="TODOS">Todos los Tipos de Servicio</option>
+              <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
+              <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Honorarios</option>
+              <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Máquinas Fiscales y Sistemas</option>
+              <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+              <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
+              <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+              <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-card table-panel">
+          <div class="table-responsive">
+            <table class="data-table" id="table-proveedores-fiscal">
+              <thead>
+                <tr>
+                  <th style="width: 14%;">RIF</th>
+                  <th style="width: 32%;">PROVEEDOR / RAZÓN SOCIAL</th>
+                  <th style="width: 32%;">TIPO DE SERVICIO (CLASIFICACIÓN)</th>
+                  <th style="width: 22%;" class="text-center">¿AFECTA INVENTARIO?</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-proveedores-fiscal">
+                <tr><td colspan="4" class="text-center">Cargando directorio de proveedores...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBTAB 2: Libro Compras vs Entradas -->
+      <div id="subtab-compras" class="fiscal-subpane" style="display: none;">
+        <div class="filters-card">
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="compras-fiscal-search" placeholder="Buscar por número de factura o proveedor..." oninput="filterComprasFiscalTable()">
+          </div>
+          <div class="select-group">
+            <select id="compras-filter-periodo" onchange="loadComprasFiscal()">
+              <option value="TODOS">📅 Todos los Períodos (Ene - Sep 2026)</option>
+              <option value="2026-01">Enero 2026</option>
+              <option value="2026-02">Febrero 2026</option>
+              <option value="2026-03">Marzo 2026</option>
+              <option value="2026-04">Abril 2026</option>
+              <option value="2026-05">Mayo 2026</option>
+              <option value="2026-06">Junio 2026</option>
+              <option value="2026-07">Julio 2026</option>
+              <option value="2026-08">Agosto 2026</option>
+              <option value="2026-09">Septiembre 2026</option>
+            </select>
+            <select id="compras-filter-estatus" onchange="loadComprasFiscal()">
+              <option value="TODOS">Todos los Estados de Cuadre</option>
+              <option value="CONCILIADO">✅ Cuadradas con Almacén</option>
+              <option value="NO_CONCILIADO">❌ Pendientes por Ingresar al Inventario</option>
+              <option value="NO_APLICA_GASTO">📑 Gastos / Servicios (No Aplica Inventario)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-card table-panel">
+          <div class="table-responsive">
+            <table class="data-table" id="table-compras-fiscal">
+              <thead>
+                <tr>
+                  <th>PERÍODO</th>
+                  <th>FECHA</th>
+                  <th>FACTURA FISCAL</th>
+                  <th>PROVEEDOR / RIF</th>
+                  <th>CLASIFICACIÓN</th>
+                  <th class="text-right">BASE IMP. (BS)</th>
+                  <th class="text-right">IVA (BS)</th>
+                  <th class="text-center">ESTADO DE CUADRE</th>
+                  <th>OBSERVACIONES DE CRUCE</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-compras-fiscal">
+                <tr><td colspan="9" class="text-center">Cargando libro de compras fiscal...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBTAB 3: Ventas Fiscales -->
+      <div id="subtab-ventas" class="fiscal-subpane" style="display: none;">
+        <div class="filters-card">
+          <div class="select-group">
+            <select id="ventas-filter-periodo" onchange="loadVentasFiscal()">
+              <option value="TODOS">📅 Todos los Meses (Ene - Sep 2026)</option>
+              <option value="2026-01">Enero 2026</option>
+              <option value="2026-02">Febrero 2026</option>
+              <option value="2026-03">Marzo 2026</option>
+              <option value="2026-04">Abril 2026</option>
+              <option value="2026-05">Mayo 2026</option>
+              <option value="2026-06">Junio 2026</option>
+              <option value="2026-07">Julio 2026</option>
+              <option value="2026-08">Agosto 2026</option>
+              <option value="2026-09">Septiembre 2026</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-card table-panel">
+          <div class="table-responsive">
+            <table class="data-table" id="table-ventas-fiscal">
+              <thead>
+                <tr>
+                  <th>PERÍODO</th>
+                  <th>FECHA REPORTE</th>
+                  <th>RANGO FACTURAS (DESDE - HASTA)</th>
+                  <th class="text-center">COMPROBANTES</th>
+                  <th class="text-right">EXENTO (BS)</th>
+                  <th class="text-right">BASE IMPONIBLE (BS)</th>
+                  <th class="text-right">DÉBITO FISCAL (IVA 16%)</th>
+                  <th class="text-right">TOTAL VENTAS (BS)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-ventas-fiscal">
+                <tr><td colspan="8" class="text-center">Cargando libro de ventas fiscal...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+    </div> <!-- .app-main-wrapper -->
+  </div> <!-- .app-layout -->
+
+  <!-- Movement Detail Modal -->
+  <div class="modal-overlay" id="modal-mov-detail" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-mov-title">Detalle del Movimiento</h3>
+        <button class="modal-close" onclick="closeModal('modal-mov-detail')">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-mov-body">
+        <div class="loading-spinner">Cargando detalles...</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-mov-detail')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Registrar Factura en Libro de Compras -->
+  <div class="modal-overlay" id="modal-nueva-compra" style="display: none;">
+    <div class="modal-box" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 style="color: var(--ucg-navy); font-weight: 800;">📥 Registrar Factura en Libro de Compras</h3>
+        <button class="modal-close" onclick="closeModal('modal-nueva-compra')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nueva-compra" onsubmit="guardarNuevaCompra(event)">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Período Fiscal:</label>
+              <select id="m-comp-periodo" class="form-control" required>
+                <option value="2026-10" selected>Octubre 2026</option>
+                <option value="2026-11">Noviembre 2026</option>
+                <option value="2026-12">Diciembre 2026</option>
+                <option value="2026-09">Septiembre 2026</option>
+                <option value="2026-08">Agosto 2026</option>
+                <option value="2026-07">Julio 2026</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Fecha de Emisión Factura:</label>
+              <input type="date" id="m-comp-fecha" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>RIF Proveedor:</label>
+              <input type="text" id="m-comp-rif" class="form-control" placeholder="J-12345678-9" required onblur="autoCompletarProveedorPorRif(this.value)">
+            </div>
+            <div class="form-group">
+              <label>Razón Social / Nombre Proveedor:</label>
+              <input type="text" id="m-comp-razon" class="form-control" placeholder="Nombre de la empresa o proveedor" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>N° Factura Fiscal:</label>
+              <input type="text" id="m-comp-factura" class="form-control" placeholder="ej: 0004128" required>
+            </div>
+            <div class="form-group">
+              <label>N° Control Fiscal:</label>
+              <input type="text" id="m-comp-control" class="form-control" placeholder="ej: 00-004512">
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
+            <div class="form-group">
+              <label>Base Imponible (Bs.):</label>
+              <input type="number" step="0.01" id="m-comp-base" class="form-control" placeholder="0.00" required oninput="calcularIvaCompra()">
+            </div>
+            <div class="form-group">
+              <label>Alícuota IVA:</label>
+              <select id="m-comp-alicuota" class="form-control" onchange="calcularIvaCompra()">
+                <option value="0.16" selected>General (16%)</option>
+                <option value="0.08">Reducida (8%)</option>
+                <option value="0.0">Exento (0%)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Impuesto IVA (Bs.):</label>
+              <input type="number" step="0.01" id="m-comp-iva" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Total Factura (Bs.):</label>
+              <input type="number" step="0.01" id="m-comp-total" class="form-control" readonly style="background:#f1f5f9; font-weight:800; font-size:1.1rem; color:var(--ucg-navy);">
+            </div>
+            <div class="form-group">
+              <label>IVA Retenido (Bs.):</label>
+              <div style="display:flex; gap:8px;">
+                <select id="m-comp-ret-pct" class="form-control" style="width:90px;" onchange="calcularIvaCompra()">
+                  <option value="0.75" selected>75%</option>
+                  <option value="1.00">100%</option>
+                  <option value="0.00">0%</option>
+                </select>
+                <input type="number" step="0.01" id="m-comp-ret" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Clasificación de Servicio:</label>
+              <select id="m-comp-tipo" class="form-control">
+                <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
+                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
+                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+                <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
+                <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+                <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
+              </select>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; padding-top: 20px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="m-comp-aplica-inv" checked style="width:18px; height:18px;">
+                <span>¿Afecta Inventario Físico de Repuestos?</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Observaciones de Cruce:</label>
+            <input type="text" id="m-comp-obs" class="form-control" placeholder="Detalle o justificación de la compra">
+          </div>
+
+          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-compra')">Cancelar</button>
+            <button type="submit" class="btn btn-navy" id="btn-save-compra">Guardar en Libro de Compras</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Registrar Venta / Reporte Z en Libro de Ventas -->
+  <div class="modal-overlay" id="modal-nueva-venta" style="display: none;">
+    <div class="modal-box" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 style="color: var(--ucg-navy); font-weight: 800;">📤 Registrar Venta Diaria / Reporte Z</h3>
+        <button class="modal-close" onclick="closeModal('modal-nueva-venta')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nueva-venta" onsubmit="guardarNuevaVenta(event)">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Período Fiscal:</label>
+              <select id="m-vent-periodo" class="form-control" required>
+                <option value="2026-10" selected>Octubre 2026</option>
+                <option value="2026-11">Noviembre 2026</option>
+                <option value="2026-12">Diciembre 2026</option>
+                <option value="2026-09">Septiembre 2026</option>
+                <option value="2026-08">Agosto 2026</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Fecha de Operación / Reporte:</label>
+              <input type="date" id="m-vent-fecha" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Factura Desde:</label>
+              <input type="text" id="m-vent-desde" class="form-control" placeholder="ej: 00002340">
+            </div>
+            <div class="form-group">
+              <label>Factura Hasta:</label>
+              <input type="text" id="m-vent-hasta" class="form-control" placeholder="ej: 00002352">
+            </div>
+            <div class="form-group">
+              <label>Cant. Comprobantes:</label>
+              <input type="number" id="m-vent-cant" class="form-control" value="1" min="1">
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
+            <div class="form-group">
+              <label>Base Imponible Gravada (Bs.):</label>
+              <input type="number" step="0.01" id="m-vent-base" class="form-control" placeholder="0.00" required oninput="calcularIvaVenta()">
+            </div>
+            <div class="form-group">
+              <label>Débito Fiscal IVA 16% (Bs.):</label>
+              <input type="number" step="0.01" id="m-vent-iva" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Ventas Exentas (Bs.):</label>
+              <input type="number" step="0.01" id="m-vent-exento" class="form-control" value="0.00" oninput="calcularIvaVenta()">
+            </div>
+            <div class="form-group">
+              <label>Total Ventas (Bs.):</label>
+              <input type="number" step="0.01" id="m-vent-total" class="form-control" readonly style="background:#f1f5f9; font-weight:800; font-size:1.1rem; color:var(--ucg-navy);">
+            </div>
+          </div>
+
+          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-venta')">Cancelar</button>
+            <button type="submit" class="btn btn-navy" id="btn-save-venta">Guardar en Libro de Ventas</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Registrar / Editar Proveedor -->
+  <div class="modal-overlay" id="modal-nuevo-proveedor" style="display: none;">
+    <div class="modal-box" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="modal-prov-title" style="color: var(--ucg-navy); font-weight: 800;">🏢 Registrar Nuevo Proveedor</h3>
+        <button class="modal-close" onclick="closeModal('modal-nuevo-proveedor')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nuevo-proveedor" onsubmit="guardarProveedor(event)">
+          <input type="hidden" id="m-prov-id">
+          <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>RIF Fiscal:</label>
+              <input type="text" id="m-prov-rif" class="form-control" placeholder="J-12345678-9" required>
+            </div>
+            <div class="form-group">
+              <label>Razón Social:</label>
+              <input type="text" id="m-prov-razon" class="form-control" placeholder="Nombre completo de la empresa" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Clasificación de Servicio:</label>
+              <select id="m-prov-tipo" class="form-control">
+                <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
+                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
+                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+                <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
+                <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+                <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>% Retención IVA Aplicable:</label>
+              <select id="m-prov-ret-pct" class="form-control">
+                <option value="75.0" selected>75% (Contribuyente Ordinario)</option>
+                <option value="100.0">100% (Retención Total)</option>
+                <option value="0.0">0% (Sin Retención)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Teléfono de Contacto:</label>
+              <input type="text" id="m-prov-telefono" class="form-control" placeholder="0212-0000000">
+            </div>
+            <div class="form-group">
+              <label>Correo Electrónico:</label>
+              <input type="email" id="m-prov-email" class="form-control" placeholder="contacto@empresa.com">
+            </div>
+          </div>
+
+          <div class="form-group" style="padding: 10px 0;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="m-prov-aplica-inv" checked style="width:18px; height:18px;">
+              <span>¿Afecta el inventario de repuestos? (Desmarcar si es servicio o gasto)</span>
+            </label>
+          </div>
+
+          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nuevo-proveedor')">Cancelar</button>
+            <button type="submit" class="btn btn-navy" id="btn-save-prov">Guardar Proveedor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Vista de Impresión Oficial SENIAT -->
+  <div class="modal-overlay" id="modal-impresion-fiscal" style="display: none;">
+    <div class="modal-box" style="max-width: 1100px; max-height: 94vh; overflow-y: auto;">
+      <div class="modal-header btn-print-hide">
+        <h3 id="modal-print-title" style="color: var(--ucg-navy); font-weight: 800;">Vista de Impresión Oficial SENIAT</h3>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-navy" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+          <button class="modal-close" onclick="closeModal('modal-impresion-fiscal')">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modal-print-body" style="padding: 0;">
+        <div class="loading-spinner">Generando documento oficial...</div>
+      </div>
+      <div class="modal-footer btn-print-hide">
+        <button class="btn btn-secondary" onclick="closeModal('modal-impresion-fiscal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
