@@ -29,17 +29,16 @@
         </div>
       </div>
 
-      <!-- 2. Ficha Fiscal Oficial del Contribuyente (SENIAT RIF Digital) -->
-      <div class="sidebar-client-box" id="sidebar-client-fiscal-box">
-        <div class="client-box-header">
-          <span class="client-pill-badge">CLIENTE AUDITADO</span>
-          <span class="client-pill-status"><span class="pulse-dot"></span> RIF VIGENTE</span>
+      <!-- 2. Ficha Fiscal Compacta del Contribuyente -->
+      <div class="sidebar-client-box" id="sidebar-client-fiscal-box" title="INVERSIONES DG 67, C.A. • RIF: J-50700865-7 • San Agustín del Norte, Caracas D.C. • Región Libertador SENIAT">
+        <div class="client-box-top">
+          <span class="pulse-dot"></span>
+          <span class="sidebar-client-name">INVERSIONES DG 67, C.A.</span>
         </div>
-        <div class="sidebar-client-name" title="INVERSIONES DG 67, C.A.">INVERSIONES DG 67, C.A.</div>
-        <div class="sidebar-client-meta font-mono">RIF: <strong>J-50700865-7</strong></div>
-        <div class="sidebar-client-condition">Contribuyente Ordinario IVA (Ret. 75%)</div>
-        <div class="sidebar-client-location">📍 San Agustín del Norte, Caracas D.C.</div>
-        <div class="sidebar-client-sede">🏛️ Región Libertador (SENIAT)</div>
+        <div class="client-box-details">
+          <span class="sidebar-client-rif font-mono">J-50700865-7</span>
+          <span class="client-tag-pill">IVA Ord. 75%</span>
+        </div>
       </div>
 
       <!-- 3. Menú de Navegación Lateral por Categorías -->
@@ -135,29 +134,28 @@
       <header class="app-topbar">
         <div class="topbar-left">
           <button class="mobile-menu-btn" id="btn-toggle-sidebar" aria-label="Abrir Menú de Navegación">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
-          <div class="topbar-client-tag">
-            <span class="tag-title">CONTRIBUYENTE:</span>
-            <span class="tag-name">INVERSIONES DG 67, C.A.</span>
-            <span class="tag-rif font-mono">RIF: J-50700865-7</span>
-            <span class="tag-loc font-mono" style="font-size: 0.72rem; color: #64748b; background: #e2e8f0; padding: 2px 7px; border-radius: 4px;">Caracas, D.C.</span>
+          <div class="topbar-breadcrumb">
+            <span class="crumb-company">INVERSIONES DG 67, C.A.</span>
+            <span class="crumb-sep">/</span>
+            <span class="crumb-active" id="topbar-section-title">Panel de Control de Inventario</span>
           </div>
         </div>
 
         <div class="topbar-right">
           <span class="topbar-period-pill">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            Período Fiscal: <strong>31/12/2025 – Sep 2026</strong>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>Ejercicio: <strong>2026 (Octubre Activo)</strong></span>
           </span>
 
           <a href="/api/export/excel" class="btn btn-action-excel" id="btn-export-excel" title="Exportar existencias y valoración a Excel">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>Exportar Excel</span>
           </a>
 
           <a href="/reporte-seniat.html" target="_blank" class="btn btn-action-pdf" id="btn-export-pdf" title="Generar Libro Oficial SENIAT (PDF)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             <span>Informe SENIAT (PDF)</span>
           </a>
         </div>
@@ -1121,7 +1119,7 @@
       </div>
 
       <!-- KPI Summary Cards -->
-      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+      <div class="kpi-grid">
         <div class="kpi-card card-cyan">
           <div class="kpi-label">TOTAL FACTURAS DECLARADAS</div>
           <div class="kpi-value" id="kpi-fiscal-total-facturas">74</div>
@@ -1131,42 +1129,42 @@
         <div class="kpi-card card-emerald">
           <div class="kpi-label">COMPRAS CUADRADAS CON ALMACÉN</div>
           <div class="kpi-value" id="kpi-fiscal-cuadradas">6</div>
-          <div class="kpi-sub" style="color: #166534; font-weight: 700;">✅ Conciliadas con entradas de inventario</div>
+          <div class="kpi-sub" style="color: #166534; font-weight: 700;">✅ Conciliadas con inventario</div>
         </div>
 
         <div class="kpi-card card-rose">
           <div class="kpi-label">FACTURAS MERCANCÍA PENDIENTES</div>
           <div class="kpi-value" id="kpi-fiscal-pendientes">42</div>
-          <div class="kpi-sub" style="color: #be123c; font-weight: 700;">❌ Declaradas pero omitidas en inventario</div>
+          <div class="kpi-sub" style="color: #be123c; font-weight: 700;">❌ Omitidas en inventario</div>
         </div>
 
         <div class="kpi-card card-amber">
           <div class="kpi-label">GASTOS Y SERVICIOS (NO INVENTARIO)</div>
           <div class="kpi-value" id="kpi-fiscal-gastos">26</div>
-          <div class="kpi-sub">📑 Servicios contables, soporte y consumos</div>
+          <div class="kpi-sub">📑 Servicios contables y consumos</div>
         </div>
       </div>
 
       <!-- Subtabs Bar -->
       <div class="fiscal-subtabs-bar">
         <button class="fiscal-subtab active" id="btn-subtab-prov" onclick="switchFiscalSubtab('subtab-proveedores')">
-          🏢 1. Clasificación de Proveedores por Tipo de Servicio
+          🏢 1. Clasificación Proveedores
         </button>
         <button class="fiscal-subtab" id="btn-subtab-comp" onclick="switchFiscalSubtab('subtab-compras')">
-          📥 2. Cruce Libro de Compras vs. Entradas de Almacén
+          📥 2. Cruce Compras vs Almacén
         </button>
         <button class="fiscal-subtab" id="btn-subtab-vent" onclick="switchFiscalSubtab('subtab-ventas')">
-          📤 3. Ventas Fiscales (Máquina ZOA0000176)
+          📤 3. Ventas Fiscales (ZOA0000176)
         </button>
       </div>
 
       <!-- SUBTAB 1: Proveedores & Clasificación por Tipo de Servicio -->
       <div id="subtab-proveedores" class="fiscal-subpane active">
-        <div class="panel-card" style="margin-bottom: 20px; border-left: 4px solid var(--ucg-navy); background: #f8fafc;">
-          <h3 style="font-size: 0.95rem; color: var(--ucg-navy); margin-bottom: 4px;">💡 Opción para Clasificar Proveedores por Tipo de Servicio:</h3>
-          <p style="font-size: 0.83rem; color: var(--text-secondary); line-height: 1.5;">
-            Aquí puedes reclasificar a cualquier proveedor en tiempo real. Si un proveedor es de <strong>Servicios Contables, Honorarios, Soporte Técnico o Gastos de Oficina</strong>, márcalo como tal: quedará reconocido para crédito fiscal de IVA pero <strong>excluido del cruce físico de repuestos</strong>, permitiendo que las entradas y salidas de almacén cuadren sin mezclar gastos operativos.
-          </p>
+        <div class="info-callout-card">
+          <div class="callout-icon">💡</div>
+          <div class="callout-body">
+            <strong>Reclasificación Fiscal en Vivo:</strong> Proveedores marcados como <em>Servicios Contables, Honorarios o Gastos Operativos</em> son reconocidos para crédito fiscal de IVA pero <strong>excluidos del cruce físico de repuestos</strong>, permitiendo que el inventario cuadre con exactitud.
+          </div>
         </div>
 
         <div class="filters-card">

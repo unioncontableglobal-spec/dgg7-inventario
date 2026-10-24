@@ -85,6 +85,26 @@ function switchTab(tabId) {
     p.classList.toggle('active', p.id === tabId);
   });
 
+  // Update dynamic topbar breadcrumb title
+  const tabTitles = {
+    'tab-dashboard': 'Panel de Control de Inventario',
+    'tab-inventario': 'Inventario al Día',
+    'tab-entrada': 'Registrar Entrada',
+    'tab-salida': 'Registrar Salida',
+    'tab-kardex': 'Kardex por Repuesto',
+    'tab-libro-compras': 'Libro de Compras Fiscal SENIAT',
+    'tab-libro-ventas': 'Libro de Ventas Fiscal SENIAT',
+    'tab-declaraciones': 'Declaración Mensual IVA (Forma 30)',
+    'tab-proveedores': 'Directorio y Panel de Proveedores',
+    'tab-fiscal': 'Auditoría y Cruce Fiscal (IVA vs Almacén)',
+    'tab-mensual': 'Cierre Físico Mes a Mes',
+    'tab-movimientos': 'Auditoría de Movimientos'
+  };
+  const topbarTitleEl = document.getElementById('topbar-section-title');
+  if (topbarTitleEl && tabTitles[tabId]) {
+    topbarTitleEl.textContent = tabTitles[tabId];
+  }
+
   // Lazy refresh based on tab
   if (tabId === 'tab-dashboard') loadDashboard();
   if (tabId === 'tab-inventario') loadProducts();
