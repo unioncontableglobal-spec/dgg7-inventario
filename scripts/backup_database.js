@@ -75,3 +75,4 @@ export async function createBackup() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   createBackup().then(() => console.log('[BACKUP] Proceso finalizado.')).catch(console.error);
 }
+

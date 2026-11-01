@@ -2454,16 +2454,369 @@ select:focus, input:focus {
   border-color: #ef4444;
 }
 
-/* Responsive */
+/* ==========================================================================
+   SUITE INTEGRAL DE RESPONSIVIDAD PARA IPHONE (PRO, PLUS, SE), TABLETS Y PC
+   ========================================================================== */
+
+/* 1. SOPORTE IOS SAFE AREA & DYNAMIC VIEWPORT (NOTCH, DYNAMIC ISLAND, HOME BAR) */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Evitar auto-zoom molesto en Safari iOS al enfocar campos de texto */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 2. TABLETS & PANTALLAS MEDIANAS (iPad, iPad Pro, Tablets Android: 768px - 1024px) */
+@media (max-width: 1024px) {
+  .app-sidebar {
+    width: 260px;
+    min-width: 260px;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .login-container {
+    max-width: 820px;
+  }
+
+  .forma30-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 3. PANTALLAS MÓVILES Y VERTICALES (<= 900px) */
 @media (max-width: 900px) {
+  .login-screen-overlay {
+    padding: 16px 12px;
+    align-items: flex-start;
+  }
+
   .login-container {
     grid-template-columns: 1fr;
-    max-width: 500px;
+    max-width: 480px;
+    min-height: auto;
+    margin: auto;
+    border-radius: 16px;
   }
+
   .login-brand-panel {
-    padding: 28px 24px;
+    padding: 24px 20px;
+    border-right: none;
+    border-bottom: 1px solid rgba(25, 167, 206, 0.25);
   }
+
+  .login-brand-header {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .login-logo-img {
+    height: 44px;
+  }
+
+  .login-firm-title {
+    font-size: 1.15rem;
+  }
+
+  .login-system-title {
+    font-size: 1.05rem;
+  }
+
+  .login-fiscal-card {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+  }
+
   .login-form-panel {
-    padding: 32px 24px;
+    padding: 26px 20px;
+  }
+
+  .form-main-title {
+    font-size: 1.35rem;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(84vw, 290px);
+    min-width: unset;
+    max-width: 300px;
+    height: 100dvh;
+    padding-bottom: calc(16px + var(--sab));
+    z-index: 99999;
+  }
+}
+
+/* 4. IPHONES MODERNOS (iPhone Pro, Pro Max, Plus, Estándar: <= 640px) */
+@media (max-width: 640px) {
+  /* Barra superior ejecutiva compacta y táctil */
+  .app-topbar {
+    height: auto;
+    min-height: 52px;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .topbar-left {
+    gap: 8px;
+  }
+
+  .mobile-menu-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .crumb-company {
+    font-size: 0.72rem;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .crumb-active {
+    font-size: 0.76rem;
+  }
+
+  .topbar-right {
+    gap: 5px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 0;
+  }
+
+  .topbar-right::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Botones superiores ultra compactos para móviles */
+  .topbar-right .btn,
+  .topbar-right a.btn {
+    padding: 6px 9px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Contenido principal */
+  .main-content {
+    padding: 14px 10px 60px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .page-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .page-header .subtitle {
+    font-size: 0.78rem;
+  }
+
+  .page-header .header-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .page-header .header-buttons .btn {
+    flex: 1;
+    min-width: 130px;
+    justify-content: center;
+    padding: 9px 12px;
+  }
+
+  /* KPIs en móviles: 2 columnas fluidas */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .kpi-card {
+    padding: 12px 10px !important;
+  }
+
+  .kpi-title {
+    font-size: 0.68rem !important;
+  }
+
+  .kpi-value {
+    font-size: 1.15rem !important;
+  }
+
+  .kpi-sub {
+    font-size: 0.64rem !important;
+  }
+
+  /* Barras de búsqueda, filtros y herramientas */
+  .filter-bar,
+  .search-box-container,
+  .table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .search-input,
+  .filter-select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Tablas de Datos con Desplazamiento Táctil Fluido */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .data-table {
+    font-size: 0.75rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 7px 9px;
+    white-space: nowrap;
+  }
+
+  /* Formularios modales en pantalla completa / bottom sheet en móviles */
+  .modal-box {
+    width: 96% !important;
+    max-width: 96% !important;
+    max-height: 92dvh !important;
+    margin: auto !important;
+    border-radius: 14px !important;
+  }
+
+  .modal-header {
+    padding: 12px 14px !important;
+  }
+
+  .modal-body {
+    padding: 14px 12px !important;
+  }
+
+  .modal-footer {
+    padding: 10px 14px !important;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Grids de submódulos */
+  .forma30-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-2col,
+  .grid-3col {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Botones de acción rápida */
+  .quick-chips {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  .quick-chip {
+    padding: 6px 4px !important;
+  }
+
+  .chip-role {
+    font-size: 0.58rem !important;
+  }
+
+  .chip-user {
+    font-size: 0.68rem !important;
+  }
+}
+
+/* 5. PANTALLAS PEQUEÑAS (iPhone SE, iPhone mini: <= 380px) */
+@media (max-width: 380px) {
+  .kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .login-container {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .login-brand-panel,
+  .login-form-panel {
+    padding: 16px 12px;
+  }
+
+  .login-fiscal-header {
+    font-size: 0.65rem;
+  }
+
+  .fiscal-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .fiscal-value {
+    text-align: left;
+    font-size: 0.72rem;
+  }
+
+  .quick-chips {
+    grid-template-columns: 1fr !important;
   }
 }
