@@ -484,7 +484,17 @@ function renderDashboardMonthly(data) {
     const ventasUsd = Number(m.ventas_usd || 0);
     const undsComp = Number(m.unidades_compradas || 0);
     const undsVent = Number(m.unidades_vendidas || 0);
+    const cantFacs = Number(m.cant_compras || 0);
     const labelMes = NOMBRES_MESES_CIERRE[m.periodo] || m.periodo;
+
+    let subCompText = '';
+    if (undsComp > 0) {
+      subCompText = `$${fmtUsd(comprasUsd)} USD • ${undsComp.toLocaleString()} unds`;
+    } else if (comprasBs > 0) {
+      subCompText = `$${fmtUsd(comprasUsd)} USD • ${cantFacs} facturas`;
+    } else {
+      subCompText = `$0.00 USD • 0 unds`;
+    }
 
     // Indicador visual de estado operativo amigable y positivo
     let badgeHtml = '';
@@ -509,7 +519,7 @@ function renderDashboardMonthly(data) {
         </td>
         <td class="text-right font-mono" style="padding: 12px 14px;">
           <div class="font-bold" style="color: #0369a1; font-size: 0.90rem;">Bs. ${fmtBs(comprasBs)}</div>
-          <div style="font-size: 0.74rem; color: #166534; font-family: monospace;">$${fmtUsd(comprasUsd)} USD • ${undsComp.toLocaleString()} unds</div>
+          <div style="font-size: 0.74rem; color: #166534; font-family: monospace;">${subCompText}</div>
         </td>
         <td class="text-right font-mono" style="padding: 12px 14px;">
           <div class="font-bold" style="color: #059669; font-size: 0.90rem;">Bs. ${fmtBs(ventasBs)}</div>

@@ -283,15 +283,25 @@ app.get('/api/dashboard', async (req, res) => {
           t.periodo,
           t.fecha_cierre,
           t.tasa_bcv,
-          COALESCE(comp.cant_compras, 0) as cant_compras,
+          COALESCE(lc.facs_mercancia, comp.cant_compras, 0) as cant_compras,
           COALESCE(comp.unidades_compradas, 0) as unidades_compradas,
-          ROUND(COALESCE(comp.monto_compras_usd, 0), 2) as compras_usd,
-          ROUND(COALESCE(comp.monto_compras_bs, 0), 2) as compras_bs,
+          ROUND(COALESCE(lc.base_mercancia_usd, comp.monto_compras_usd, 0), 2) as compras_usd,
+          ROUND(COALESCE(lc.base_mercancia_bs, comp.monto_compras_bs, 0), 2) as compras_bs,
           COALESCE(vent.cant_ventas, 0) as cant_ventas,
           COALESCE(vent.unidades_vendidas, 0) as unidades_vendidas,
           ROUND(COALESCE(vent.monto_ventas_usd, 0), 2) as ventas_usd,
           ROUND(COALESCE(vent.monto_ventas_bs, 0), 2) as ventas_bs
         FROM tasas_bcv_periodo t
+        LEFT JOIN (
+          SELECT 
+            periodo,
+            count(*) as facs_mercancia,
+            sum(base_imponible_bs) as base_mercancia_bs,
+            sum(base_imponible_divisa) as base_mercancia_usd
+          FROM libro_compras
+          WHERE aplica_inventario = 1
+          GROUP BY periodo
+        ) lc ON t.periodo = lc.periodo
         LEFT JOIN (
           SELECT 
             substr(m.fecha, 1, 7) as mes,
