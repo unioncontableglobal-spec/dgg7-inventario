@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LIBRO OFICIAL DE INVENTARIO SENIAT - INVERSIONES DG 67, C.A.</title>
+  <title>LIBRO OFICIAL DE INVENTARIOS SENIAT (ART. 177 RISLR & ART. 32-35 CÓDIGO DE COMERCIO) - INVERSIONES DG 67, C.A.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --ucg-navy: #000080;
       --ucg-blue: #0A5CF5;
       --text-dark: #0f172a;
       --text-muted: #475569;
-      --border-color: #cbd5e1;
+      --border-color: #94a3b8;
     }
 
     * {
@@ -26,36 +26,62 @@
       font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
       background-color: #f1f5f9;
       color: var(--text-dark);
-      padding: 24px;
-      font-size: 11px;
-      line-height: 1.35;
+      padding: 16px;
+      font-size: 9.5px;
+      line-height: 1.3;
     }
 
-    /* Floating Action Bar (Hidden in Print) */
+    /* Floating Action & Filter Bar (Hidden in Print) */
     .print-actions-bar {
       position: sticky;
-      top: 12px;
-      max-width: 1100px;
-      margin: 0 auto 16px;
+      top: 8px;
+      max-width: 1380px;
+      margin: 0 auto 14px;
       background: #ffffff;
-      border: 1px solid var(--border-color);
+      border: 1px solid #cbd5e1;
       box-shadow: 0 4px 20px rgba(0, 0, 128, 0.12);
       border-radius: 10px;
-      padding: 10px 18px;
+      padding: 10px 14px;
       display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      z-index: 1000;
+      gap: 8px;
+    }
+
+    .toolbar-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toolbar-select, .toolbar-input {
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1.5px solid #cbd5e1;
+      background: #f8fafc;
+      color: var(--ucg-navy);
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       font-family: inherit;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
-      padding: 8px 16px;
+      padding: 6px 12px;
       border-radius: 6px;
       border: none;
       cursor: pointer;
@@ -67,7 +93,6 @@
       color: #ffffff;
       box-shadow: 0 2px 8px rgba(0, 0, 128, 0.25);
     }
-    .btn-print:hover { opacity: 0.95; }
 
     .btn-excel {
       background: #f0fdf4;
@@ -75,19 +100,25 @@
       color: #166534;
     }
 
+    .btn-csv {
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      color: #1e40af;
+    }
+
     .btn-back {
       background: #f8fafc;
-      border: 1px solid var(--border-color);
+      border: 1px solid #cbd5e1;
       color: var(--text-dark);
     }
 
-    /* Report Sheet (Sheet of Paper) */
+    /* Report Sheet */
     .report-sheet {
-      max-width: 1100px;
+      max-width: 1380px;
       margin: 0 auto;
       background: #ffffff;
-      padding: 32px 36px;
-      border: 1px solid var(--border-color);
+      padding: 22px 26px;
+      border: 1px solid #cbd5e1;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
       border-radius: 4px;
     }
@@ -95,26 +126,24 @@
     /* Fiscal Header */
     .fiscal-header {
       display: grid;
-      grid-template-columns: 140px 1fr 180px;
+      grid-template-columns: 120px 1fr 200px;
       align-items: center;
-      gap: 16px;
-      padding-bottom: 14px;
+      gap: 14px;
+      padding-bottom: 10px;
       border-bottom: 2px solid var(--ucg-navy);
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     .ucg-logo {
-      height: 60px;
+      height: 52px;
       width: auto;
       object-fit: contain;
     }
 
-    .header-center {
-      text-align: center;
-    }
+    .header-center { text-align: center; }
 
     .seniat-flag {
-      font-size: 8.5px;
+      font-size: 8px;
       font-weight: 900;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -122,30 +151,30 @@
     }
 
     .report-main-title {
-      font-size: 13.5px;
+      font-size: 12.5px;
       font-weight: 900;
       color: var(--ucg-navy);
       text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin: 3px 0;
+      letter-spacing: 0.02em;
+      margin: 2px 0;
     }
 
     .report-legal-ref {
-      font-size: 8.5px;
-      font-weight: 600;
+      font-size: 8px;
+      font-weight: 700;
       color: #334155;
     }
 
     .header-agency {
       text-align: right;
-      font-size: 8.5px;
+      font-size: 8px;
       color: var(--text-muted);
-      border-left: 1px solid var(--border-color);
-      padding-left: 12px;
+      border-left: 1px solid #cbd5e1;
+      padding-left: 10px;
     }
 
     .agency-name {
-      font-size: 9.5px;
+      font-size: 9px;
       font-weight: 900;
       color: var(--ucg-navy);
       text-transform: uppercase;
@@ -154,97 +183,122 @@
     /* Taxpayer Details Grid */
     .taxpayer-box {
       background: #f8fafc;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 10px 14px;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      padding: 7px 12px;
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr;
+      grid-template-columns: 2fr 1.1fr 1.3fr;
       gap: 10px;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
-    .data-group {
-      display: flex;
-      flex-direction: column;
-    }
+    .data-group { display: flex; flex-direction: column; }
 
     .data-label {
-      font-size: 7.5px;
+      font-size: 7px;
       font-weight: 800;
       text-transform: uppercase;
       color: var(--text-muted);
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
     }
 
     .data-value {
-      font-size: 10px;
-      font-weight: 700;
+      font-size: 9.5px;
+      font-weight: 800;
       color: var(--text-dark);
     }
 
     .data-value.highlight {
       color: var(--ucg-navy);
-      font-size: 11px;
+      font-size: 10px;
     }
 
-    /* Summary Bar */
+    /* 5-Box Executive Summary Bar */
     .summary-strip {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 14px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
     }
 
     .summary-card {
       background: #ffffff;
-      border: 1px solid var(--border-color);
+      border: 1px solid #94a3b8;
       border-left: 3px solid var(--ucg-navy);
-      padding: 8px 12px;
+      padding: 6px 9px;
       border-radius: 4px;
     }
 
     .sc-label {
-      font-size: 7.5px;
+      font-size: 7px;
       font-weight: 800;
       text-transform: uppercase;
       color: var(--text-muted);
     }
 
     .sc-val {
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 900;
       font-family: 'JetBrains Mono', monospace;
       color: var(--ucg-navy);
+      margin-top: 2px;
     }
 
-    /* Table */
+    .sc-sub {
+      font-size: 7.5px;
+      color: #475569;
+      font-weight: 700;
+    }
+
+    /* Official SENIAT Table */
     .report-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
-      font-size: 9px;
+      margin-bottom: 14px;
+      font-size: 7.8px;
     }
 
     .report-table th {
       background: #f1f5f9;
-      color: var(--ucg-navy);
-      font-size: 8px;
+      color: #0f172a;
+      font-size: 7px;
       font-weight: 900;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding: 6px 8px;
-      border: 1px solid var(--border-color);
-      text-align: left;
+      padding: 3.5px 4px;
+      border: 1px solid #64748b;
+      text-align: center;
+      line-height: 1.15;
     }
+
+    .report-table tr.group-header th {
+      background: var(--ucg-navy);
+      color: #ffffff;
+      font-size: 7.2px;
+      letter-spacing: 0.02em;
+      padding: 4px 5px;
+    }
+
+    .report-table tr.group-header th.grp-inicial { background: #1e3a8a; }
+    .report-table tr.group-header th.grp-entradas { background: #065f46; }
+    .report-table tr.group-header th.grp-salidas { background: #9f1239; }
+    .report-table tr.group-header th.grp-final { background: #000080; }
 
     .report-table td {
-      padding: 5px 8px;
-      border: 1px solid #e2e8f0;
+      padding: 3px 4px;
+      border: 1px solid #cbd5e1;
       color: #1e293b;
+      vertical-align: middle;
     }
 
-    .report-table tbody tr:nth-child(even) {
-      background: #fbfcfd;
+    .report-table tbody tr:nth-child(even) { background: #f8fafc; }
+
+    .report-table tfoot td {
+      background: #e2e8f0;
+      border: 1px solid #475569;
+      font-weight: 900;
+      font-size: 8px;
+      padding: 5px 4px;
+      color: #0f172a;
     }
 
     .text-right { text-align: right; }
@@ -252,52 +306,77 @@
     .font-mono { font-family: 'JetBrains Mono', monospace; }
     .font-bold { font-weight: 700; }
 
+    /* Asiento Contable Box (for Cierre Anual view) */
+    .asiento-contable-box {
+      border: 1.5px solid #000080;
+      border-radius: 4px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      page-break-inside: avoid;
+      display: none;
+    }
+
+    .asiento-title {
+      background: #000080;
+      color: #fff;
+      font-size: 8.5px;
+      font-weight: 900;
+      padding: 5px 10px;
+      text-transform: uppercase;
+    }
+
     /* Certification & Signatures */
     .certification-block {
-      border: 1px solid var(--border-color);
+      border: 1px solid #94a3b8;
       background: #f8fafc;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border-radius: 4px;
-      margin-bottom: 24px;
-      font-size: 8.5px;
+      margin-bottom: 18px;
+      font-size: 7.8px;
       color: #334155;
-      line-height: 1.45;
+      line-height: 1.38;
       text-align: justify;
+      page-break-inside: avoid;
     }
 
     .signatures-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 24px;
-      margin-top: 36px;
+      margin-top: 24px;
       page-break-inside: avoid;
     }
 
     .signature-card {
       text-align: center;
-      border-top: 1px solid #64748b;
-      padding-top: 8px;
+      border-top: 1px solid #0f172a;
+      padding-top: 5px;
     }
 
     .sig-name {
-      font-size: 9.5px;
+      font-size: 8.5px;
       font-weight: 800;
       color: var(--text-dark);
     }
 
     .sig-role {
-      font-size: 8px;
+      font-size: 7.5px;
       font-weight: 600;
       color: var(--text-muted);
     }
 
-    /* Print Styles */
     @media print {
+      @page {
+        size: letter landscape;
+        margin: 6mm 7mm;
+      }
       body {
         padding: 0 !important;
         background: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
-      .print-actions-bar {
+      .print-actions-bar, .no-print {
         display: none !important;
       }
       .report-sheet {
@@ -306,33 +385,77 @@
         box-shadow: none !important;
         max-width: 100% !important;
       }
-      @page {
-        size: letter portrait;
-        margin: 8mm 10mm;
-      }
-      thead {
-        display: table-header-group;
-      }
-      tr {
-        page-break-inside: avoid;
-      }
+      thead { display: table-header-group; }
+      tfoot { display: table-row-group; }
+      tr { page-break-inside: avoid; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Floating Print Toolbar -->
+  <!-- Floating Print & Filter Toolbar -->
   <div class="print-actions-bar">
-    <div style="font-weight: 800; color: var(--ucg-navy); font-size: 13px;">
-      📄 Informe Oficial de Inventario para el SENIAT
+    <div class="toolbar-row">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-weight: 900; color: var(--ucg-navy); font-size: 12px;">
+          📘 Cumplimiento Normativo SENIAT (Art. 177 RISLR & Art. 32–35 Código de Comercio)
+        </span>
+        <select id="sel-vista" class="toolbar-select" style="background:#eff6ff; border-color:#2563eb;" onchange="cambiarModoVista()">
+          <option value="ART_177">📊 1. Reporte Mensual Art. 177 RISLR (Entradas, Salidas Tipificadas y Costo Promedio)</option>
+          <option value="CIERRE_ANUAL">⚖️ 2. Libro de Inventarios y Balances (Cierre Anual: Toma Física vs. Inventario Teórico)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-back" onclick="window.close()">Volver</button>
+        <a href="/api/export/libro-art177?formato=xlsx" id="btn-export-xlsx" class="btn btn-excel">📥 Exportar Excel (.xlsx)</a>
+        <a href="/api/export/libro-art177?formato=csv" id="btn-export-csv" class="btn btn-csv">📄 Exportar CSV Auditable</a>
+        <button class="btn btn-print" onclick="window.print()">
+          🖨️ Imprimir / Guardar PDF Oficial
+        </button>
+      </div>
     </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="btn btn-back" onclick="window.close()">Volver al Sistema</button>
-      <a href="/api/export/excel" id="excel-btn-link" class="btn btn-excel">Descargar en Excel</a>
-      <button class="btn btn-print" onclick="window.print()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-        Imprimir / Guardar PDF
-      </button>
+
+    <div class="toolbar-row" style="border-top: 1px solid #f1f5f9; padding-top: 6px;">
+      <div class="toolbar-controls">
+        <label style="font-size:10.5px; font-weight:700; color:#475569;">Período:</label>
+        <select id="sel-periodo" class="toolbar-select" onchange="onChangePeriodo()">
+          <option value="ANUAL_2026">📅 Ejercicio Fiscal 2026 (Acumulado)</option>
+          <option value="2025-12">🏁 Inventario Inicial al 31/12/2025</option>
+          <option value="2026-01">01 - Enero 2026</option>
+          <option value="2026-02">02 - Febrero 2026</option>
+          <option value="2026-03">03 - Marzo 2026</option>
+          <option value="2026-04">04 - Abril 2026</option>
+          <option value="2026-05">05 - Mayo 2026</option>
+          <option value="2026-06">06 - Junio 2026</option>
+          <option value="2026-07">07 - Julio 2026</option>
+          <option value="2026-08">08 - Agosto 2026</option>
+          <option value="RANGO">📆 Rango de Fechas Personalizado</option>
+        </select>
+
+        <span id="box-rango-fechas" style="display:none; align-items:center; gap:4px;">
+          <input type="date" id="inp-desde" class="toolbar-input" value="2026-01-01" onchange="cargarLibroInventarioSeniat()">
+          <span>a</span>
+          <input type="date" id="inp-hasta" class="toolbar-input" value="2026-08-31" onchange="cargarLibroInventarioSeniat()">
+        </span>
+
+        <select id="sel-moneda" class="toolbar-select" onchange="renderTablaActual()">
+          <option value="VES">🇻🇪 Moneda Curso Legal: Bolívares (VES) + Ref. USD</option>
+          <option value="USD">💵 Vista en Dólares Referenciales ($ USD)</option>
+        </select>
+
+        <select id="sel-almacen" class="toolbar-select" onchange="cargarLibroInventarioSeniat()">
+          <option value="TODOS">🏢 Todos los Almacenes</option>
+          <option value="MULTIMARCAS">🔧 Almacén MULTIMARCAS</option>
+          <option value="AUTOPERIQUITOS">🚗 Almacén AUTOPERIQUITOS</option>
+        </select>
+
+        <select id="sel-filtro-mov" class="toolbar-select" onchange="renderTablaActual()">
+          <option value="TODOS">📦 Catálogo Completo (658 Repuestos)</option>
+          <option value="CON_MOVIMIENTO">⚡ Solo con Movimiento en el Período</option>
+          <option value="CON_EXISTENCIA">✅ Solo con Existencia Final &gt; 0</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -342,168 +465,511 @@
     <!-- Fiscal Header -->
     <header class="fiscal-header">
       <div>
-        <img src="LOGOUCG.png" alt="Unión Contable Global" class="ucg-logo">
+        <img src="LOGOUCG.png" alt="Unión Contable Global" class="ucg-logo" onerror="this.style.display='none'">
       </div>
       <div class="header-center">
-        <div class="seniat-flag">República Bolivariana de Venezuela • SENIAT</div>
-        <div class="report-main-title">Libro de Inventario Físico y Movimientos</div>
-        <div class="report-legal-ref">Cumplimiento Providencia Administrativa SENIAT Nº 0257 / Art. 177 Ley de ISLR / Art. 32 Código de Comercio</div>
+        <div class="seniat-flag">República Bolivariana de Venezuela • Ministerio del Poder Popular de Economía y Finanzas • SENIAT</div>
+        <div class="report-main-title" id="doc-main-title">REGISTRO ESPECIAL DE ENTRADAS Y SALIDAS DE INVENTARIO (ART. 177 REGLAMENTO LEY DE ISLR)</div>
+        <div class="report-legal-ref" id="doc-legal-sub">Método de Valoración: Costo Promedio Ponderado Móvil • Moneda de Curso Legal (Bolívares VES) • Art. 32–35 Código de Comercio</div>
       </div>
       <div class="header-agency">
         <div class="agency-name">Unión Contable Global</div>
-        <div>Asesoría Contable & Tributaria</div>
-        <div style="font-size: 7.5px; margin-top: 2px;">Caracas, Venezuela</div>
+        <div>Auditoría Tributaria & Mercantil</div>
+        <div style="font-size: 7.5px; margin-top: 2px;" id="lbl-fecha-emision">Emisión: --</div>
       </div>
     </header>
 
     <!-- Taxpayer Details -->
     <div class="taxpayer-box">
       <div class="data-group">
-        <span class="data-label">Razón Social del Contribuyente</span>
+        <span class="data-label">1. Razón Social y Domicilio Fiscal del Contribuyente</span>
         <span class="data-value highlight">INVERSIONES DG 67, C.A.</span>
-        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
-          Domicilio Fiscal: Av. Sur 11 entre las esquinas Bolívar y Miranda, Casa N° 112, Local S/N, Urb. San Agustín del Norte, Caracas ZP 1010
+        <span style="font-size: 7.5px; color: var(--text-muted); margin-top: 1px;">
+          Av. Sur 11 entre las esquinas Bolívar y Miranda, Casa N° 112, Local S/N, Urb. San Agustín del Norte, Caracas ZP 1010
         </span>
       </div>
       <div class="data-group">
-        <span class="data-label">Registro de Información Fiscal (RIF)</span>
+        <span class="data-label">2. RIF y Método de Valoración Fiscal</span>
         <span class="data-value font-mono highlight">J-50700865-7</span>
-        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
-          Sede Tributos Internos Libertador
+        <span style="font-size: 7.5px; color: var(--text-muted); margin-top: 1px;">
+          Costo Promedio Ponderado (Art. 177 RISLR)
         </span>
       </div>
       <div class="data-group">
-        <span class="data-label">Período / Fecha de Corte</span>
-        <span class="data-value font-mono highlight" id="lbl-fecha-corte">Al Día (En Vivo)</span>
-        <span style="font-size: 8px; color: var(--text-muted); margin-top: 2px;">
-          Moneda: USD (Referencial)
+        <span class="data-label">3. Período Fiscal / Ejercicio Auditado</span>
+        <span class="data-value font-mono highlight" id="lbl-fecha-corte">Ejercicio Fiscal 2026</span>
+        <span style="font-size: 7.5px; color: var(--text-muted); margin-top: 1px;" id="lbl-rango-fechas">
+          Desde: 01/01/2026 • Hasta: 31/12/2026
         </span>
       </div>
     </div>
 
-    <!-- Summary Strip -->
+    <!-- 5-Box Executive Summary (Art. 177 Continuity Equation in VES & USD) -->
     <div class="summary-strip">
       <div class="summary-card">
-        <div class="sc-label">Total Ítems en Catálogo</div>
+        <div class="sc-label">Ítems Auditados</div>
         <div class="sc-val" id="lbl-total-items">--</div>
+        <div class="sc-sub" id="lbl-almacen-sub">Todos los Almacenes</div>
       </div>
-      <div class="summary-card">
-        <div class="sc-label">Total Unidades Físicas en Existencia</div>
-        <div class="sc-val" id="lbl-total-unidades">--</div>
+      <div class="summary-card" style="border-left-color: #1e3a8a;">
+        <div class="sc-label">1. Inventario Inicial</div>
+        <div class="sc-val" id="lbl-init-val">Bs. 0,00</div>
+        <div class="sc-sub" id="lbl-init-und">0 unds</div>
       </div>
-      <div class="summary-card">
-        <div class="sc-label">Valorización Total de Inventario</div>
-        <div class="sc-val" id="lbl-total-valor">$0.00 USD</div>
+      <div class="summary-card" style="border-left-color: #065f46;">
+        <div class="sc-label">2. (+) Entradas / Compras</div>
+        <div class="sc-val" style="color:#065f46;" id="lbl-ent-val">Bs. 0,00</div>
+        <div class="sc-sub" id="lbl-ent-und">+0 unds</div>
+      </div>
+      <div class="summary-card" style="border-left-color: #9f1239;">
+        <div class="sc-label">3. (-) Salidas Tipificadas</div>
+        <div class="sc-val" style="color:#9f1239;" id="lbl-sal-val">Bs. 0,00</div>
+        <div class="sc-sub" id="lbl-sal-und">-0 unds (Costo Venta)</div>
+      </div>
+      <div class="summary-card" style="border-left-color: #000080; background:#f8fafc;">
+        <div class="sc-label">4. (=) Inventario Final</div>
+        <div class="sc-val" id="lbl-fin-val">Bs. 0,00</div>
+        <div class="sc-sub" id="lbl-fin-und">0 unds al cierre</div>
       </div>
     </div>
 
-    <!-- Inventory Table -->
+    <!-- Asiento Contable de Cierre Box (Shown in CIERRE_ANUAL Mode - Art. 32-35 Código de Comercio) -->
+    <div class="asiento-contable-box" id="box-asiento-cierre">
+      <div class="asiento-title">📑 ASIENTO CONTABLE DE CIERRE Y DETERMINACIÓN DEL COSTO DE VENTA (LIBRO DE INVENTARIOS Y BALANCES - ART. 32–35 CÓDIGO DE COMERCIO)</div>
+      <table class="report-table" style="margin-bottom:0;">
+        <thead>
+          <tr>
+            <th style="width:12%;">CÓDIGO CTA.</th>
+            <th style="width:48%; text-align:left;">DESCRIPCIÓN DE LA CUENTA CONTABLE (PCGA / VEN-NIF)</th>
+            <th style="width:20%;">DEBE (BOLÍVARES VES)</th>
+            <th style="width:20%;">HABER (BOLÍVARES VES)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-asiento-cierre">
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Main Dynamic Official Table -->
     <table class="report-table">
-      <thead>
-        <tr>
-          <th style="width: 3%;" class="text-center">#</th>
-          <th style="width: 10%;">CÓDIGO</th>
-          <th style="width: 37%;">DESCRIPCIÓN DE LA MERCANCÍA / REPUESTO</th>
-          <th style="width: 5%;" class="text-center">UND</th>
-          <th style="width: 13%;">CATEGORÍA</th>
-          <th style="width: 8%;">ALMACÉN</th>
-          <th style="width: 7%;" class="text-right">STOCK MÍN.</th>
-          <th style="width: 8%;" class="text-right">STOCK FÍSICO</th>
-          <th style="width: 9%;" class="text-right">COSTO ($)</th>
-          <th style="width: 10%;" class="text-right">TOTAL ($)</th>
-        </tr>
-      </thead>
+      <thead id="report-thead"></thead>
       <tbody id="report-tbody">
-        <tr><td colspan="10" class="text-center">Cargando datos oficiales desde Turso Cloud...</td></tr>
+        <tr><td colspan="18" class="text-center" style="padding: 20px;">Cargando Registro Oficial de Inventarios SENIAT...</td></tr>
       </tbody>
+      <tfoot id="report-tfoot"></tfoot>
     </table>
 
     <!-- Legal Certification -->
     <div class="certification-block">
-      <strong>CERTIFICACIÓN CONTABLE Y FISCAL:</strong> De conformidad con el Artículo 177 de la Ley de Impuesto Sobre la Renta (ISLR), las disposiciones del Código de Comercio de Venezuela (Artículos 32 y 33) y la Providencia Administrativa SENIAT N° 0257 reguladora de la emisión de facturas y libros contables, certificamos que el presente informe refleja con exactitud las existencias físicas reales, valuadas al costo promedio ponderado y soportadas en los registros de entradas por compras y salidas por ventas auditadas.
+      <strong>CERTIFICACIÓN CONTABLE, TRIBUTARIA Y MERCANTIL (ART. 177 RISLR / ART. 32–35 CÓDIGO DE COMERCIO):</strong> Certificamos que el presente Registro Especial de Inventarios ha sido elaborado bajo el método de <strong>Costo Promedio Ponderado Móvil</strong> en moneda de curso legal (Bolívares - VES), discriminando por cada ítem el inventario inicial, las entradas soportadas en facturas fiscales de compra, las salidas tipificadas (ventas, autoconsumos, retiros, muestras, mermas o ajustes) y el inventario final resultante, sin movimientos huérfanos y en total concordancia con los Libros Especiales de Compras y Ventas de <strong>INVERSIONES DG 67, C.A. (RIF J-50700865-7)</strong>.
     </div>
 
     <!-- Signature Boxes -->
     <div class="signatures-grid">
       <div class="signature-card">
-        <div class="sig-name">DEPARTAMENTO DE ALMACÉN</div>
-        <div class="sig-role">Elaborado por / Responsable de Inventario</div>
-        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">C.I.: __________________________</div>
+        <div class="sig-name">DEPARTAMENTO DE ALMACÉN Y TIENDA</div>
+        <div class="sig-role">Control Físico y Soportes de Recepción/Despacho</div>
+        <div style="margin-top: 14px; font-size: 7.5px; color: var(--text-muted);">Firma y Fecha: __________________________</div>
       </div>
 
       <div class="signature-card">
         <div class="sig-name">UNIÓN CONTABLE GLOBAL</div>
-        <div class="sig-role">Revisado y Certificado por Contador Público</div>
-        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">C.P.C. N°: _____________________</div>
+        <div class="sig-role">Revisado y Auditado por Contador Público</div>
+        <div style="margin-top: 14px; font-size: 7.5px; color: var(--text-muted);">C.P.C. N°: _____________________</div>
       </div>
 
       <div class="signature-card">
         <div class="sig-name">INVERSIONES DG 67, C.A.</div>
         <div class="sig-role">Representante Legal / Sello Húmedo</div>
-        <div style="margin-top: 18px; font-size: 7.5px; color: var(--text-muted);">RIF: J-50700865-7</div>
+        <div style="margin-top: 14px; font-size: 7.5px; color: var(--text-muted);">RIF: J-50700865-7</div>
       </div>
     </div>
 
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const fechaCorte = urlParams.get('fecha_corte');
+    let datosLibroActual = null;
 
-      const lblFecha = document.getElementById('lbl-fecha-corte');
-      const excelBtn = document.getElementById('excel-btn-link');
+    function fmtBs(val) {
+      return Number(val || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
-      if (fechaCorte === '2025-12-31') {
-        lblFecha.textContent = '31/12/2025 (Inventario Inicial)';
-      } else if (fechaCorte) {
-        lblFecha.textContent = `Corte al: ${fechaCorte}`;
+    function fmtUsd(val) {
+      return '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtNum(val) {
+      return Number(val || 0).toLocaleString('es-VE');
+    }
+
+    function onChangePeriodo() {
+      const per = document.getElementById('sel-periodo').value;
+      const boxRango = document.getElementById('box-rango-fechas');
+      boxRango.style.display = per === 'RANGO' ? 'inline-flex' : 'none';
+      cargarLibroInventarioSeniat();
+    }
+
+    function cambiarModoVista() {
+      const vista = document.getElementById('sel-vista').value;
+      const mainTitle = document.getElementById('doc-main-title');
+      const boxAsiento = document.getElementById('box-asiento-cierre');
+
+      if (vista === 'CIERRE_ANUAL') {
+        mainTitle.textContent = 'LIBRO OFICIAL DE INVENTARIOS Y BALANCES - CIERRE DEL EJERCICIO (ART. 32–35 CÓDIGO DE COMERCIO)';
+        boxAsiento.style.display = 'block';
       } else {
-        lblFecha.textContent = 'Al Día (En Vivo)';
+        mainTitle.textContent = 'REGISTRO ESPECIAL DE ENTRADAS Y SALIDAS DE INVENTARIO (ART. 177 REGLAMENTO LEY DE ISLR)';
+        boxAsiento.style.display = 'none';
+      }
+      renderTablaActual();
+    }
+
+    async function cargarLibroInventarioSeniat() {
+      const periodo = document.getElementById('sel-periodo')?.value || 'ANUAL_2026';
+      const almacen = document.getElementById('sel-almacen')?.value || 'TODOS';
+      const desde = document.getElementById('inp-desde')?.value || '';
+      const hasta = document.getElementById('inp-hasta')?.value || '';
+
+      let query = `?periodo=${encodeURIComponent(periodo)}&almacen=${encodeURIComponent(almacen)}`;
+      if (periodo === 'RANGO' && desde && hasta) {
+        query += `&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
       }
 
-      if (excelBtn && fechaCorte) {
-        excelBtn.href = `/api/export/excel?fecha_corte=${fechaCorte}`;
-      }
+      document.getElementById('btn-export-xlsx').href = `/api/export/libro-art177${query}&formato=xlsx`;
+      document.getElementById('btn-export-csv').href = `/api/export/libro-art177${query}&formato=csv`;
 
-      // Fetch products
+      const tbody = document.getElementById('report-tbody');
+      tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="padding:18px;">Calculando Costo Promedio Ponderado y Movimientos Art. 177 RISLR...</td></tr>`;
+
       try {
-        const query = fechaCorte ? `?fecha_corte=${fechaCorte}&limit=2000` : `?limit=2000`;
-        const res = await fetch(`/api/productos${query}`);
-        const products = await res.json();
+        const res = await fetch(`/api/reportes/libro-inventario-seniat${query}`);
+        const data = await res.json();
+        datosLibroActual = data;
+        renderTablaActual();
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="color:#dc2626; padding:18px;">Error al cargar Libro Oficial: ${err.message}</td></tr>`;
+      }
+    }
 
-        let totalUnits = 0;
-        let totalVal = 0;
+    async function actualizarConteoFisico(prodId, inputEl) {
+      const nuevoFisico = parseFloat(inputEl.value || 0);
+      try {
+        const res = await fetch('/api/inventario/toma-fisica', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            producto_id: prodId,
+            conteo_fisico: nuevoFisico,
+            observacion_auditoria: 'Actualizado en Libro de Inventarios y Balances'
+          })
+        });
+        if (res.ok) {
+          cargarLibroInventarioSeniat();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
 
-        const tbody = document.getElementById('report-tbody');
-        tbody.innerHTML = products.map((p, idx) => {
-          totalUnits += (p.stock_actual || 0);
-          totalVal += (p.valor_total_usd || 0);
+    function renderTablaActual() {
+      if (!datosLibroActual || !datosLibroActual.items) return;
+
+      const vista = document.getElementById('sel-vista')?.value || 'ART_177';
+      const moneda = document.getElementById('sel-moneda')?.value || 'VES';
+      const esVes = moneda === 'VES';
+      const sym = esVes ? 'Bs.' : '$';
+      const fmtM = esVes ? fmtBs : (v) => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const filtroMov = document.getElementById('sel-filtro-mov')?.value || 'TODOS';
+      const almacen = document.getElementById('sel-almacen')?.value || 'TODOS';
+      let items = datosLibroActual.items;
+
+      if (filtroMov === 'CON_MOVIMIENTO') {
+        items = items.filter(it => (it.cant_entradas > 0 || it.cant_salidas > 0));
+      } else if (filtroMov === 'CON_EXISTENCIA') {
+        items = items.filter(it => it.cant_final > 0);
+      }
+
+      document.getElementById('lbl-fecha-corte').textContent = datosLibroActual.etiquetaPeriodo || datosLibroActual.periodo;
+      document.getElementById('lbl-rango-fechas').textContent = `Desde: ${datosLibroActual.fechaInicio} • Hasta: ${datosLibroActual.fechaFin}`;
+      document.getElementById('lbl-almacen-sub').textContent = almacen === 'TODOS' ? 'Multimarcas + Autoperiquitos' : `Almacén: ${almacen}`;
+
+      let tCantIni = 0, tVesIni = 0, tUsdIni = 0;
+      let tCantEnt = 0, tVesEnt = 0, tUsdEnt = 0;
+      let tSalVenta = 0, tSalAuto = 0, tSalRet = 0, tSalMues = 0, tSalMerma = 0;
+      let tCantSal = 0, tVesSal = 0, tUsdSal = 0;
+      let tCantFin = 0, tVesFin = 0, tUsdFin = 0;
+      let tCantFis = 0, tVesFis = 0, tDiffUnd = 0, tDiffVes = 0;
+
+      for (const p of items) {
+        tCantIni += (p.cant_inicial || 0);
+        tVesIni += (p.monto_inicial_ves || 0);
+        tUsdIni += (p.monto_inicial_usd || 0);
+
+        tCantEnt += (p.cant_entradas || 0);
+        tVesEnt += (p.monto_entradas_ves || 0);
+        tUsdEnt += (p.monto_entradas_usd || 0);
+
+        tSalVenta += (p.sal_venta_und || 0);
+        tSalAuto += (p.sal_autoconsumo_und || 0);
+        tSalRet += (p.sal_retiro_und || 0);
+        tSalMues += (p.sal_muestra_und || 0);
+        tSalMerma += ((p.sal_merma_und || 0) + (p.sal_ajuste_und || 0));
+
+        tCantSal += (p.cant_salidas || 0);
+        tVesSal += (p.monto_salidas_ves || 0);
+        tUsdSal += (p.monto_salidas_usd || 0);
+
+        tCantFin += (p.cant_final || 0);
+        tVesFin += (p.monto_final_ves || 0);
+        tUsdFin += (p.monto_final_usd || 0);
+
+        tCantFis += (p.conteo_fisico || 0);
+        tVesFis += (p.valor_fisico_ves || 0);
+        tDiffUnd += (p.diferencia_unidades || 0);
+        tDiffVes += (p.diferencia_ves || 0);
+      }
+
+      // Actualizar Tarjetas Resumen Superior
+      document.getElementById('lbl-total-items').textContent = fmtNum(items.length);
+      document.getElementById('lbl-init-val').textContent = esVes ? `Bs. ${fmtBs(tVesIni)}` : fmtUsd(tUsdIni);
+      document.getElementById('lbl-init-und').textContent = `${fmtNum(tCantIni)} unds (${fmtUsd(tUsdIni)})`;
+      document.getElementById('lbl-ent-val').textContent = esVes ? `Bs. ${fmtBs(tVesEnt)}` : fmtUsd(tUsdEnt);
+      document.getElementById('lbl-ent-und').textContent = `+${fmtNum(tCantEnt)} unds (${fmtUsd(tUsdEnt)})`;
+      document.getElementById('lbl-sal-val').textContent = esVes ? `Bs. ${fmtBs(tVesSal)}` : fmtUsd(tUsdSal);
+      document.getElementById('lbl-sal-und').textContent = `-${fmtNum(tCantSal)} unds (${fmtUsd(tUsdSal)})`;
+      document.getElementById('lbl-fin-val').textContent = esVes ? `Bs. ${fmtBs(tVesFin)}` : fmtUsd(tUsdFin);
+      document.getElementById('lbl-fin-und').textContent = `${fmtNum(tCantFin)} unds (${fmtUsd(tUsdFin)})`;
+
+      const thead = document.getElementById('report-thead');
+      const tbody = document.getElementById('report-tbody');
+      const tfoot = document.getElementById('report-tfoot');
+
+      if (vista === 'CIERRE_ANUAL') {
+        // Actualizar Asiento Contable de Cierre (Art. 32-35 Código de Comercio)
+        const tbodyAsiento = document.getElementById('tbody-asiento-cierre');
+        tbodyAsiento.innerHTML = `
+          <tr>
+            <td class="text-center font-mono font-bold">1105-01</td>
+            <td class="font-bold">INVENTARIO FINAL DE MERCANCÍAS (AL CIERRE DEL EJERCICIO)</td>
+            <td class="text-right font-mono font-bold" style="color:#000080;">Bs. ${fmtBs(tVesFis)}</td>
+            <td class="text-right font-mono">-</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">5101-01</td>
+            <td class="font-bold">COSTO DE VENTAS DETERMINADO (INV. INICIAL + COMPRAS - INV. FINAL)</td>
+            <td class="text-right font-mono font-bold" style="color:#9f1239;">Bs. ${fmtBs(tVesSal)}</td>
+            <td class="text-right font-mono">-</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">1105-00</td>
+            <td style="padding-left:20px;">A: INVENTARIO INICIAL DE MERCANCÍAS</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono font-bold">Bs. ${fmtBs(tVesIni)}</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">5102-01</td>
+            <td style="padding-left:20px;">A: COMPRAS NETAS DE MERCANCÍAS DEL EJERCICIO</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono font-bold">Bs. ${fmtBs(tVesEnt)}</td>
+          </tr>
+        `;
+
+        thead.innerHTML = `
+          <tr class="group-header">
+            <th colspan="6">IDENTIFICACIÓN Y COSTO PROMEDIO PONDERADO (CPP)</th>
+            <th colspan="2" class="grp-inicial">INVENTARIO TEÓRICO SEGÚN LIBROS</th>
+            <th colspan="2" class="grp-entradas">TOMA FÍSICA REAL AL CIERRE</th>
+            <th colspan="3" class="grp-salidas">VARIACIÓN / AJUSTE DE AUDITORÍA</th>
+          </tr>
+          <tr>
+            <th>#</th>
+            <th>CÓDIGO</th>
+            <th style="text-align:left;">DESCRIPCIÓN DEL REPUESTO / MERCANCÍA</th>
+            <th>UND</th>
+            <th>ALMACÉN</th>
+            <th>CPP UNIT. (${sym})</th>
+            <th style="background:#eff6ff;">EXIST. TEÓRICA</th>
+            <th style="background:#eff6ff;">VALOR TEÓRICO (${sym})</th>
+            <th style="background:#ecfdf5;">CONTEO FÍSICO</th>
+            <th style="background:#ecfdf5;">VALOR FÍSICO (${sym})</th>
+            <th style="background:#fff1f2;">DIF. (UND)</th>
+            <th style="background:#fff1f2;">AJUSTE (${sym})</th>
+            <th>ESTADO AUDITORÍA</th>
+          </tr>
+        `;
+
+        tbody.innerHTML = items.map((p, idx) => {
+          const cpp = esVes ? p.costo_promedio_ves : p.costo_unitario_usd;
+          const vTeo = esVes ? p.monto_final_ves : p.monto_final_usd;
+          const vFis = esVes ? p.valor_fisico_ves : p.valor_fisico_usd;
+          const vDif = esVes ? p.diferencia_ves : p.diferencia_usd;
+
+          return `
+            <tr>
+              <td class="text-center font-mono">${idx + 1}</td>
+              <td class="font-mono font-bold" style="color:var(--ucg-navy);">${p.codigo}</td>
+              <td class="font-bold">${p.descripcion}</td>
+              <td class="text-center">${p.unidad_medida}</td>
+              <td class="text-center">${p.almacen}</td>
+              <td class="text-right font-mono">${fmtM(cpp)}</td>
+              <td class="text-right font-mono font-bold">${p.cant_final}</td>
+              <td class="text-right font-mono">${fmtM(vTeo)}</td>
+              <td class="text-right font-mono font-bold" style="background:#f0fdf4;">
+                <input type="number" step="1" value="${p.conteo_fisico}" class="no-print" style="width:58px; text-align:right; font-family:monospace; font-weight:700; border:1px solid #86efac; border-radius:4px; padding:1px 3px;" onchange="actualizarConteoFisico(${p.producto_id}, this)">
+                <span style="display:none;" class="only-print">${p.conteo_fisico}</span>
+              </td>
+              <td class="text-right font-mono font-bold" style="color:#065f46;">${fmtM(vFis)}</td>
+              <td class="text-right font-mono font-bold" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${p.diferencia_unidades}</td>
+              <td class="text-right font-mono" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${fmtM(vDif)}</td>
+              <td class="text-center" style="font-size:7px; font-weight:800; color:${p.diferencia_unidades === 0 ? '#166534' : '#9f1239'};">
+                ${p.diferencia_unidades === 0 ? '✅ CONFORME' : '⚠️ AJUSTAR'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        tfoot.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-right">TOTALES DEL LIBRO DE INVENTARIOS Y BALANCES (${items.length} ÍTEMS):</td>
+            <td class="text-right font-mono">${fmtNum(tCantFin)}</td>
+            <td class="text-right font-mono">${fmtM(esVes ? tVesFin : tUsdFin)}</td>
+            <td class="text-right font-mono" style="color:#065f46;">${fmtNum(tCantFis)}</td>
+            <td class="text-right font-mono" style="color:#065f46;">${fmtM(esVes ? tVesFis : tUsdFin)}</td>
+            <td class="text-right font-mono">${fmtNum(tDiffUnd)}</td>
+            <td class="text-right font-mono">${fmtM(tDiffVes)}</td>
+            <td></td>
+          </tr>
+        `;
+        return;
+      }
+
+      // VISTA ESTÁNDAR OBLIGATORIA: ART. 177 RISLR CON SALIDAS TIPIFICADAS Y COSTO PROMEDIO PONDERADO
+      thead.innerHTML = `
+        <tr class="group-header">
+          <th colspan="6">IDENTIFICACIÓN DEL ÍTEM Y COSTO PROMEDIO PONDERADO</th>
+          <th colspan="2" class="grp-inicial">1. INVENTARIO INICIAL</th>
+          <th colspan="2" class="grp-entradas">2. ENTRADAS (COMPRAS/AJ.)</th>
+          <th colspan="6" class="grp-salidas">3. SALIDAS TIPIFICADAS (ART. 177 RISLR) Y COSTO DE VENTA</th>
+          <th colspan="2" class="grp-final">4. INVENTARIO FINAL</th>
+        </tr>
+        <tr>
+          <th style="width:2.2%;">#</th>
+          <th style="width:5.8%;">CÓDIGO</th>
+          <th style="width:19%; text-align:left;">DESCRIPCIÓN DE LA MERCANCÍA / REPUESTO</th>
+          <th style="width:2.8%;">UND</th>
+          <th style="width:5.8%;">ALMACÉN</th>
+          <th style="width:5.5%;">CPP UNIT. (${sym})</th>
+          <!-- 1. Inicial -->
+          <th style="width:4.2%; background:#eff6ff;">CANT. INIC.</th>
+          <th style="width:6.8%; background:#eff6ff;">COSTO INIC. (${sym})</th>
+          <!-- 2. Entradas -->
+          <th style="width:4.2%; background:#ecfdf5;">CANT. ENT.</th>
+          <th style="width:6.8%; background:#ecfdf5;">COSTO ENT. (${sym})</th>
+          <!-- 3. Salidas Discriminadas -->
+          <th style="width:3.8%; background:#fff1f2;" title="Salidas por Factura de Venta">VENTA</th>
+          <th style="width:3.5%; background:#fff1f2;" title="Salidas por Autoconsumo Interno">AUTOC.</th>
+          <th style="width:3.5%; background:#fff1f2;" title="Retiro de Accionistas o Socios">RETIRO</th>
+          <th style="width:3.5%; background:#fff1f2;" title="Muestras Promocionales">MUEST.</th>
+          <th style="width:3.5%; background:#fff1f2;" title="Mermas, Daños o Ajustes">MERMA</th>
+          <th style="width:6.8%; background:#fff1f2;">COSTO SALIDAS (${sym})</th>
+          <!-- 4. Final -->
+          <th style="width:4.3%; background:#e0e7ff;">EXIST. FINAL</th>
+          <th style="width:7.5%; background:#e0e7ff;">VALOR FINAL (${sym})</th>
+        </tr>
+      `;
+
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="padding:18px;">No hay repuestos que coincidan con el filtro seleccionado.</td></tr>`;
+      } else {
+        tbody.innerHTML = items.map((p, idx) => {
+          const cpp = esVes ? p.costo_promedio_ves : p.costo_unitario_usd;
+          const vIni = esVes ? p.monto_inicial_ves : p.monto_inicial_usd;
+          const vEnt = esVes ? p.monto_entradas_ves : p.monto_entradas_usd;
+          const vSal = esVes ? p.monto_salidas_ves : p.monto_salidas_usd;
+          const vFin = esVes ? p.monto_final_ves : p.monto_final_usd;
+
+          const hasEnt = p.cant_entradas > 0;
+          const hasSal = p.cant_salidas > 0;
+          const mermaAj = Number((p.sal_merma_und || 0) + (p.sal_ajuste_und || 0));
 
           return `
             <tr>
               <td class="text-center font-mono">${idx + 1}</td>
               <td class="font-mono font-bold" style="color: var(--ucg-navy);">${p.codigo}</td>
               <td class="font-bold">${p.descripcion}</td>
-              <td class="text-center">${p.unidad_medida}</td>
-              <td>${p.categoria}</td>
-              <td>${p.almacen}</td>
-              <td class="text-right font-mono">${p.stock_minimo}</td>
-              <td class="text-right font-mono font-bold">${p.stock_actual}</td>
-              <td class="text-right font-mono">$${p.costo_referencial_usd.toFixed(2)}</td>
-              <td class="text-right font-mono font-bold">$${p.valor_total_usd.toFixed(2)}</td>
+              <td class="text-center">${p.unidad_medida || 'UND'}</td>
+              <td class="text-center" style="font-size:7px;">${p.almacen}</td>
+              <td class="text-right font-mono">${fmtM(cpp)}</td>
+              <!-- 1. Inicial -->
+              <td class="text-right font-mono">${p.cant_inicial}</td>
+              <td class="text-right font-mono">${fmtM(vIni)}</td>
+              <!-- 2. Entradas -->
+              <td class="text-right font-mono font-bold" style="color:${hasEnt ? '#065f46' : '#64748b'};">${hasEnt ? '+' + p.cant_entradas : '0'}</td>
+              <td class="text-right font-mono" style="color:${hasEnt ? '#065f46' : '#64748b'};">${fmtM(vEnt)}</td>
+              <!-- 3. Salidas Discriminadas -->
+              <td class="text-right font-mono font-bold" style="color:${p.sal_venta_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_venta_und || 0}</td>
+              <td class="text-right font-mono" style="color:${p.sal_autoconsumo_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_autoconsumo_und || 0}</td>
+              <td class="text-right font-mono" style="color:${p.sal_retiro_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_retiro_und || 0}</td>
+              <td class="text-right font-mono" style="color:${p.sal_muestra_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_muestra_und || 0}</td>
+              <td class="text-right font-mono" style="color:${mermaAj > 0 ? '#9f1239' : '#94a3b8'};">${mermaAj}</td>
+              <td class="text-right font-mono font-bold" style="color:${hasSal ? '#9f1239' : '#64748b'};">${fmtM(vSal)}</td>
+              <!-- 4. Final -->
+              <td class="text-right font-mono font-bold" style="color: var(--ucg-navy); background:#f8fafc;">${p.cant_final}</td>
+              <td class="text-right font-mono font-bold" style="color: var(--ucg-navy); background:#f8fafc;">${fmtM(vFin)}</td>
             </tr>
           `;
         }).join('');
-
-        // Summary labels
-        document.getElementById('lbl-total-items').textContent = products.length.toLocaleString();
-        document.getElementById('lbl-total-unidades').textContent = Math.round(totalUnits).toLocaleString();
-        document.getElementById('lbl-total-valor').textContent = `$${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
-
-      } catch (err) {
-        document.getElementById('report-tbody').innerHTML = `<tr><td colspan="10" class="text-center" style="color: red;">Error al cargar datos del reporte: ${err.message}</td></tr>`;
       }
+
+      tfoot.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-right">TOTALES GENERALES ART. 177 RISLR (${items.length} ÍTEMS EN ${moneda}):</td>
+          <td class="text-right font-mono">${fmtNum(tCantIni)}</td>
+          <td class="text-right font-mono">${fmtM(esVes ? tVesIni : tUsdIni)}</td>
+          <td class="text-right font-mono" style="color:#065f46;">+${fmtNum(tCantEnt)}</td>
+          <td class="text-right font-mono" style="color:#065f46;">${fmtM(esVes ? tVesEnt : tUsdEnt)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalVenta)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalAuto)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalRet)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalMues)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalMerma)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${fmtM(esVes ? tVesSal : tUsdSal)}</td>
+          <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtNum(tCantFin)}</td>
+          <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtM(esVes ? tVesFin : tUsdFin)}</td>
+        </tr>
+      `;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('lbl-fecha-emision').textContent = 'Emisión: ' + new Date().toLocaleDateString('es-VE');
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const fechaCorte = urlParams.get('fecha_corte');
+      const periodoParam = urlParams.get('periodo');
+      const vistaParam = urlParams.get('vista');
+      const selPeriodo = document.getElementById('sel-periodo');
+      const selVista = document.getElementById('sel-vista');
+
+      if (vistaParam && selVista) {
+        selVista.value = vistaParam;
+        cambiarModoVista();
+      }
+
+      if (periodoParam && selPeriodo) {
+        selPeriodo.value = periodoParam;
+      } else if (fechaCorte && selPeriodo) {
+        if (fechaCorte === '2025-12-31') {
+          selPeriodo.value = '2025-12';
+        } else {
+          const ym = fechaCorte.slice(0, 7);
+          if (Array.from(selPeriodo.options).some(o => o.value === ym)) {
+            selPeriodo.value = ym;
+          }
+        }
+      }
+
+      cargarLibroInventarioSeniat();
     });
   </script>
 </body>

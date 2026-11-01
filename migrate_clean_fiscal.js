@@ -21,19 +21,60 @@ const tursoDb = (tursoUrl && tursoToken) ? createClient({ url: tursoUrl, authTok
 const folder = path.join(__dirname, 'DECLARACIONES MENSUALES');
 const files = fs.readdirSync(folder).filter(f => f.endsWith('.xlsx') && !f.startsWith('~')).sort();
 
-function excelToDate(val) {
+/**
+ * Convierte fechas de Excel o cadenas DD/MM/YYYY a YYYY-MM-DD,
+ * corrigiendo el error de auto-incremento de mes de Excel cuando el usuario arrastró 01/03/2026
+ * con formato americano (que generó 03/01/2026=46025, 03/02/2026=46056, etc.).
+ */
+function parseSalesDate(val, periodo, rowOffset) {
   if (!val) return null;
+  const [yearStr, monthStr] = periodo.split('-');
+  const targetMonth = parseInt(monthStr, 10);
+
   if (typeof val === 'number') {
-    const d = new Date((val - 25569) * 86400 * 1000);
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    const iso = d.toISOString().split('T')[0];
+    const [y, m, day] = iso.split('-').map(Number);
+
+    // Si la fecha serial cae exactamente en el mes del periodo, la usamos directo
+    if (y === 2026 && m === targetMonth) {
+      return iso;
+    }
+    // Si el día del serial coincide con el número de mes (ej. día=3 en Marzo, día=4 en Abril, día=5 en Mayo)
+    // significa que Excel invirtió Día/Mes al arrastrar la serie (mes=m pasa a ser el día real!)
+    if (y === 2026 && day === targetMonth && m >= 1 && m <= 12) {
+      return `2026-${String(targetMonth).padStart(2, '0')}-${String(m).padStart(2, '0')}`;
+    }
+    return iso;
+  }
+
+  const s = String(val).trim();
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      let dPart = parts[0].padStart(2, '0');
+      let mPart = parts[1].padStart(2, '0');
+      let yPart = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      return `${yPart}-${mPart}-${dPart}`;
+    }
+  }
+  return s.split(' ')[0].split('T')[0];
+}
+
+function parsePurchaseDate(val, periodo) {
+  if (!val) return `${periodo}-01`;
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
     return d.toISOString().split('T')[0];
   }
   const s = String(val).trim();
   if (s.includes('/')) {
     const parts = s.split('/');
     if (parts.length === 3) {
-      if (parts[2].length === 4) {
-        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      }
+      let dPart = parts[0].padStart(2, '0');
+      let mPart = parts[1].padStart(2, '0');
+      let yPart = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      return `${yPart}-${mPart}-${dPart}`;
     }
   }
   return s.split(' ')[0].split('T')[0];
@@ -58,32 +99,85 @@ function classifyProvider(rif, razon) {
   }
 }
 
-async function migrate() {
-  console.log('=== INICIANDO MIGRACIÓN Y LIMPIEZA FISCAL PRECISA (ENE - SEP 2026 + OCTUBRE) ===');
+/**
+ * Extrae con exactitud matemática los valores oficiales de la hoja 'RESUMEN IVA' (Forma 30) de cada Excel.
+ */
+function parseResumenIvaSheet(wb) {
+  const rSheetName = wb.SheetNames.find(s => s.toUpperCase().includes('RESUMEN'));
+  if (!rSheetName) return null;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[rSheetName], { header: 1 });
 
-  // Ensure columns in db
-  for (const client of [localDb, tursoDb].filter(Boolean)) {
-    try {
-      await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN excedente_anterior_bs REAL DEFAULT 0.0");
-    } catch (e) {}
-    try {
-      await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN excedente_siguiente_bs REAL DEFAULT 0.0");
-    } catch (e) {}
-    try {
-      await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN total_a_pagar_bs REAL DEFAULT 0.0");
-    } catch (e) {}
-    try {
-      await client.execute("ALTER TABLE proveedores ADD COLUMN telefono TEXT");
-    } catch (e) {}
-    try {
-      await client.execute("ALTER TABLE proveedores ADD COLUMN email TEXT");
-    } catch (e) {}
-    try {
-      await client.execute("ALTER TABLE proveedores ADD COLUMN porcentaje_retencion REAL DEFAULT 75.0");
-    } catch (e) {}
+  let ventasNoGravadas = 0;
+  let ventasBase = 0;
+  let debitoFiscal = 0;
+  let comprasNoGravadas = 0;
+  let comprasBase = 0;
+  let creditoFiscal = 0;
+  let excedenteAnterior = 0;
+  let totalCreditosFiscales = 0;
+  let impuestoPeriodo = 0;
+  let excedenteSiguiente = 0;
+  let retencionesPeriodo = 0;
+  let totalAPagar = 0;
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const label = String(row[0] || '').trim().toUpperCase();
+    if (!label) continue;
+
+    if (label.includes('VENTAS INTERNAS NO GRAVADAS')) {
+      ventasNoGravadas = Number(row[4] || 0);
+    } else if (label === 'TOTAL VENTAS Y DEBITOS FISCALES') {
+      ventasBase = Number(row[4] || 0);
+      debitoFiscal = Number(row[5] || 0);
+    } else if (label === 'TOTAL COMPRAS Y CREDITOS FISCALES') {
+      comprasBase = Number(row[4] || 0);
+      creditoFiscal = Number(row[5] || 0);
+    } else if (label.includes('EXCEDENTE DE CREDITOS FISCALES DEL MES ANTERIOR')) {
+      excedenteAnterior = Number(row[5] || 0);
+    } else if (label === 'TOTAL CREDITOS FISCALES') {
+      totalCreditosFiscales = Number(row[5] || 0);
+    } else if (label === 'IMPUESTO DEL PERIODO') {
+      impuestoPeriodo = Math.max(0, Number(row[5] || 0));
+    } else if (label.includes('EXCEDENTE DE CREDITOS FISCALES PARA MES SIGUIENTE')) {
+      const val = Number(row[5] || 0);
+      excedenteSiguiente = val > 0 ? val : 0;
+    } else if (label.includes('RETENCIONES DEL PERIODO')) {
+      retencionesPeriodo = Number(row[4] || row[5] || 0);
+    } else if (label === 'TOTAL A PAGAR') {
+      totalAPagar = Math.max(0, Number(row[5] || 0));
+    }
   }
 
-  // Clear fiscal tables for clean recreation
+  return {
+    ventasNoGravadas: Number(ventasNoGravadas.toFixed(2)),
+    ventasBase: Number(ventasBase.toFixed(2)),
+    debitoFiscal: Number(debitoFiscal.toFixed(2)),
+    comprasNoGravadas: Number(comprasNoGravadas.toFixed(2)),
+    comprasBase: Number(comprasBase.toFixed(2)),
+    creditoFiscal: Number(creditoFiscal.toFixed(2)),
+    excedenteAnterior: Number(excedenteAnterior.toFixed(2)),
+    totalCreditosFiscales: Number(totalCreditosFiscales.toFixed(2)),
+    impuestoPeriodo: Number(impuestoPeriodo.toFixed(2)),
+    excedenteSiguiente: Number(excedenteSiguiente.toFixed(2)),
+    retencionesPeriodo: Number(retencionesPeriodo.toFixed(2)),
+    totalAPagar: Number(totalAPagar.toFixed(2))
+  };
+}
+
+async function migrate() {
+  console.log('=== AUDITORÍA E IMPORTACIÓN FISCAL EXACTA (ENERO A SEPTIEMBRE 2026 + OCTUBRE MANUAL) ===');
+
+  for (const client of [localDb, tursoDb].filter(Boolean)) {
+    try { await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN excedente_anterior_bs REAL DEFAULT 0.0"); } catch (e) {}
+    try { await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN excedente_siguiente_bs REAL DEFAULT 0.0"); } catch (e) {}
+    try { await client.execute("ALTER TABLE declaraciones_iva ADD COLUMN total_a_pagar_bs REAL DEFAULT 0.0"); } catch (e) {}
+    try { await client.execute("ALTER TABLE proveedores ADD COLUMN telefono TEXT"); } catch (e) {}
+    try { await client.execute("ALTER TABLE proveedores ADD COLUMN email TEXT"); } catch (e) {}
+    try { await client.execute("ALTER TABLE proveedores ADD COLUMN porcentaje_retencion REAL DEFAULT 75.0"); } catch (e) {}
+  }
+
+  // Limpiar las tablas fiscales para reconstruirlas sin duplicados ni filas de totales falsas
   for (const client of [localDb, tursoDb].filter(Boolean)) {
     await client.execute("DELETE FROM libro_compras");
     await client.execute("DELETE FROM libro_ventas");
@@ -96,18 +190,26 @@ async function migrate() {
     if (p.rif) provMap.set(String(p.rif).trim().toUpperCase(), p.id);
   });
 
-  let acumuladoExcedente = 0.0;
+  // Ordenar archivos por número de mes (01 a 09)
+  const sortedFiles = [...files].sort((a, b) => {
+    const mA = parseInt(a.replace('Resumen IVA ', '').split('-')[0], 10);
+    const mB = parseInt(b.replace('Resumen IVA ', '').split('-')[0], 10);
+    return mA - mB;
+  });
 
-  for (const fname of files) {
+  let ultimoExcedenteSiguiente = 0.0;
+
+  for (const fname of sortedFiles) {
     const parts = fname.replace('Resumen IVA ', '').replace(' DG67 CA 2.xlsx', '').replace(' DG67 CA.xlsx', '').split('-');
     const mesNum = parseInt(parts[0], 10);
     const periodo = `2026-${String(mesNum).padStart(2, '0')}`;
     const fpath = path.join(folder, fname);
-    console.log(`\nProcesando período ${periodo} desde: ${fname}`);
+    console.log(`\n📄 Auditando e importando período ${periodo} desde: ${fname}`);
 
     const wb = XLSX.readFile(fpath);
+    const resumenOficial = parseResumenIvaSheet(wb);
 
-    // 1. Process Libro de Compras
+    // 1. LIBRO DE COMPRAS (solo filas de facturas reales antes de "Totales" / "AJUSTES")
     const cSheetName = wb.SheetNames.find(s => s.toUpperCase().includes('COMPRAS'));
     let comprasPeriodo = [];
     let totComprasBase = 0;
@@ -117,7 +219,23 @@ async function migrate() {
       const data = XLSX.utils.sheet_to_json(wb.Sheets[cSheetName], { header: 1 });
       for (let r = 7; r < data.length; r++) {
         const row = data[r] || [];
+        const col0Str = String(row[0] || '').trim().toUpperCase();
+        const col13Str = String(row[13] || '').trim().toUpperCase();
+        const col17Str = String(row[17] || '').trim().toUpperCase();
+
+        // Detener inmediatamente al llegar a la fila de Totales o sección de Ajustes/Resumen inferior
+        if (
+          col17Str.includes('TOTAL') ||
+          col0Str.includes('AJUSTES') ||
+          col13Str.includes('RESUMEN LIBRO') ||
+          col13Str.includes('TOTAL')
+        ) {
+          break;
+        }
+
         const nroOp = row[0];
+        if (typeof nroOp !== 'number') continue;
+
         const fecRaw = row[1];
         const rifRaw = row[3];
         const razonRaw = row[4];
@@ -129,12 +247,13 @@ async function migrate() {
 
         if (base && !isNaN(base) && base > 0) {
           const rif = rifRaw ? String(rifRaw).trim().toUpperCase() : 'S/RIF';
-          const razon = razonRaw ? String(razonRaw).trim() : 'Proveedor General';
-          const fac = nroFac ? String(nroFac).trim() : null;
+          const razon = razonRaw ? String(razonRaw).trim() : `Proveedor Operación #${nroOp} (${periodo})`;
+          const fac = nroFac ? String(nroFac).trim() : `OP-${nroOp}`;
           const ctrl = nroCtrl ? String(nroCtrl).trim() : null;
-          const fecha = excelToDate(fecRaw) || `${periodo}-01`;
-          const ivaCalculado = (iva && !isNaN(iva) && iva > 0) ? iva : Number((base * 0.16).toFixed(2));
-          const totalBs = Number((base + ivaCalculado).toFixed(2));
+          const fecha = parsePurchaseDate(fecRaw, periodo);
+          const ivaCalculado = (iva && !isNaN(iva) && iva > 0) ? Number(iva.toFixed(2)) : Number((base * 0.16).toFixed(2));
+          const baseRedondeada = Number(base.toFixed(2));
+          const totalBs = Number((baseRedondeada + ivaCalculado).toFixed(2));
 
           const { tipo, aplica } = classifyProvider(rif, razon);
           let provId = provMap.get(rif);
@@ -153,22 +272,22 @@ async function migrate() {
           }
 
           const estatus = aplica === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
-          const obs = aplica === 0 ? `Gasto / Servicio (${tipo})` : 'Factura registrada en Libro de Compras';
+          const obs = aplica === 0 ? `Gasto / Servicio (${tipo})` : 'Factura declarada en Libro de Compras SENIAT';
 
           comprasPeriodo.push({
             periodo,
             archivo_origen: fname,
-            nro_operacion: typeof nroOp === 'number' ? nroOp : comprasPeriodo.length + 1,
+            nro_operacion: nroOp,
             fecha,
             rif,
             razon_social: razon,
             nro_factura: fac,
             nro_control: ctrl,
-            base_imponible_bs: base,
+            base_imponible_bs: baseRedondeada,
             alicuota: 0.16,
             iva_bs: ivaCalculado,
             total_bs: totalBs,
-            iva_retenido_bs: ret,
+            iva_retenido_bs: Number(ret.toFixed(2)),
             proveedor_id: provId || null,
             tipo_servicio: tipo,
             aplica_inventario: aplica,
@@ -177,12 +296,11 @@ async function migrate() {
           });
 
           totComprasBase += base;
-          totComprasIva += ivaCalculado;
+          totComprasIva += iva;
         }
       }
     }
 
-    // Insert compras into databases
     for (const c of comprasPeriodo) {
       for (const client of [localDb, tursoDb].filter(Boolean)) {
         await client.execute({
@@ -199,56 +317,65 @@ async function migrate() {
         });
       }
     }
-    console.log(`  ✓ Libro de Compras: ${comprasPeriodo.length} facturas (Base: ${totComprasBase.toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.)`);
 
-    // 2. Process Libro de Ventas
+    // 2. LIBRO DE VENTAS (solo filas diarias reales de ZOA0000176 antes de "Total ZOA0000176")
     const vSheetName = wb.SheetNames.find(s => s.toUpperCase().includes('VENTAS'));
     let ventasPeriodo = [];
     let totVentasBase = 0;
     let totVentasIva = 0;
-    let totVentasTotal = 0;
+    let totComprobantes = 0;
 
     if (vSheetName) {
       const data = XLSX.utils.sheet_to_json(wb.Sheets[vSheetName], { header: 1 });
-      for (let r = 12; r < data.length; r++) {
+      for (let r = 13; r < data.length; r++) {
         const row = data[r] || [];
+        const col0Str = String(row[0] || '').trim().toUpperCase();
+        if (col0Str.includes('TOTAL')) {
+          break; // Detener en "Total ZOA0000176"
+        }
+
         const fecRaw = row[1];
-        const tot = Number(row[3]);
-        const ex = Number(row[5]) || 0.0;
-        const base = Number(row[7]);
-        const iva = Number(row[9]);
+        if (!fecRaw) continue;
+
+        const tot = Number(row[3]) || 0.0;
+        const col5Raw = row[5];
+        const ex = (typeof col5Raw === 'number' && !isNaN(col5Raw)) ? col5Raw : 0.0;
+        const notaEspecial = (typeof col5Raw === 'string' && col5Raw.trim().length > 0) ? col5Raw.trim() : null;
+        const base = Number(row[7]) || 0.0;
+        const iva = Number(row[9]) || 0.0;
         const desde = row[16] ? String(row[16]).trim() : null;
         const hasta = row[17] ? String(row[17]).trim() : null;
         const cant = Number(row[18]) || 0;
 
-        if (base && !isNaN(base) && base > 0) {
-          const fecha = excelToDate(fecRaw) || `${periodo}-01`;
-          const ivaCalculado = (iva && !isNaN(iva) && iva > 0) ? iva : Number((base * 0.16).toFixed(2));
-          const totalCalculado = (tot && !isNaN(tot) && tot > 0) ? tot : Number((base + ivaCalculado + ex).toFixed(2));
+        // Importamos filas con ventas gravadas (> 0) o con nota especial (ANULADA / MAQUINA AVERIADA con comprobantes)
+        if (base > 0 || (notaEspecial && (desde || hasta))) {
+          const fecha = parseSalesDate(fecRaw, periodo, r - 13) || `${periodo}-01`;
+          const baseRedondeada = Number(base.toFixed(2));
+          const ivaRedondeado = Number((iva > 0 ? iva : base * 0.16).toFixed(2));
+          const totalRedondeado = Number((tot > 0 ? tot : baseRedondeada + ivaRedondeado + ex).toFixed(2));
 
           ventasPeriodo.push({
             periodo,
             archivo_origen: fname,
             fecha,
-            factura_desde: desde,
+            factura_desde: notaEspecial && base === 0 ? `${desde || ''} (${notaEspecial})`.trim() : desde,
             factura_hasta: hasta,
-            total_bs: totalCalculado,
-            exento_bs: ex,
-            base_imponible_bs: base,
+            total_bs: totalRedondeado,
+            exento_bs: Number(ex.toFixed(2)),
+            base_imponible_bs: baseRedondeada,
             alicuota: 0.16,
-            iva_bs: ivaCalculado,
+            iva_bs: ivaRedondeado,
             cantidad_comprobantes: cant,
-            estatus_conciliacion: 'REGISTRADO_FISCAL'
+            estatus_conciliacion: notaEspecial && base === 0 ? notaEspecial : 'REGISTRADO_FISCAL'
           });
 
           totVentasBase += base;
-          totVentasIva += ivaCalculado;
-          totVentasTotal += totalCalculado;
+          totVentasIva += iva;
+          totComprobantes += cant;
         }
       }
     }
 
-    // Insert ventas into databases
     for (const v of ventasPeriodo) {
       for (const client of [localDb, tursoDb].filter(Boolean)) {
         await client.execute({
@@ -263,26 +390,18 @@ async function migrate() {
         });
       }
     }
-    console.log(`  ✓ Libro de Ventas: ${ventasPeriodo.length} registros (Base: ${totVentasBase.toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.)`);
 
-    // 3. Process Declaración IVA & Cálculos SENIAT
-    const debitoFiscal = totVentasIva;
-    const creditoFiscal = totComprasIva;
-    const excedenteAnterior = acumuladoExcedente;
-    const creditoTotalDeducible = creditoFiscal + excedenteAnterior;
+    // 3. RESUMEN DE DECLARACIÓN FORMA 30 (Fiel al 100% a la hoja 'RESUMEN IVA' del archivo Excel)
+    const declVentasBase = resumenOficial ? resumenOficial.ventasBase : Number(totVentasBase.toFixed(2));
+    const declDebito = resumenOficial ? resumenOficial.debitoFiscal : Number(totVentasIva.toFixed(2));
+    const declComprasBase = resumenOficial ? resumenOficial.comprasBase : Number(totComprasBase.toFixed(2));
+    const declCredito = resumenOficial ? resumenOficial.creditoFiscal : Number(totComprasIva.toFixed(2));
+    const declExcAnt = resumenOficial ? resumenOficial.excedenteAnterior : ultimoExcedenteSiguiente;
+    const declRet = resumenOficial ? resumenOficial.retencionesPeriodo : 0.0;
+    const declExcSig = resumenOficial ? resumenOficial.excedenteSiguiente : 0.0;
+    const declAPagar = resumenOficial ? resumenOficial.totalAPagar : 0.0;
 
-    let impuestoAPagar = 0.0;
-    let excedenteSiguiente = 0.0;
-
-    if (debitoFiscal > creditoTotalDeducible) {
-      impuestoAPagar = Number((debitoFiscal - creditoTotalDeducible).toFixed(2));
-      excedenteSiguiente = 0.0;
-      acumuladoExcedente = 0.0;
-    } else {
-      impuestoAPagar = 0.0;
-      excedenteSiguiente = Number((creditoTotalDeducible - debitoFiscal).toFixed(2));
-      acumuladoExcedente = excedenteSiguiente;
-    }
+    ultimoExcedenteSiguiente = declExcSig;
 
     for (const client of [localDb, tursoDb].filter(Boolean)) {
       await client.execute({
@@ -290,171 +409,42 @@ async function migrate() {
               (periodo, archivo_origen, ventas_base_bs, debito_fiscal_bs, compras_base_bs, credito_fiscal_bs,
                iva_retenido_bs, total_compras_facturas, total_ventas_dias, estatus,
                excedente_anterior_bs, excedente_siguiente_bs, total_a_pagar_bs)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DECLARADO', ?, ?, ?)`,
         args: [
-          periodo, fname, totVentasBase, debitoFiscal, totComprasBase, creditoFiscal,
-          0.0, comprasPeriodo.length, ventasPeriodo.length, 'DECLARADO',
-          excedenteAnterior, excedenteSiguiente, impuestoAPagar
+          periodo, fname, declVentasBase, declDebito, declComprasBase, declCredito,
+          declRet, comprasPeriodo.length, ventasPeriodo.length,
+          declExcAnt, declExcSig, declAPagar
         ]
       });
     }
 
-    console.log(`  ⚖ Resumen IVA ${periodo}: Débitos=${debitoFiscal.toFixed(2)} | Créditos=${creditoFiscal.toFixed(2)} | Exc. Ant=${excedenteAnterior.toFixed(2)} -> Exc. Sig=${excedenteSiguiente.toFixed(2)} | A Pagar=${impuestoAPagar.toFixed(2)}`);
+    console.log(`  ✓ Libro Compras: ${comprasPeriodo.length} facturas | Base: Bs. ${declComprasBase.toLocaleString('es-VE', {minimumFractionDigits: 2})} | Crédito: Bs. ${declCredito.toLocaleString('es-VE', {minimumFractionDigits: 2})}`);
+    console.log(`  ✓ Libro Ventas : ${ventasPeriodo.length} registros | Base: Bs. ${declVentasBase.toLocaleString('es-VE', {minimumFractionDigits: 2})} | Débito : Bs. ${declDebito.toLocaleString('es-VE', {minimumFractionDigits: 2})}`);
+    console.log(`  ⚖ Forma 30 (${periodo}): Exc.Ant=${declExcAnt.toFixed(2)} | Ret.Clientes=${declRet.toFixed(2)} | Exc.Sig=${declExcSig.toFixed(2)} | Total a Pagar=${declAPagar.toFixed(2)}`);
   }
 
-  // 4. Preparar Mes de Octubre 2026 (2026-10)
-  console.log('\n--- PREPARANDO EL MES DE OCTUBRE 2026 (2026-10) ---');
+  // 4. PREPARAR MES DE OCTUBRE 2026 (2026-10) PARA CARGA MANUAL EN EL SISTEMA
+  // Arrastre exacto del Excedente de Crédito Fiscal de Septiembre 2026: Bs. 45.355,86
+  console.log('\n--- PREPARANDO OCTUBRE 2026 (2026-10) CON ARRASTRE OFICIAL DE SEPTIEMBRE ---');
   const octPeriodo = '2026-10';
-  const octExcedenteAnterior = acumuladoExcedente; // Arrastre de Septiembre
+  const octExcedenteAnterior = ultimoExcedenteSiguiente; // 45355.86 Bs.
 
-  // Insert base declaration record for October
   for (const client of [localDb, tursoDb].filter(Boolean)) {
     await client.execute({
       sql: `INSERT INTO declaraciones_iva 
             (periodo, archivo_origen, ventas_base_bs, debito_fiscal_bs, compras_base_bs, credito_fiscal_bs,
              iva_retenido_bs, total_compras_facturas, total_ventas_dias, estatus,
              excedente_anterior_bs, excedente_siguiente_bs, total_a_pagar_bs)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(periodo) DO UPDATE SET excedente_anterior_bs = excluded.excedente_anterior_bs;`,
-      args: [
-        octPeriodo, 'GENERADO_SISTEMA_WEB', 0.0, 0.0, 0.0, 0.0,
-        0.0, 0, 0, 'EN_PROCESO',
-        octExcedenteAnterior, octExcedenteAnterior, 0.0
-      ]
+            VALUES (?, 'CARGA_MANUAL_SISTEMA', 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 'EN_PROCESO', ?, ?, 0.0)`,
+      args: [octPeriodo, octExcedenteAnterior, octExcedenteAnterior]
     });
   }
 
-  // Let's add 2 sample initial invoices for October to demonstrate immediate functionality
-  const sampleFacturasOct = [
-    {
-      periodo: '2026-10',
-      nro_op: 1,
-      fecha: '2026-10-05',
-      rif: 'J-41310543-8',
-      razon: 'Disbattery Lubricantes, S.A.',
-      fac: 'F0032991',
-      ctrl: '00-285410',
-      base: 85200.00,
-      iva: 13632.00,
-      total: 98832.00,
-      ret: 10224.00, // 75%
-      tipo: 'MERCANCIA_REPUESTOS',
-      aplica: 1,
-      obs: 'Compra de Lubricantes y Grasas Especiales (Octubre 2026)'
-    },
-    {
-      periodo: '2026-10',
-      nro_op: 2,
-      fecha: '2026-10-12',
-      rif: 'J-50714716-9',
-      razon: 'Union Global 333, C.A.',
-      fac: '000019',
-      ctrl: '00-00000021',
-      base: 42500.00,
-      iva: 6800.00,
-      total: 49300.00,
-      ret: 5100.00, // 75%
-      tipo: 'SERVICIOS_CONTABLES_Y_LEGALES',
-      aplica: 0,
-      obs: 'Honorarios Profesionales Contables y Asesoría Tributaria'
-    }
-  ];
-
-  for (const c of sampleFacturasOct) {
-    const provId = provMap.get(c.rif) || null;
-    for (const client of [localDb, tursoDb].filter(Boolean)) {
-      await client.execute({
-        sql: `INSERT INTO libro_compras 
-              (periodo, archivo_origen, nro_operacion, fecha, rif, razon_social, nro_factura, nro_control,
-               base_imponible_bs, alicuota, iva_bs, total_bs, iva_retenido_bs, proveedor_id,
-               tipo_servicio, aplica_inventario, estatus_conciliacion, observaciones_cruce)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          c.periodo, 'CARGA_DIRECTA_WEB', c.nro_op, c.fecha, c.rif, c.razon, c.fac, c.ctrl,
-          c.base, 0.16, c.iva, c.total, c.ret, provId,
-          c.tipo, c.aplica, c.aplica === 1 ? 'NO_CONCILIADO' : 'NO_APLICA_GASTO', c.obs
-        ]
-      });
-    }
-  }
-
-  // Sample sales for October
-  const sampleVentasOct = [
-    {
-      periodo: '2026-10',
-      fecha: '2026-10-06',
-      desde: '00002340',
-      hasta: '00002352',
-      cant: 13,
-      base: 95400.00,
-      iva: 15264.00,
-      total: 110664.00
-    },
-    {
-      periodo: '2026-10',
-      fecha: '2026-10-15',
-      desde: '00002353',
-      hasta: '00002368',
-      cant: 16,
-      base: 142100.00,
-      iva: 22736.00,
-      total: 164836.00
-    }
-  ];
-
-  for (const v of sampleVentasOct) {
-    for (const client of [localDb, tursoDb].filter(Boolean)) {
-      await client.execute({
-        sql: `INSERT INTO libro_ventas 
-              (periodo, archivo_origen, fecha, factura_desde, factura_hasta, total_bs, exento_bs,
-               base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes, estatus_conciliacion)
-              VALUES (?, ?, ?, ?, ?, ?, 0.0, ?, 0.16, ?, ?, 'REGISTRADO_FISCAL')`,
-        args: [
-          v.periodo, 'CARGA_DIRECTA_WEB', v.fecha, v.desde, v.hasta, v.total,
-          v.base, v.iva, v.cant
-        ]
-      });
-    }
-  }
-
-  // Recalculate October declaration
-  const octTotVentasBase = sampleVentasOct.reduce((acc, v) => acc + v.base, 0);
-  const octTotVentasIva = sampleVentasOct.reduce((acc, v) => acc + v.iva, 0);
-  const octTotComprasBase = sampleFacturasOct.reduce((acc, c) => acc + c.base, 0);
-  const octTotComprasIva = sampleFacturasOct.reduce((acc, c) => acc + c.iva, 0);
-  const octTotRetenido = sampleFacturasOct.reduce((acc, c) => acc + c.ret, 0);
-
-  const octCreditoDeducible = octTotComprasIva + octExcedenteAnterior;
-  let octPagar = 0;
-  let octExcSig = 0;
-  if (octTotVentasIva > octCreditoDeducible) {
-    octPagar = Number((octTotVentasIva - octCreditoDeducible).toFixed(2));
-    octExcSig = 0;
-  } else {
-    octPagar = 0;
-    octExcSig = Number((octCreditoDeducible - octTotVentasIva).toFixed(2));
-  }
-
-  for (const client of [localDb, tursoDb].filter(Boolean)) {
-    await client.execute({
-      sql: `UPDATE declaraciones_iva
-            SET ventas_base_bs = ?, debito_fiscal_bs = ?, compras_base_bs = ?, credito_fiscal_bs = ?,
-                iva_retenido_bs = ?, total_compras_facturas = ?, total_ventas_dias = ?,
-                excedente_anterior_bs = ?, excedente_siguiente_bs = ?, total_a_pagar_bs = ?, estatus = 'EN_PROCESO'
-            WHERE periodo = '2026-10'`,
-      args: [
-        octTotVentasBase, octTotVentasIva, octTotComprasBase, octTotComprasIva,
-        octTotRetenido, sampleFacturasOct.length, sampleVentasOct.length,
-        octExcedenteAnterior, octExcSig, octPagar
-      ]
-    });
-  }
-
-  console.log(`✓ Octubre 2026 configurado con arrastre de Septiembre (${octExcedenteAnterior.toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.) y 2 operaciones iniciales de ejemplo.`);
-  console.log('=== MIGRACIÓN FISCAL EXITOSA Y SINCRONIZADA TOTALMENTE ===');
+  console.log(`✓ Octubre 2026 (2026-10) inicializado limpio para carga manual con Excedente de Crédito Fiscal del Mes Anterior = Bs. ${octExcedenteAnterior.toLocaleString('es-VE', {minimumFractionDigits: 2})}`);
+  console.log('=== AUDITORÍA Y SINCRONIZACIÓN COMPLETADA AL 100% ===');
 }
 
 migrate().then(() => process.exit(0)).catch(err => {
-  console.error('Error migrando:', err);
+  console.error('Error en migración fiscal:', err);
   process.exit(1);
 });

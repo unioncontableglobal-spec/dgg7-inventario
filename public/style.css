@@ -1636,84 +1636,248 @@ select:focus, input:focus {
 
 /* Print View Modal for Official SENIAT Books */
 .print-preview-container {
-  max-width: 1050px;
+  max-width: 1120px;
   margin: 0 auto;
   background: #ffffff;
-  padding: 28px 32px;
+  padding: 24px 28px;
   border: 1px solid #cbd5e1;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
   font-family: 'Plus Jakarta Sans', Arial, sans-serif;
   color: #0f172a;
 }
 
-.print-preview-header {
+.print-preview-header,
+.seniat-official-header {
   display: grid;
-  grid-template-columns: 120px 1fr 140px;
+  grid-template-columns: 120px 1fr 185px;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   border-bottom: 2px solid #000080;
-  padding-bottom: 14px;
-  margin-bottom: 18px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
 }
 
-.print-preview-table {
+.print-preview-table,
+.seniat-grid-table,
+.seniat-f30-main-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10px;
-  margin-bottom: 20px;
+  font-size: 9px;
+  margin-bottom: 14px;
 }
 
 .print-preview-table th, 
-.print-preview-table td {
-  border: 1px solid #94a3b8;
-  padding: 5px 6px;
+.print-preview-table td,
+.seniat-grid-table th,
+.seniat-grid-table td,
+.seniat-f30-main-table th,
+.seniat-f30-main-table td {
+  border: 1px solid #64748b;
+  padding: 4px 5px;
+  vertical-align: middle;
 }
 
-.print-preview-table th {
+.print-preview-table th,
+.seniat-grid-table th {
   background: #f1f5f9;
   font-weight: 800;
-  text-align: left;
+  text-align: center;
+  color: #0f172a;
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.seniat-group-header th {
+  background: #000080 !important;
+  color: #ffffff !important;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4px 6px;
+}
+
+.seniat-summary-boxes {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+  margin-top: 10px;
+  margin-bottom: 18px;
+  page-break-inside: avoid;
+}
+
+.seniat-summary-box {
+  border: 1px solid #64748b;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.seniat-box-title {
+  background: #000080;
+  color: #ffffff;
+  font-size: 8.5px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+}
+
+.seniat-f30-top-banner {
+  display: grid;
+  grid-template-columns: 110px 1fr 160px;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid #000080;
+  background: #f8fafc;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.seniat-f30-banner-logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.seniat-f30-banner-center {
+  text-align: center;
+  padding: 0 4px;
+}
+
+.seniat-f30-banner-box {
+  text-align: right;
+  border: 2px solid #000080;
+  padding: 5px 10px;
+  border-radius: 4px;
+  background: #eff6ff;
+  white-space: nowrap;
+}
+
+.seniat-portrait-f30 {
+  max-width: 820px;
+  padding: 16px 20px;
+}
+
+.seniat-portrait-f30 .print-preview-table th,
+.seniat-portrait-f30 .print-preview-table td,
+.seniat-portrait-f30 .seniat-f30-main-table th,
+.seniat-portrait-f30 .seniat-f30-main-table td {
+  padding: 3.5px 6px;
+}
+
+.seniat-f30-header-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 9px;
+}
+
+.seniat-f30-header-grid td {
+  border: 1px solid #64748b;
+  padding: 6px 8px;
+  background: #ffffff;
 }
 
 .print-footer-signatures {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 40px;
-  margin-top: 40px;
+  gap: 32px;
+  margin-top: 32px;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
+  page-break-inside: avoid;
+}
+
+.print-footer-signatures.seniat-3-signatures {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
 }
 
 .sig-line {
-  border-top: 1px solid #000;
+  border-top: 1px solid #0f172a;
   padding-top: 6px;
-  font-weight: 700;
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 9.5px;
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    margin: 8mm 9mm;
   }
-  #modal-impresion-fiscal, #modal-impresion-fiscal * {
-    visibility: visible;
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  #modal-impresion-fiscal {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    background: transparent;
-  }
-  .modal-header, .modal-footer, .btn-print-hide {
+  .app-layout,
+  .app-sidebar,
+  .app-main-wrapper,
+  .app-topbar,
+  .main-content,
+  .toast-container,
+  .modal-header,
+  .modal-footer,
+  .btn-print-hide {
     display: none !important;
   }
+  #modal-impresion-fiscal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  #modal-impresion-fiscal .modal-box {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  #modal-print-body,
   .print-preview-container {
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    max-width: 100%;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-row-group;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
   }
 }
 

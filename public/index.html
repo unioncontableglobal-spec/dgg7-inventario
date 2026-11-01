@@ -90,6 +90,12 @@
           <span>Declaración IVA (Forma 30)</span>
         </button>
 
+        <button class="nav-tab" data-tab="tab-retenciones-islr" id="btn-tab-retenciones-islr">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line><line x1="9" y1="11" x2="15" y2="11"></line></svg>
+          <span>Retenciones ISLR</span>
+          <span class="nav-badge-pill" style="background:#0B2447; color:#19A7CE; border:1px solid #19A7CE;">PA 00093</span>
+        </button>
+
         <button class="nav-tab" data-tab="tab-proveedores" id="btn-tab-proveedores">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           <span>Panel de Proveedores</span>
@@ -144,6 +150,10 @@
         </div>
 
         <div class="topbar-right">
+          <button type="button" class="btn btn-sm" style="background: #0B2447; color: #FFFFFF; border: 1.5px solid #19A7CE; font-weight: 800; padding: 6px 11px; font-size: 0.76rem;" onclick="openModalTasasCierreBCV()" title="Configurar Tasa Oficial BCV de Cierre de Mes y Revalorizar Meses Declarados (USD ↔ Bs.)">
+            💱 Tasas BCV Cierre Mensual
+          </button>
+
           <span class="topbar-period-pill">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
             <span>Ejercicio: <strong>2026 (Octubre Activo)</strong></span>
@@ -276,6 +286,9 @@
           <p class="subtitle">Catálogo unificado y balance de existencias sincronizado en Turso Cloud.</p>
         </div>
         <div class="header-buttons">
+          <button type="button" class="btn btn-secondary" onclick="openModalTasasCierreBCV()" title="Ajustar Tasa Oficial BCV del 31/12/2025 y de cada mes declarado">
+            💱 Tasas BCV Cierre (31/12/2025 – Oct)
+          </button>
           <a href="/api/export/excel" class="btn btn-emerald" id="btn-tab-export-excel">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Descargar Excel
@@ -305,6 +318,8 @@
             <option value="2026-06-30">📅 Cierre Junio 2026</option>
             <option value="2026-07-31">📅 Cierre Julio 2026</option>
             <option value="2026-08-31">📅 Cierre Agosto 2026</option>
+            <option value="2026-09-30">📅 Cierre Septiembre 2026</option>
+            <option value="2026-10-31">📅 Cierre Octubre 2026</option>
           </select>
           <select id="inv-filter-cat">
             <option value="TODAS">Todas las Categorías</option>
@@ -322,8 +337,11 @@
 
       <!-- Inventory Table -->
       <div class="panel-card table-panel">
-        <div class="table-meta">
+        <div class="table-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <span id="inv-count-badge">Mostrando 0 productos</span>
+          <div id="inv-bcv-summary-badge" style="font-size:0.82rem; font-weight:700; color:#0B2447; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 12px; border-radius:6px;">
+            💱 Tasa Oficial BCV Aplicable: Bs. -- por USD
+          </div>
         </div>
         <div class="table-responsive table-scroll">
           <table class="data-table" id="table-inventario">
@@ -336,14 +354,16 @@
                 <th>ALMACÉN</th>
                 <th class="text-right">STOCK MÍN.</th>
                 <th class="text-right">STOCK ACTUAL</th>
-                <th class="text-right">COSTO ($)</th>
-                <th class="text-right">VALOR ($)</th>
+                <th class="text-right">COSTO UNIT. ($)</th>
+                <th class="text-right" style="color:#0B2447;">COSTO UNIT. (BS)</th>
+                <th class="text-right">VALOR TOTAL ($)</th>
+                <th class="text-right" style="color:#059669;">VALOR TOTAL (BS)</th>
                 <th class="text-center">ESTADO</th>
                 <th class="text-center">ACCIÓN</th>
               </tr>
             </thead>
             <tbody id="tbody-inventario">
-              <tr><td colspan="11" class="text-center">Cargando inventario...</td></tr>
+              <tr><td colspan="13" class="text-center">Cargando inventario...</td></tr>
             </tbody>
           </table>
         </div>
@@ -354,8 +374,13 @@
     <section id="tab-entrada" class="tab-pane">
       <div class="page-header">
         <div>
-          <h1>Registrar Entrada de Mercancía (Compras)</h1>
-          <p class="subtitle">Registra el ingreso de repuestos, vinculando proveedor, factura de compra y costos.</p>
+          <h1>Registrar Entrada de Mercancía (Kardex y Doble Expresión PA SNAT/2026/00093)</h1>
+          <p class="subtitle">Registra el ingreso de repuestos con conversión automática Bolívares ↔ Divisas (Tasa Oficial BCV) y desglose de Precio Unitario, Base Imponible, IVA 16% y Total Línea.</p>
+        </div>
+        <div class="header-buttons">
+          <button type="button" class="btn btn-secondary" onclick="openModalTasasCierreBCV()">
+            💱 Tasas BCV de Cierre Mensual
+          </button>
         </div>
       </div>
 
@@ -363,28 +388,71 @@
         <form id="form-entrada" class="movement-form">
           <!-- Document Header -->
           <div class="form-section">
-            <h3 class="section-title">1. Datos del Documento</h3>
-            <div class="form-grid">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+              <h3 class="section-title" style="margin:0;">1. Trazabilidad del Documento Fuente y Tasa Oficial BCV (Art. 177 RISLR / PA 00093)</h3>
+              <div id="ent-bcv-legend-banner" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; padding:4px 12px; border-radius:6px; font-size:0.76rem; font-weight:800;">
+                Tasa Oficial BCV Aplicable: Bs. 88,50 por USD (Fecha: Hoy)
+              </div>
+            </div>
+            <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
               <div class="form-field">
-                <label for="ent-fecha">Fecha del Ingreso *</label>
-                <input type="date" id="ent-fecha" required>
+                <label for="ent-subtipo">Tipificación de Entrada *</label>
+                <select id="ent-subtipo" required>
+                  <option value="COMPRA_NACIONAL">📥 Compra Nacional (Factura Fiscal)</option>
+                  <option value="NOTA_RECEPCION">📦 Nota de Recepción / Entrega</option>
+                  <option value="DEVOLUCION_VENTA">🔄 Devolución en Venta (Nota de Crédito)</option>
+                  <option value="AJUSTE_POSITIVO_SOBRANTE">⚖️ Ajuste Positivo / Sobrante Toma Física</option>
+                </select>
               </div>
 
               <div class="form-field">
-                <label for="ent-factura">Número de Factura / Control Fiscal *</label>
-                <input type="text" id="ent-factura" placeholder="Ej: FACT 4589" required>
+                <label for="ent-fecha">Fecha del Ingreso / Compra *</label>
+                <input type="date" id="ent-fecha" required onchange="onCambioFechaMovimiento('ent')">
               </div>
 
               <div class="form-field">
-                <label for="ent-proveedor">Proveedor *</label>
+                <label for="ent-factura">N° Factura / Nota / Acta *</label>
+                <input type="text" id="ent-factura" placeholder="Ej: FACT 00002252" required>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-control">N° Control Fiscal SENIAT *</label>
+                <input type="text" id="ent-control" placeholder="Ej: 00-004589" value="00-" required>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-proveedor">Proveedor Fiscal *</label>
                 <select id="ent-proveedor" required>
                   <option value="">Seleccione Proveedor...</option>
                 </select>
               </div>
 
               <div class="form-field">
-                <label for="ent-obs">Observaciones</label>
-                <input type="text" id="ent-obs" placeholder="Nota opcional o detalle del despacho">
+                <label for="ent-modo-moneda">Moneda de Carga (Conversión Bidireccional) *</label>
+                <select id="ent-modo-moneda" onchange="calculateEntryTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
+                  <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
+                  <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="ent-tasa">Tasa Oficial BCV (Bs./USD) *</label>
+                <input type="number" step="0.01" id="ent-tasa" value="88.50" required oninput="calculateEntryTotals()" title="Tasa oficial BCV del día de la operación">
+              </div>
+
+              <div class="form-field">
+                <label for="ent-fecha-tasa">Fecha de la Tasa BCV *</label>
+                <input type="date" id="ent-fecha-tasa" required oninput="calculateEntryTotals()">
+              </div>
+
+              <div class="form-field">
+                <label for="ent-usuario">Usuario Responsable *</label>
+                <input type="text" id="ent-usuario" value="ASISTENTE_ALMACEN_TIENDA" required>
+              </div>
+
+              <div class="form-field" style="grid-column: span 3;">
+                <label for="ent-obs">Observaciones / Documento Afectado</label>
+                <input type="text" id="ent-obs" placeholder="Nota o acta de soporte">
               </div>
             </div>
           </div>
@@ -392,7 +460,7 @@
           <!-- Items Detail -->
           <div class="form-section">
             <div class="section-header-flex">
-              <h3 class="section-title">2. Lista de Repuestos</h3>
+              <h3 class="section-title">2. Líneas del Documento con Doble Expresión Monetaria (Costo Unitario, Base Imponible, IVA 16% y Total en Bs. y USD)</h3>
               <button type="button" class="btn btn-sm btn-emerald" id="btn-add-item-ent">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
                 Agregar Ítem
@@ -403,20 +471,25 @@
               <table class="items-entry-table" id="table-items-entrada">
                 <thead>
                   <tr>
-                    <th style="width: 45%;">Producto / Repuesto</th>
-                    <th style="width: 15%;" class="text-right">Cantidad</th>
-                    <th style="width: 20%;" class="text-right">Costo Unitario ($)</th>
-                    <th style="width: 15%;" class="text-right">Subtotal ($)</th>
-                    <th style="width: 5%;"></th>
+                    <th style="width: 28%;">Producto / Repuesto</th>
+                    <th style="width: 9%;" class="text-right">Cant.</th>
+                    <th style="width: 13%;" class="text-right">Costo Unit. ($)</th>
+                    <th style="width: 14%;" class="text-right">Costo Unit. (Bs.)</th>
+                    <th style="width: 15%;" class="text-right">Base Imponible (Bs / $)</th>
+                    <th style="width: 11%;" class="text-right">IVA 16% (Bs / $)</th>
+                    <th style="width: 14%;" class="text-right">Total Línea (Bs / $)</th>
+                    <th style="width: 4%;"></th>
                   </tr>
                 </thead>
                 <tbody id="tbody-items-entrada">
                   <!-- Dynamic rows added by JS -->
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td colspan="3" class="text-right font-bold">TOTAL COMPRA ($ USD):</td>
-                    <td class="text-right font-bold" id="total-entrada-usd">$0.00</td>
+                  <tr style="background:#f8fafc;">
+                    <td colspan="4" class="text-right font-bold" id="ent-footer-legend" style="color:#0B2447;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD:</td>
+                    <td class="text-right font-mono font-bold" id="total-entrada-base">Bs. 0,00 ($0.00)</td>
+                    <td class="text-right font-mono font-bold" id="total-entrada-iva">Bs. 0,00 ($0.00)</td>
+                    <td class="text-right font-mono font-bold" id="total-entrada-usd" style="color:#0B2447; font-size:0.92rem;">Bs. 0,00 ($0.00)</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -429,7 +502,7 @@
             <button type="button" class="btn btn-secondary" onclick="resetForm('form-entrada')">Limpiar Formulario</button>
             <button type="submit" class="btn btn-emerald btn-lg" id="btn-submit-entrada">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              Guardar Entrada en Turso Cloud
+              Guardar Entrada con Doble Expresión SENIAT
             </button>
           </div>
         </form>
@@ -440,8 +513,8 @@
     <section id="tab-salida" class="tab-pane">
       <div class="page-header">
         <div>
-          <h1>Registrar Salida de Mercancía (Ventas / Despachos)</h1>
-          <p class="subtitle">Registra ventas con validación en tiempo real de existencias para prevenir stock negativo.</p>
+          <h1>Registrar Salida de Mercancía y Facturación (Control Estricto Kardex PA SNAT/2026/00093)</h1>
+          <p class="subtitle">Validación en tiempo real de existencias (prohibido facturar sin stock físico) y doble expresión monetaria Bs./USD por línea.</p>
         </div>
       </div>
 
@@ -449,21 +522,74 @@
         <form id="form-salida" class="movement-form">
           <!-- Document Header -->
           <div class="form-section">
-            <h3 class="section-title">1. Datos de la Venta / Factura</h3>
-            <div class="form-grid">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+              <h3 class="section-title" style="margin:0;">1. Tipificación Fiscal, Método de Valoración y Tasa BCV (Art. 177 RISLR / PA 00093)</h3>
+              <div id="sal-bcv-legend-banner" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; padding:4px 12px; border-radius:6px; font-size:0.76rem; font-weight:800;">
+                Tasa Oficial BCV Aplicable: Bs. 88,50 por USD (Fecha: Hoy)
+              </div>
+            </div>
+            <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
               <div class="form-field">
-                <label for="sal-fecha">Fecha de Salida *</label>
-                <input type="date" id="sal-fecha" required>
+                <label for="sal-subtipo">Tipo de Salida (Art. 177 RISLR) *</label>
+                <select id="sal-subtipo" required style="font-weight:700; color:var(--ucg-navy); background:#fff1f2; border-color:#fecdd3;">
+                  <option value="VENTA">📤 Venta (Factura Fiscal / Máquina ZOA0000176)</option>
+                  <option value="AUTOCONSUMO">🔧 Autoconsumo Interno de la Empresa</option>
+                  <option value="RETIRO_SOCIOS">👤 Retiro de Accionistas / Socios (Desincorporación)</option>
+                  <option value="MUESTRA">🎁 Muestra Promocional / Obsequio sin Cargo</option>
+                  <option value="MERMA_DANO">⚠️ Merma, Daño, Obsolescencia o Deterioro (Acta)</option>
+                  <option value="AJUSTE_NEGATIVO_FALTANTE">⚖️ Ajuste por Faltante en Toma Física</option>
+                </select>
               </div>
 
               <div class="form-field">
-                <label for="sal-factura">Número de Factura de Venta *</label>
-                <input type="text" id="sal-factura" placeholder="Ej: FACT 2223" required>
+                <label for="sal-metodo-val">Método de Valoración Kardex *</label>
+                <select id="sal-metodo-val" style="font-weight:700; color:#0B2447; background:#eff6ff; border-color:#93c5fd;">
+                  <option value="CPP">📊 Costo Promedio Ponderado (CPP)</option>
+                  <option value="PEPS">📦 PEPS / FIFO (Primero en Entrar, Primero en Salir)</option>
+                </select>
               </div>
 
               <div class="form-field">
-                <label for="sal-obs">Cliente / Observaciones</label>
-                <input type="text" id="sal-obs" placeholder="Cliente o nota de entrega">
+                <label for="sal-fecha">Fecha de Salida / Factura *</label>
+                <input type="date" id="sal-fecha" required onchange="onCambioFechaMovimiento('sal')">
+              </div>
+
+              <div class="form-field">
+                <label for="sal-factura">N° Factura / Nota / Acta *</label>
+                <input type="text" id="sal-factura" placeholder="Ej: FACT 2223 o ACTA-MERMA-01" required>
+              </div>
+
+              <div class="form-field">
+                <label for="sal-control">N° Control Fiscal / Serial Máquina *</label>
+                <input type="text" id="sal-control" value="ZOA0000176" placeholder="Ej: ZOA0000176 o Acta N°" required>
+              </div>
+
+              <div class="form-field">
+                <label for="sal-modo-moneda">Moneda de Carga (Precio Unitario) *</label>
+                <select id="sal-modo-moneda" onchange="calculateExitTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
+                  <option value="DIVISA">💵 Precio en Divisas ($ USD) ➔ Calcula Bs.</option>
+                  <option value="BS">🇻🇪 Precio en Bolívares (Bs.) ➔ Calcula USD</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="sal-tasa">Tasa Oficial BCV (Bs./USD) *</label>
+                <input type="number" step="0.01" id="sal-tasa" value="88.50" required oninput="calculateExitTotals()">
+              </div>
+
+              <div class="form-field">
+                <label for="sal-fecha-tasa">Fecha de la Tasa BCV *</label>
+                <input type="date" id="sal-fecha-tasa" required oninput="calculateExitTotals()">
+              </div>
+
+              <div class="form-field">
+                <label for="sal-usuario">Usuario Responsable Autorizado *</label>
+                <input type="text" id="sal-usuario" value="CAJA_DESPACHO_TIENDA" required>
+              </div>
+
+              <div class="form-field" style="grid-column: span 3;">
+                <label for="sal-obs">Cliente / Motivo Legal / Observaciones *</label>
+                <input type="text" id="sal-obs" placeholder="Nombre del cliente o justificación de autoconsumo/merma" required>
               </div>
             </div>
           </div>
@@ -471,7 +597,7 @@
           <!-- Items Detail -->
           <div class="form-section">
             <div class="section-header-flex">
-              <h3 class="section-title">2. Repuestos a Despachar</h3>
+              <h3 class="section-title">2. Repuestos a Despachar (Validación de Stock en Tiempo Real + Doble Expresión Bs./USD)</h3>
               <button type="button" class="btn btn-sm btn-rose" id="btn-add-item-sal">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
                 Agregar Ítem
@@ -482,15 +608,27 @@
               <table class="items-entry-table" id="table-items-salida">
                 <thead>
                   <tr>
-                    <th style="width: 50%;">Producto / Repuesto</th>
-                    <th style="width: 20%;" class="text-center">Stock Disponible</th>
-                    <th style="width: 25%;" class="text-right">Cantidad a Despachar</th>
-                    <th style="width: 5%;"></th>
+                    <th style="width: 26%;">Producto / Repuesto</th>
+                    <th style="width: 11%;" class="text-center">Stock Físico</th>
+                    <th style="width: 9%;" class="text-right">Cant.</th>
+                    <th style="width: 12%;" class="text-right">Precio Unit. ($)</th>
+                    <th style="width: 13%;" class="text-right">Precio Unit. (Bs.)</th>
+                    <th style="width: 13%;" class="text-right">Base Imp. (Bs / $)</th>
+                    <th style="width: 12%;" class="text-right">Total c/IVA (Bs / $)</th>
+                    <th style="width: 4%;"></th>
                   </tr>
                 </thead>
                 <tbody id="tbody-items-salida">
                   <!-- Dynamic rows added by JS -->
                 </tbody>
+                <tfoot>
+                  <tr style="background:#f8fafc;">
+                    <td colspan="5" class="text-right font-bold" id="sal-footer-legend" style="color:#0B2447;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD:</td>
+                    <td class="text-right font-mono font-bold" id="total-salida-base">Bs. 0,00 ($0.00)</td>
+                    <td class="text-right font-mono font-bold" id="total-salida-total" style="color:#be123c; font-size:0.92rem;">Bs. 0,00 ($0.00)</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -500,7 +638,7 @@
             <button type="button" class="btn btn-secondary" onclick="resetForm('form-salida')">Limpiar Formulario</button>
             <button type="submit" class="btn btn-rose btn-lg" id="btn-submit-salida">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              Guardar Salida en Turso Cloud
+              Validar Existencia y Emitir Salida SENIAT
             </button>
           </div>
         </form>
@@ -511,8 +649,17 @@
     <section id="tab-kardex" class="tab-pane">
       <div class="page-header">
         <div>
-          <h1>Consulta de Kardex por Repuesto</h1>
-          <p class="subtitle">Historial cronológico completo de entradas, salidas y saldos acumulados de cualquier producto.</p>
+          <h1>Consulta de Kardex y Valoración de Mercancía (Art. 177 RISLR / PA SNAT/2026/00093)</h1>
+          <p class="subtitle">Trazabilidad por línea con Costo Unitario en Divisa ($), Tasa BCV de Operación, Costo Unitario en Bs. y valoración por Costo Promedio Ponderado (CPP) o PEPS/FIFO.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn btn-secondary" onclick="openModalTasasCierreBCV()">
+            💱 Tasas BCV de Cierre Mensual
+          </button>
+          <button class="btn btn-navy" onclick="imprimirKardexProducto()" title="Imprimir Ficha Oficial de Kardex SENIAT en PDF">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            🖨️ Imprimir Ficha Kardex Oficial (PDF)
+          </button>
         </div>
       </div>
 
@@ -520,6 +667,12 @@
         <div class="search-box" style="flex: 2;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="kardex-search-input" placeholder="Escribe el código exacto o selecciona un repuesto (ej: A1, 513, 5338)...">
+        </div>
+        <div class="select-group">
+          <select id="kardex-metodo-select" onchange="executeKardexSearch()" style="font-weight:800; color:#0B2447; background:#eff6ff; border:1.5px solid #19A7CE;">
+            <option value="CPP">📊 Método: Costo Promedio Ponderado (CPP)</option>
+            <option value="PEPS">📦 Método: PEPS / FIFO (Primero en Entrar, Primero en Salir)</option>
+          </select>
         </div>
         <button class="btn btn-emerald" id="btn-search-kardex">Consultar Kardex</button>
       </div>
@@ -534,20 +687,21 @@
               <span class="meta-tag" id="kardex-cat">Categoría: --</span>
               <span class="meta-tag" id="kardex-alm">Almacén: --</span>
               <span class="meta-tag" id="kardex-und">Unidad: --</span>
+              <span class="meta-tag" id="kardex-metodo-badge" style="background:#dbeafe; color:#1e40af; font-weight:800;">Método: Costo Promedio Ponderado (CPP)</span>
             </div>
           </div>
         </div>
         <div class="kardex-metrics">
           <div class="kardex-metric">
-            <span class="k-label">Stock Actual</span>
+            <span class="k-label">Existencia Física</span>
             <span class="k-value" id="kardex-stock">--</span>
           </div>
           <div class="kardex-metric">
-            <span class="k-label">Costo Referencial</span>
+            <span class="k-label">Costo Unit. (Bs. / USD)</span>
             <span class="k-value" id="kardex-cost">$0.00</span>
           </div>
           <div class="kardex-metric">
-            <span class="k-label">Estado</span>
+            <span class="k-label">Estado Kardex</span>
             <span class="k-badge" id="kardex-status">--</span>
           </div>
         </div>
@@ -560,12 +714,17 @@
             <thead>
               <tr>
                 <th>FECHA</th>
-                <th>TIPO</th>
-                <th>DOCUMENTO</th>
+                <th>TIPIFICACIÓN (ART. 177)</th>
+                <th>DOC. FUENTE</th>
+                <th>N° CONTROL</th>
                 <th>TERCERO / PROVEEDOR</th>
                 <th class="text-right">ENTRADAS</th>
                 <th class="text-right">SALIDAS</th>
-                <th class="text-right">SALDO RESULTANTE</th>
+                <th class="text-right">SALDO (UND)</th>
+                <th class="text-right">COSTO DIVISA ($)</th>
+                <th class="text-right">TASA BCV OP.</th>
+                <th class="text-right">COSTO UNIT. (BS)</th>
+                <th class="text-right">VALOR SALDO (BS / $)</th>
               </tr>
             </thead>
             <tbody id="tbody-kardex">
@@ -580,8 +739,23 @@
     <section id="tab-mensual" class="tab-pane">
       <div class="page-header">
         <div>
-          <h1>Conciliación y Cierre de Inventario Mes a Mes</h1>
-          <p class="subtitle">Evolución contable desde el inventario inicial al 31/12/2025 hasta agosto 2026.</p>
+          <h1>Conciliación de Inventario Mes a Mes y Cierre BCV (Art. 177 RISLR / PA SNAT/2026/00093)</h1>
+          <p class="subtitle">Evolución mensual auditada en Unidades, Divisas ($ USD) y Bolívares (Bs.) a la Tasa Oficial BCV de Cierre de cada Mes.</p>
+        </div>
+        <div class="header-buttons">
+          <button class="btn" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; font-weight:800;" onclick="openModalTasasCierreBCV()">
+            💱 Configurar Tasas BCV de Cierre (Meses Declarados)
+          </button>
+          <button class="btn btn-secondary" onclick="imprimirCierreMensualInventario()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            🖨️ Imprimir Resumen Cierre Mensual (PDF)
+          </button>
+          <a href="/reporte-seniat.html" target="_blank" class="btn btn-outline-pdf">
+            📘 Libro Oficial Art. 177 RISLR en Bs. (PDF / Excel / CSV)
+          </a>
+          <a href="/reporte-seniat.html?vista=CIERRE_ANUAL" target="_blank" class="btn btn-navy">
+            ⚖️ Libro de Inventarios y Balances (Toma Física vs Teórico)
+          </a>
         </div>
       </div>
 
@@ -592,9 +766,11 @@
             <thead>
               <tr>
                 <th>PERÍODO / MES</th>
+                <th class="text-center">TASA BCV CIERRE</th>
                 <th class="text-right">SALDO INICIAL</th>
-                <th class="text-right" style="color: #34d399;">COMPRAS / ENTRADAS</th>
+                <th class="text-right" style="color: #34d399;">COMPRAS (UND)</th>
                 <th class="text-right">COMPRAS ($ USD)</th>
+                <th class="text-right">COMPRAS (BS. CIERRE BCV)</th>
                 <th class="text-right" style="color: #fb7185;">VENTAS / SALIDAS</th>
                 <th class="text-right" style="color: #818cf8;">SALDO FINAL (UND)</th>
                 <th class="text-center">DOCS</th>
@@ -602,7 +778,7 @@
               </tr>
             </thead>
             <tbody id="tbody-mensual">
-              <tr><td colspan="8" class="text-center">Cargando reporte mensual...</td></tr>
+              <tr><td colspan="10" class="text-center">Cargando reporte mensual...</td></tr>
             </tbody>
           </table>
         </div>
@@ -610,10 +786,10 @@
 
       <!-- Explanatory Alert Card -->
       <div class="panel-card" style="margin-top: 24px; border-left: 4px solid var(--ucg-navy); background: #f8fafc;">
-        <h3 style="font-size: 0.95rem; margin-bottom: 6px; color: var(--ucg-navy);">💡 Cómo funciona el Cierre Mes a Mes:</h3>
+        <h3 style="font-size: 0.95rem; margin-bottom: 6px; color: var(--ucg-navy);">💡 Cumplimiento Normativo SENIAT (Art. 177 RISLR y Art. 32–35 Código de Comercio):</h3>
         <p style="font-size: 0.83rem; color: var(--text-secondary); line-height: 1.5;">
-          • <strong>Inventario Inicial 2026:</strong> Corresponde con exactitud al corte del <strong>31/12/2025</strong> con <strong>4.451 unidades</strong> en 658 repuestos valorados.<br>
-          • <strong>Conciliación Continua:</strong> En cada mes, el <code>Saldo Final = Saldo Inicial + Entradas - Salidas</code>. Al hacer clic en <em>"Ver Productos al Corte"</em>, la tabla de inventario se ajusta automáticamente a ese día exacto, permitiéndote exportar el libro oficial de ese mes a Excel.
+          • <strong>Reporte Mensual Art. 177 RISLR:</strong> Haz clic en <em>"📘 Libro Oficial Art. 177 RISLR en Bs."</em> para emitir el informe mensual o por rango de fechas en moneda de curso legal (VES) y USD, con salidas discriminadas (Venta, Autoconsumo, Retiro de Socios, Muestra, Merma/Daño y Ajuste).<br>
+          • <strong>Libro de Inventarios y Balances (Cierre Anual):</strong> Haz clic en <em>"⚖️ Libro de Inventarios y Balances (Toma Física vs Teórico)"</em> para auditar el conteo físico al cierre del ejercicio económico y sustentar el asiento contable de cierre.
         </p>
       </div>
     </section>
@@ -622,21 +798,22 @@
     <section id="tab-movimientos" class="tab-pane">
       <div class="page-header">
         <div>
-          <h1>Histórico de Movimientos de Inventario</h1>
-          <p class="subtitle">Auditoría completa de compras, ventas y ajustes desde el 31/12/2025.</p>
+          <h1>Histórico de Movimientos de Inventario (Trazabilidad y Comprobabilidad)</h1>
+          <p class="subtitle">Auditoría sin movimientos huérfanos: cada registro enlaza Documento Fuente, N° de Control Fiscal, Tipificación y Usuario Responsable.</p>
         </div>
       </div>
 
       <div class="filters-card">
         <div class="search-box">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="mov-search" placeholder="Buscar por número de factura o proveedor...">
+          <input type="text" id="mov-search" placeholder="Buscar por N° Factura, N° Control Fiscal, Proveedor o Responsable...">
         </div>
         <div class="select-group">
           <select id="mov-filter-tipo">
             <option value="TODOS">Todos los Tipos</option>
             <option value="ENTRADA_COMPRA">📥 Compras / Entradas</option>
-            <option value="SALIDA_VENTA">📤 Ventas / Salidas</option>
+            <option value="SALIDA_VENTA">📤 Salidas (Venta / Autoconsumo / Merma)</option>
+            <option value="AJUSTE">⚖️ Ajustes de Auditoría</option>
             <option value="INVENTARIO_INICIAL">🏁 Inventario Inicial</option>
           </select>
           <input type="date" id="mov-filter-desde" title="Fecha Desde">
@@ -650,17 +827,18 @@
             <thead>
               <tr>
                 <th>FECHA</th>
-                <th>TIPO</th>
-                <th>DOCUMENTO</th>
+                <th>TIPIFICACIÓN (ART. 177)</th>
+                <th>DOC. FUENTE</th>
+                <th>N° CONTROL</th>
                 <th>PROVEEDOR / CLIENTE</th>
-                <th class="text-right">ÍTEMS</th>
-                <th class="text-right">TOTAL UNIDADES</th>
-                <th>OBSERVACIONES</th>
-                <th class="text-center">DETALLES</th>
+                <th>RESPONSABLE</th>
+                <th class="text-right">UNIDADES</th>
+                <th class="text-right">MONTO (BS)</th>
+                <th class="text-center">SOPORTE</th>
               </tr>
             </thead>
             <tbody id="tbody-movimientos">
-              <tr><td colspan="8" class="text-center">Cargando histórico...</td></tr>
+              <tr><td colspan="9" class="text-center">Cargando histórico...</td></tr>
             </tbody>
           </table>
         </div>
@@ -677,9 +855,14 @@
           <p class="subtitle">Registro oficial según Art. 75 y 76 del Reglamento del IVA. Carga directa de facturas para sustituir el XLS.</p>
         </div>
         <div class="header-buttons">
-          <button class="btn btn-navy" onclick="openModalNuevaCompra()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            + Nueva Factura de Compra
+          <button class="btn btn-emerald" onclick="openModalImportarEntradaTienda()" title="Cruzar y llamar facturas de mercancía cargadas por el asistente en Entradas de Almacén">
+            🔗 1. Llamar Mercancía (Tienda)
+          </button>
+          <button class="btn btn-navy" onclick="openModalNuevaCompra('GASTO')" title="Registrar factura de Servicios, Honorarios (ej. Unión Global) o Compra de Activo Fijo">
+            ⚖️ 2. Cargar Servicio / Gasto / Activo Fijo
+          </button>
+          <button class="btn btn-secondary" onclick="openModalNuevaCompra('MERCANCIA')" title="Registrar factura de compra manualmente">
+            + Factura Manual
           </button>
           <button class="btn btn-secondary" onclick="imprimirLibroCompras()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
@@ -716,6 +899,22 @@
         </div>
       </div>
 
+      <!-- Barra Rápida de Meses (Enero a Octubre 2026) -->
+      <div class="month-pills-bar" id="pills-compras-bar" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; background:#f8fafc; padding:10px 14px; border-radius:10px; border:1px solid #e2e8f0; align-items:center;">
+        <span style="font-size:0.76rem; font-weight:800; color:var(--ucg-navy); margin-right:6px; text-transform:uppercase;">📅 Meses Declarados y Octubre:</span>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-01" onclick="seleccionarMesRapido('compras','2026-01')">01 Ene</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-02" onclick="seleccionarMesRapido('compras','2026-02')">02 Feb</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-03" onclick="seleccionarMesRapido('compras','2026-03')">03 Mar</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-04" onclick="seleccionarMesRapido('compras','2026-04')">04 Abr</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-05" onclick="seleccionarMesRapido('compras','2026-05')">05 May</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-06" onclick="seleccionarMesRapido('compras','2026-06')">06 Jun</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-07" onclick="seleccionarMesRapido('compras','2026-07')">07 Jul</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-08" onclick="seleccionarMesRapido('compras','2026-08')">08 Ago</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-09" onclick="seleccionarMesRapido('compras','2026-09')">09 Sep</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-10" onclick="seleccionarMesRapido('compras','2026-10')" style="border:1.5px solid #0A5CF5; font-weight:800;">✨ 10 Oct (Manual)</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="TODOS" onclick="seleccionarMesRapido('compras','TODOS')">📚 Todos</button>
+      </div>
+
       <!-- Filters -->
       <div class="filters-card">
         <div class="search-box">
@@ -724,17 +923,17 @@
         </div>
         <div class="select-group">
           <select id="compras-periodo-select" onchange="loadLibroCompras()">
-            <option value="2026-10">📅 Octubre 2026 (Mes en Proceso)</option>
-            <option value="2026-09">Septiembre 2026</option>
-            <option value="2026-08">Agosto 2026</option>
-            <option value="2026-07">Julio 2026</option>
-            <option value="2026-06">Junio 2026</option>
-            <option value="2026-05">Mayo 2026</option>
-            <option value="2026-04">Abril 2026</option>
-            <option value="2026-03">Marzo 2026</option>
-            <option value="2026-02">Febrero 2026</option>
-            <option value="2026-01">Enero 2026</option>
-            <option value="TODOS">Ver Todo el Histórico 2026</option>
+            <option value="2026-09">09 - Septiembre 2026 (Declarado)</option>
+            <option value="2026-08">08 - Agosto 2026 (Declarado)</option>
+            <option value="2026-07">07 - Julio 2026 (Declarado)</option>
+            <option value="2026-06">06 - Junio 2026 (Declarado)</option>
+            <option value="2026-05">05 - Mayo 2026 (Declarado)</option>
+            <option value="2026-04">04 - Abril 2026 (Declarado)</option>
+            <option value="2026-03">03 - Marzo 2026 (Declarado)</option>
+            <option value="2026-02">02 - Febrero 2026 (Declarado)</option>
+            <option value="2026-01">01 - Enero 2026 (Declarado)</option>
+            <option value="2026-10">📅 10 - Octubre 2026 (Carga Manual)</option>
+            <option value="TODOS">📚 Ver Todo el Histórico (Ene - Oct 2026)</option>
           </select>
           <select id="compras-tipo-select" onchange="loadLibroCompras()">
             <option value="TODOS">Todos los Tipos de Servicio</option>
@@ -798,8 +997,10 @@
           <p class="subtitle">Registro fiscal de operaciones de venta diaria e impresora ZOA0000176 según Art. 77 del Reglamento de IVA.</p>
         </div>
         <div class="header-buttons">
+          <button class="btn btn-emerald" onclick="openModalImportarSalidaTienda()" title="Cruzar y llamar facturas de venta despachadas por el asistente en Salidas de Almacén">
+            🔗 Llamar Ventas de Salida (Tienda)
+          </button>
           <button class="btn btn-navy" onclick="openModalNuevaVenta()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             + Registrar Venta / Reporte Z
           </button>
           <button class="btn btn-secondary" onclick="imprimirLibroVentas()">
@@ -837,21 +1038,37 @@
         </div>
       </div>
 
+      <!-- Barra Rápida de Meses (Enero a Octubre 2026) -->
+      <div class="month-pills-bar" id="pills-ventas-bar" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; background:#f8fafc; padding:10px 14px; border-radius:10px; border:1px solid #e2e8f0; align-items:center;">
+        <span style="font-size:0.76rem; font-weight:800; color:var(--ucg-navy); margin-right:6px; text-transform:uppercase;">📅 Meses Declarados y Octubre:</span>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-01" onclick="seleccionarMesRapido('ventas','2026-01')">01 Ene</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-02" onclick="seleccionarMesRapido('ventas','2026-02')">02 Feb</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-03" onclick="seleccionarMesRapido('ventas','2026-03')">03 Mar</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-04" onclick="seleccionarMesRapido('ventas','2026-04')">04 Abr</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-05" onclick="seleccionarMesRapido('ventas','2026-05')">05 May</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-06" onclick="seleccionarMesRapido('ventas','2026-06')">06 Jun</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-07" onclick="seleccionarMesRapido('ventas','2026-07')">07 Jul</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-08" onclick="seleccionarMesRapido('ventas','2026-08')">08 Ago</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-09" onclick="seleccionarMesRapido('ventas','2026-09')">09 Sep</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-10" onclick="seleccionarMesRapido('ventas','2026-10')" style="border:1.5px solid #0A5CF5; font-weight:800;">✨ 10 Oct (Manual)</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="TODOS" onclick="seleccionarMesRapido('ventas','TODOS')">📚 Todos</button>
+      </div>
+
       <!-- Filters -->
       <div class="filters-card">
         <div class="select-group">
           <select id="ventas-periodo-select" onchange="loadLibroVentas()">
-            <option value="2026-10">📅 Octubre 2026 (Mes en Proceso)</option>
-            <option value="2026-09">Septiembre 2026</option>
-            <option value="2026-08">Agosto 2026</option>
-            <option value="2026-07">Julio 2026</option>
-            <option value="2026-06">Junio 2026</option>
-            <option value="2026-05">Mayo 2026</option>
-            <option value="2026-04">Abril 2026</option>
-            <option value="2026-03">Marzo 2026</option>
-            <option value="2026-02">Febrero 2026</option>
-            <option value="2026-01">Enero 2026</option>
-            <option value="TODOS">Ver Todo el Histórico 2026</option>
+            <option value="2026-09">09 - Septiembre 2026 (Declarado)</option>
+            <option value="2026-08">08 - Agosto 2026 (Declarado)</option>
+            <option value="2026-07">07 - Julio 2026 (Declarado)</option>
+            <option value="2026-06">06 - Junio 2026 (Declarado)</option>
+            <option value="2026-05">05 - Mayo 2026 (Declarado)</option>
+            <option value="2026-04">04 - Abril 2026 (Declarado)</option>
+            <option value="2026-03">03 - Marzo 2026 (Declarado)</option>
+            <option value="2026-02">02 - Febrero 2026 (Declarado)</option>
+            <option value="2026-01">01 - Enero 2026 (Declarado)</option>
+            <option value="2026-10">📅 10 - Octubre 2026 (Carga Manual)</option>
+            <option value="TODOS">📚 Ver Todo el Histórico (Ene - Oct 2026)</option>
           </select>
         </div>
       </div>
@@ -912,23 +1129,48 @@
         </div>
       </div>
 
+      <!-- Barra Rápida de Meses (Enero a Octubre 2026) -->
+      <div class="month-pills-bar" id="pills-decl-bar" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; background:#f8fafc; padding:10px 14px; border-radius:10px; border:1px solid #e2e8f0; align-items:center;">
+        <span style="font-size:0.76rem; font-weight:800; color:var(--ucg-navy); margin-right:6px; text-transform:uppercase;">📅 Meses Declarados y Octubre:</span>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-01" onclick="seleccionarMesRapido('decl','2026-01')">01 Ene</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-02" onclick="seleccionarMesRapido('decl','2026-02')">02 Feb</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-03" onclick="seleccionarMesRapido('decl','2026-03')">03 Mar</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-04" onclick="seleccionarMesRapido('decl','2026-04')">04 Abr</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-05" onclick="seleccionarMesRapido('decl','2026-05')">05 May</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-06" onclick="seleccionarMesRapido('decl','2026-06')">06 Jun</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-07" onclick="seleccionarMesRapido('decl','2026-07')">07 Jul</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-08" onclick="seleccionarMesRapido('decl','2026-08')">08 Ago</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-09" onclick="seleccionarMesRapido('decl','2026-09')">09 Sep</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-10" onclick="seleccionarMesRapido('decl','2026-10')" style="border:1.5px solid #0A5CF5; font-weight:800;">✨ 10 Oct (En Proceso)</button>
+      </div>
+
       <!-- Period selector for declaration -->
-      <div class="filters-card" style="margin-bottom: 20px;">
-        <div style="font-weight: 800; color: var(--ucg-navy); font-size: 0.95rem;">Seleccionar Mes a Declarar / Auditar:</div>
-        <div class="select-group">
-          <select id="decl-periodo-select" onchange="loadDeclaracionDetalle()" style="min-width: 260px; font-weight: 700;">
-            <option value="2026-10">📅 Octubre 2026 (Mes Actual - En Preparación)</option>
-            <option value="2026-09">Septiembre 2026 (Declarado)</option>
-            <option value="2026-08">Agosto 2026 (Declarado)</option>
-            <option value="2026-07">Julio 2026 (Declarado)</option>
-            <option value="2026-06">Junio 2026 (Declarado)</option>
-            <option value="2026-05">Mayo 2026 (Declarado)</option>
-            <option value="2026-04">Abril 2026 (Declarado)</option>
-            <option value="2026-03">Marzo 2026 (Declarado)</option>
-            <option value="2026-02">Febrero 2026 (Declarado)</option>
-            <option value="2026-01">Enero 2026 (Declarado)</option>
-          </select>
-          <span class="nav-badge-pill" id="decl-status-badge" style="padding: 6px 14px; font-size: 0.82rem; background: #dbeafe; color: #1e40af;">EN PROCESO</span>
+      <div class="filters-card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div style="font-weight: 800; color: var(--ucg-navy); font-size: 0.92rem;">Seleccionar Mes a Declarar / Auditar:</div>
+          <div class="select-group">
+            <select id="decl-periodo-select" onchange="loadDeclaracionDetalle()" style="min-width: 260px; font-weight: 700;">
+              <option value="2026-09">09 - Septiembre 2026 (Declarado)</option>
+              <option value="2026-08">08 - Agosto 2026 (Declarado)</option>
+              <option value="2026-07">07 - Julio 2026 (Declarado)</option>
+              <option value="2026-06">06 - Junio 2026 (Declarado)</option>
+              <option value="2026-05">05 - Mayo 2026 (Declarado)</option>
+              <option value="2026-04">04 - Abril 2026 (Declarado)</option>
+              <option value="2026-03">03 - Marzo 2026 (Declarado)</option>
+              <option value="2026-02">02 - Febrero 2026 (Declarado)</option>
+              <option value="2026-01">01 - Enero 2026 (Declarado)</option>
+              <option value="2026-10">📅 10 - Octubre 2026 (Mes Actual - En Preparación)</option>
+            </select>
+            <span class="nav-badge-pill" id="decl-status-badge" style="padding: 6px 14px; font-size: 0.82rem; background: #dbeafe; color: #1e40af;">EN PROCESO</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sm btn-secondary" onclick="irALibroDesdeForma30('compras')">
+            📥 Ver Libro de Compras de este Mes
+          </button>
+          <button class="btn btn-sm btn-secondary" onclick="irALibroDesdeForma30('ventas')">
+            📤 Ver Libro de Ventas de este Mes
+          </button>
         </div>
       </div>
 
@@ -1036,10 +1278,11 @@
                 <th class="text-right">EXCEDENTE SIGUIENTE (BS)</th>
                 <th class="text-right">TOTAL A PAGAR (BS)</th>
                 <th class="text-center">ESTATUS</th>
+                <th class="text-center">VER LIBROS DEL MES</th>
               </tr>
             </thead>
             <tbody id="tbody-declaraciones-historico">
-              <tr><td colspan="9" class="text-center">Cargando histórico anual...</td></tr>
+              <tr><td colspan="10" class="text-center">Cargando histórico anual...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1284,11 +1527,12 @@
                 <tr>
                   <th>PERÍODO</th>
                   <th>FECHA REPORTE</th>
-                  <th>RANGO FACTURAS (DESDE - HASTA)</th>
-                  <th class="text-center">COMPROBANTES</th>
-                  <th class="text-right">EXENTO (BS)</th>
+                  <th>RANGO REPORTE Z (LIBRO)</th>
+                  <th class="text-center">COMP. Z</th>
+                  <th class="text-center">SALIDAS ALMACÉN (TIENDA)</th>
+                  <th class="text-center">ESTADO CRUCE</th>
                   <th class="text-right">BASE IMPONIBLE (BS)</th>
-                  <th class="text-right">DÉBITO FISCAL (IVA 16%)</th>
+                  <th class="text-right">DÉBITO FISCAL (16%)</th>
                   <th class="text-right">TOTAL VENTAS (BS)</th>
                 </tr>
               </thead>
@@ -1300,6 +1544,142 @@
         </div>
       </div>
 
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 12. TAB: COMPROBANTES DE RETENCIÓN DE ISLR (PA SNAT/2026/00093)        -->
+    <!-- ====================================================================== -->
+    <section id="tab-retenciones-islr" class="tab-pane">
+      <!-- Banner Identidad Corporativa Unión Contable Global + PA SNAT/2026/00093 -->
+      <div class="islr-brand-banner" style="background: linear-gradient(135deg, #0B2447 0%, #3F5B8F 100%); color: #FFFFFF; border-bottom: 3px solid #19A7CE; border-radius: 10px; padding: 14px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; box-shadow: 0 4px 14px rgba(11, 36, 71, 0.16);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <img src="LOGOUCG.png" alt="Unión Contable Global" style="height: 46px; background: #FFFFFF; padding: 4px 8px; border-radius: 6px; border: 1.5px solid #19A7CE;">
+          <div>
+            <div style="font-size: 0.72rem; font-weight: 800; color: #19A7CE; letter-spacing: 0.08em; text-transform: uppercase;">
+              UNIÓN CONTABLE GLOBAL, ASESORES CONTABLES • «UNIMOS NÚMEROS, CONTAMOS ÉXITOS»
+            </div>
+            <h1 style="font-size: 1.18rem; font-weight: 800; color: #FFFFFF; margin: 2px 0;">
+              Comprobantes de Retención de ISLR (SENIAT PA SNAT/2026/00093 y Decreto 1.808)
+            </h1>
+            <div style="font-size: 0.76rem; color: #E5E7EB;">
+              Numeración 14 dígitos (<code style="color:#19A7CE; background:rgba(255,255,255,0.1); padding:1px 5px; border-radius:4px;">AAAAMM + 8 sec.</code>) • Sello de Tiempo <code style="color:#19A7CE; background:rgba(255,255,255,0.1); padding:1px 5px; border-radius:4px;">HH:MM:SS</code> • Correo Proveedor Obligatorio • Sustraendo UT Bs. <span id="lbl-ut-vigente">43,00</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn" style="background: #19A7CE; color: #FFFFFF; font-weight: 800; border: none;" onclick="openModalEmitirRetencionISLR()">
+            + Emitir Comprobante ISLR
+          </button>
+          <button class="btn" style="background: rgba(255,255,255,0.14); color: #FFFFFF; border: 1px solid #19A7CE; font-weight: 700;" onclick="openModalConfigISLR()">
+            ⚙️ Parámetros UT / Imprenta Digital
+          </button>
+          <button class="btn" style="background: #FFFFFF; color: #0B2447; font-weight: 800;" onclick="exportarXMLSeniatISLR()">
+            📄 Exportar XML SENIAT
+          </button>
+          <button class="btn btn-action-excel" onclick="exportarExcelISLR()">
+            📊 Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIs Retenciones ISLR -->
+      <div class="kpi-grid" style="margin-bottom: 14px;">
+        <div class="kpi-card" style="border-top: 3px solid #0B2447;">
+          <div class="kpi-label">COMPROBANTES EMITIDOS</div>
+          <div class="kpi-value" id="kpi-islr-count" style="color: #0B2447;">0</div>
+          <div class="kpi-sub" id="kpi-islr-periodo-sub">Período Seleccionado</div>
+        </div>
+        <div class="kpi-card" style="border-top: 3px solid #3F5B8F;">
+          <div class="kpi-label">MONTO TOTAL DOCUMENTOS (BS)</div>
+          <div class="kpi-value" id="kpi-islr-doc-total" style="color: #3F5B8F;">Bs. 0,00</div>
+          <div class="kpi-sub">Facturas sujetas a retención</div>
+        </div>
+        <div class="kpi-card" style="border-top: 3px solid #19A7CE;">
+          <div class="kpi-label">BASE IMPONIBLE OBJETO RET. (BS)</div>
+          <div class="kpi-value" id="kpi-islr-base-total" style="color: #0B2447;">Bs. 0,00</div>
+          <div class="kpi-sub">Decreto 1.808 SENIAT</div>
+        </div>
+        <div class="kpi-card" style="border-top: 3px solid #0B2447; background: #F3F4F6;">
+          <div class="kpi-label" style="color: #0B2447; font-weight: 800;">TOTAL ISLR RETENIDO A ENTERAR (BS)</div>
+          <div class="kpi-value" id="kpi-islr-retenido-total" style="color: #0B2447;">Bs. 0,00</div>
+          <div class="kpi-sub" style="color: #3F5B8F; font-weight: 700;">Declaración Mensual XML SENIAT</div>
+        </div>
+      </div>
+
+      <!-- Barra Rápida de Meses ISLR (Enero a Octubre 2026) -->
+      <div class="month-pills-bar" id="pills-islr-bar" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; background:#F3F4F6; padding:10px 14px; border-radius:10px; border:1px solid #cbd5e1; align-items:center;">
+        <span style="font-size:0.76rem; font-weight:800; color:#0B2447; margin-right:6px; text-transform:uppercase;">📅 Período Fiscal ISLR:</span>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-01" onclick="seleccionarMesRapidoISLR('2026-01')">01 Ene</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-02" onclick="seleccionarMesRapidoISLR('2026-02')">02 Feb</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-03" onclick="seleccionarMesRapidoISLR('2026-03')">03 Mar</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-04" onclick="seleccionarMesRapidoISLR('2026-04')">04 Abr</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-05" onclick="seleccionarMesRapidoISLR('2026-05')">05 May</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-06" onclick="seleccionarMesRapidoISLR('2026-06')">06 Jun</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-07" onclick="seleccionarMesRapidoISLR('2026-07')">07 Jul</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-08" onclick="seleccionarMesRapidoISLR('2026-08')">08 Ago</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-09" onclick="seleccionarMesRapidoISLR('2026-09')">09 Sep</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-10" onclick="seleccionarMesRapidoISLR('2026-10')" style="border:1.5px solid #19A7CE; font-weight:800;">✨ 10 Oct (Actual)</button>
+        <button type="button" class="btn btn-sm month-pill-btn" data-periodo="TODOS" onclick="seleccionarMesRapidoISLR('TODOS')">📚 Todos (2026)</button>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filters-card">
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="islr-search-input" placeholder="Buscar por N° Comprobante (14 dígitos), RIF, Proveedor o Concepto..." oninput="loadComprobantesISLR()">
+        </div>
+        <div class="select-group">
+          <select id="islr-periodo-select" onchange="loadComprobantesISLR()">
+            <option value="2026-09">09 - Septiembre 2026 (20260900000009)</option>
+            <option value="2026-08">08 - Agosto 2026</option>
+            <option value="2026-07">07 - Julio 2026</option>
+            <option value="2026-06">06 - Junio 2026</option>
+            <option value="2026-05">05 - Mayo 2026</option>
+            <option value="2026-04">04 - Abril 2026</option>
+            <option value="2026-03">03 - Marzo 2026</option>
+            <option value="2026-02">02 - Febrero 2026</option>
+            <option value="2026-01">01 - Enero 2026</option>
+            <option value="2026-10">📅 10 - Octubre 2026 (Emisión Manual)</option>
+            <option value="TODOS">📚 Ver Todos los Períodos 2026</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tabla de Comprobantes de Retención ISLR -->
+      <div class="panel-card table-panel">
+        <div class="table-responsive">
+          <table class="data-table" id="table-retenciones-islr">
+            <thead>
+              <tr style="background: #0B2447; color: #FFFFFF;">
+                <th style="background:#0B2447; color:#FFFFFF;">N° COMPROBANTE (14 CAR.)</th>
+                <th style="background:#0B2447; color:#FFFFFF;">FECHA / HORA EMISIÓN</th>
+                <th style="background:#0B2447; color:#FFFFFF;">PERÍODO</th>
+                <th style="background:#0B2447; color:#FFFFFF;">SUJETO RETENIDO / RIF</th>
+                <th style="background:#0B2447; color:#FFFFFF;">CORREO (PA 00093)</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-center">TIPO PERS. / CÓD.</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-right">TOTAL DOC. (BS)</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-right">BASE IMP. (BS)</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-right">SUSTRAENDO</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-right">ISLR RETENIDO (BS)</th>
+                <th style="background:#0B2447; color:#FFFFFF;" class="text-center">ACCIONES / PDF</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-retenciones-islr">
+              <tr><td colspan="11" class="text-center">Cargando comprobantes de retención ISLR...</td></tr>
+            </tbody>
+            <tfoot style="background: #F3F4F6; font-weight: 800; border-top: 2px solid #0B2447;">
+              <tr>
+                <td colspan="6" class="text-right" style="color: #0B2447;">TOTALES DEL PERÍODO SELECCIONADO:</td>
+                <td class="text-right font-mono" id="tot-islr-doc">Bs. 0,00</td>
+                <td class="text-right font-mono" id="tot-islr-base">Bs. 0,00</td>
+                <td class="text-right font-mono" id="tot-islr-sust">Bs. 0,00</td>
+                <td class="text-right font-mono" id="tot-islr-ret" style="color: #0B2447; font-size: 0.9rem;">Bs. 0,00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -1331,16 +1711,44 @@
       </div>
       <div class="modal-body">
         <form id="form-nueva-compra" onsubmit="guardarNuevaCompra(event)">
+          <input type="hidden" id="m-comp-movimiento-id" value="">
+
+          <!-- Buscador Inteligente de Entradas de Tienda (Cruce con Asistente) -->
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+              <span style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy);">🔗 1. Selecciona el Tipo de Compra a Registrar:</span>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('MERCANCIA')" id="btn-modo-mercancia" style="padding: 4px 10px; font-size: 11px; background: var(--ucg-navy); color: #fff;">📦 Mercancía / Repuestos (Inventario)</button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('GASTO')" id="btn-modo-gasto" style="padding: 4px 10px; font-size: 11px;">⚖️ Servicio / Gasto (Ej. Unión Global - ISLR)</button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('ACTIVO')" id="btn-modo-activo" style="padding: 4px 10px; font-size: 11px;">🏢 Compra de Activo Fijo / Equipos</button>
+              </div>
+            </div>
+            <div id="box-buscador-entrada-tienda">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="m-comp-buscar-tienda" class="form-control" placeholder="Escribe N° de Factura o Proveedor cargado por el asistente (ej: 2225, 2242, Disbattery, Angelinev)..." oninput="buscarEntradasTiendaParaCompra(this.value)" style="font-size: 0.82rem;">
+                <button type="button" class="btn btn-sm btn-emerald" onclick="buscarEntradasTiendaParaCompra(document.getElementById('m-comp-buscar-tienda').value)" style="white-space: nowrap;">🔍 Buscar Entrada</button>
+              </div>
+              <div id="lista-resultados-entrada-tienda" style="max-height: 150px; overflow-y: auto; margin-top: 8px; display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;"></div>
+              <div id="badge-entrada-vinculada" style="display: none; margin-top: 8px; padding: 6px 10px; background: #dcfce7; color: #166534; border-radius: 6px; font-size: 0.78rem; font-weight: 700;"></div>
+            </div>
+          </div>
+
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label>Período Fiscal:</label>
               <select id="m-comp-periodo" class="form-control" required>
-                <option value="2026-10" selected>Octubre 2026</option>
-                <option value="2026-11">Noviembre 2026</option>
-                <option value="2026-12">Diciembre 2026</option>
-                <option value="2026-09">Septiembre 2026</option>
-                <option value="2026-08">Agosto 2026</option>
-                <option value="2026-07">Julio 2026</option>
+                <option value="2026-10" selected>10 - Octubre 2026</option>
+                <option value="2026-11">11 - Noviembre 2026</option>
+                <option value="2026-12">12 - Diciembre 2026</option>
+                <option value="2026-09">09 - Septiembre 2026</option>
+                <option value="2026-08">08 - Agosto 2026</option>
+                <option value="2026-07">07 - Julio 2026</option>
+                <option value="2026-06">06 - Junio 2026</option>
+                <option value="2026-05">05 - Mayo 2026</option>
+                <option value="2026-04">04 - Abril 2026</option>
+                <option value="2026-03">03 - Marzo 2026</option>
+                <option value="2026-02">02 - Febrero 2026</option>
+                <option value="2026-01">01 - Enero 2026</option>
               </select>
             </div>
             <div class="form-group">
@@ -1371,10 +1779,38 @@
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
+          <div style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
+              <span id="m-comp-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:2px 8px; border-radius:4px; border:1px solid #19A7CE;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD</span>
+            </div>
+            <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
+              <div class="form-group" style="margin:0;">
+                <label>Modo de Carga del Monto:</label>
+                <select id="m-comp-modo-moneda" class="form-control" style="font-weight:700; color:#0B2447;" onchange="onCambioModoMonedaCompra()">
+                  <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
+                  <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Tasa Oficial BCV (Bs./USD):</label>
+                <input type="number" step="0.01" id="m-comp-tasa-bcv" class="form-control font-mono font-bold" value="88.50" oninput="calcularIvaCompra()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Fecha de la Tasa BCV:</label>
+                <input type="date" id="m-comp-fecha-tasa" class="form-control font-mono" oninput="calcularIvaCompra()">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
             <div class="form-group">
               <label>Base Imponible (Bs.):</label>
-              <input type="number" step="0.01" id="m-comp-base" class="form-control" placeholder="0.00" required oninput="calcularIvaCompra()">
+              <input type="number" step="0.01" id="m-comp-base" class="form-control font-mono font-bold" placeholder="0.00" required oninput="calcularIvaCompra('BS')">
+            </div>
+            <div class="form-group">
+              <label>Base Imponible ($ USD):</label>
+              <input type="number" step="0.01" id="m-comp-base-divisa" class="form-control font-mono" placeholder="0.00" oninput="calcularIvaCompra('DIVISA')">
             </div>
             <div class="form-group">
               <label>Alícuota IVA:</label>
@@ -1385,15 +1821,17 @@
               </select>
             </div>
             <div class="form-group">
-              <label>Impuesto IVA (Bs.):</label>
-              <input type="number" step="0.01" id="m-comp-iva" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+              <label>Impuesto IVA (Bs. / $):</label>
+              <input type="number" step="0.01" id="m-comp-iva" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+              <div id="m-comp-iva-divisa-lbl" style="font-size:0.72rem; color:#0369a1; font-family:monospace; font-weight:700; margin-top:2px;">Ref: $0.00 USD</div>
             </div>
           </div>
 
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
-              <label>Total Factura (Bs.):</label>
-              <input type="number" step="0.01" id="m-comp-total" class="form-control" readonly style="background:#f1f5f9; font-weight:800; font-size:1.1rem; color:var(--ucg-navy);">
+              <label>Total Factura (Bs. / Equivalente USD):</label>
+              <input type="number" step="0.01" id="m-comp-total" class="form-control font-mono" readonly style="background:#f1f5f9; font-weight:800; font-size:1.05rem; color:var(--ucg-navy);">
+              <div id="m-comp-total-divisa-lbl" style="font-size:0.76rem; color:#0B2447; font-family:monospace; font-weight:800; margin-top:3px;">Equivalente: $0.00 USD</div>
             </div>
             <div class="form-group">
               <label>IVA Retenido (Bs.):</label>
@@ -1403,8 +1841,9 @@
                   <option value="1.00">100%</option>
                   <option value="0.00">0%</option>
                 </select>
-                <input type="number" step="0.01" id="m-comp-ret" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+                <input type="number" step="0.01" id="m-comp-ret" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
               </div>
+              <div id="m-comp-ret-divisa-lbl" style="font-size:0.72rem; color:#64748b; font-family:monospace; margin-top:3px;">Ref. Retenido: $0.00 USD</div>
             </div>
           </div>
 
@@ -1434,9 +1873,15 @@
             <input type="text" id="m-comp-obs" class="form-control" placeholder="Detalle o justificación de la compra">
           </div>
 
-          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px;">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-compra')">Cancelar</button>
-            <button type="submit" class="btn btn-navy" id="btn-save-compra">Guardar en Libro de Compras</button>
+          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; font-weight:800; color:#0B2447; cursor:pointer; background:#f0f9ff; padding:6px 10px; border-radius:6px; border:1px solid #19A7CE;">
+              <input type="checkbox" id="m-comp-ir-islr" style="width:16px; height:16px;">
+              <span>🧾 Al guardar, abrir Comprobante de Retención ISLR (Ej. Servicios Unión Global)</span>
+            </label>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-compra')">Cancelar</button>
+              <button type="submit" class="btn btn-navy" id="btn-save-compra">Guardar en Libro de Compras</button>
+            </div>
           </div>
         </form>
       </div>
@@ -1452,15 +1897,35 @@
       </div>
       <div class="modal-body">
         <form id="form-nueva-venta" onsubmit="guardarNuevaVenta(event)">
+          <!-- Buscador Inteligente de Salidas / Ventas de Tienda (Cruce con Asistente) -->
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+            <div style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy); margin-bottom: 6px;">
+              🔗 1. Llamar Facturas de Venta Despachadas por el Asistente en Tienda
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" id="m-vent-buscar-tienda" class="form-control" placeholder="Buscar por N° Factura (ej: 755, 1980, 2223) o Fecha (ej: 2026-08-15)..." oninput="buscarSalidasTiendaParaVenta(this.value)" style="font-size: 0.82rem;">
+              <button type="button" class="btn btn-sm btn-emerald" onclick="buscarSalidasTiendaParaVenta(document.getElementById('m-vent-buscar-tienda').value)" style="white-space: nowrap;">🔍 Buscar Salidas</button>
+            </div>
+            <div id="lista-resultados-salida-tienda" style="max-height: 150px; overflow-y: auto; margin-top: 8px; display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;"></div>
+            <div id="badge-salida-vinculada" style="display: none; margin-top: 8px; padding: 6px 10px; background: #dcfce7; color: #166534; border-radius: 6px; font-size: 0.78rem; font-weight: 700;"></div>
+          </div>
+
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label>Período Fiscal:</label>
               <select id="m-vent-periodo" class="form-control" required>
-                <option value="2026-10" selected>Octubre 2026</option>
-                <option value="2026-11">Noviembre 2026</option>
-                <option value="2026-12">Diciembre 2026</option>
-                <option value="2026-09">Septiembre 2026</option>
-                <option value="2026-08">Agosto 2026</option>
+                <option value="2026-10" selected>10 - Octubre 2026</option>
+                <option value="2026-11">11 - Noviembre 2026</option>
+                <option value="2026-12">12 - Diciembre 2026</option>
+                <option value="2026-09">09 - Septiembre 2026</option>
+                <option value="2026-08">08 - Agosto 2026</option>
+                <option value="2026-07">07 - Julio 2026</option>
+                <option value="2026-06">06 - Junio 2026</option>
+                <option value="2026-05">05 - Mayo 2026</option>
+                <option value="2026-04">04 - Abril 2026</option>
+                <option value="2026-03">03 - Marzo 2026</option>
+                <option value="2026-02">02 - Febrero 2026</option>
+                <option value="2026-01">01 - Enero 2026</option>
               </select>
             </div>
             <div class="form-group">
@@ -1484,25 +1949,55 @@
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
+          <div style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
+              <span id="m-vent-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:2px 8px; border-radius:4px; border:1px solid #19A7CE;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD</span>
+            </div>
+            <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
+              <div class="form-group" style="margin:0;">
+                <label>Modo de Carga del Monto:</label>
+                <select id="m-vent-modo-moneda" class="form-control" style="font-weight:700; color:#0B2447;" onchange="calcularIvaVenta()">
+                  <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
+                  <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Tasa Oficial BCV (Bs./USD):</label>
+                <input type="number" step="0.01" id="m-vent-tasa-bcv" class="form-control font-mono font-bold" value="88.50" oninput="calcularIvaVenta()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Fecha de la Tasa BCV:</label>
+                <input type="date" id="m-vent-fecha-tasa" class="form-control font-mono" oninput="calcularIvaVenta()">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
             <div class="form-group">
               <label>Base Imponible Gravada (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-base" class="form-control" placeholder="0.00" required oninput="calcularIvaVenta()">
+              <input type="number" step="0.01" id="m-vent-base" class="form-control font-mono font-bold" placeholder="0.00" required oninput="calcularIvaVenta('BS')">
             </div>
             <div class="form-group">
-              <label>Débito Fiscal IVA 16% (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-iva" class="form-control" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+              <label>Base Imponible ($ USD):</label>
+              <input type="number" step="0.01" id="m-vent-base-divisa" class="form-control font-mono" placeholder="0.00" oninput="calcularIvaVenta('DIVISA')">
+            </div>
+            <div class="form-group">
+              <label>Débito Fiscal IVA 16% (Bs. / $):</label>
+              <input type="number" step="0.01" id="m-vent-iva" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+              <div id="m-vent-iva-divisa-lbl" style="font-size:0.72rem; color:#0369a1; font-family:monospace; font-weight:700; margin-top:2px;">Ref: $0.00 USD</div>
             </div>
           </div>
 
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label>Ventas Exentas (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-exento" class="form-control" value="0.00" oninput="calcularIvaVenta()">
+              <input type="number" step="0.01" id="m-vent-exento" class="form-control font-mono" value="0.00" oninput="calcularIvaVenta()">
             </div>
             <div class="form-group">
-              <label>Total Ventas (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-total" class="form-control" readonly style="background:#f1f5f9; font-weight:800; font-size:1.1rem; color:var(--ucg-navy);">
+              <label>Total Ventas (Bs. / Equivalente USD):</label>
+              <input type="number" step="0.01" id="m-vent-total" class="form-control font-mono" readonly style="background:#f1f5f9; font-weight:800; font-size:1.05rem; color:var(--ucg-navy);">
+              <div id="m-vent-total-divisa-lbl" style="font-size:0.76rem; color:#0B2447; font-family:monospace; font-weight:800; margin-top:3px;">Equivalente: $0.00 USD</div>
             </div>
           </div>
 
@@ -1565,8 +2060,24 @@
               <input type="text" id="m-prov-telefono" class="form-control" placeholder="0212-0000000">
             </div>
             <div class="form-group">
-              <label>Correo Electrónico:</label>
-              <input type="email" id="m-prov-email" class="form-control" placeholder="contacto@empresa.com">
+              <label style="color:#0B2447; font-weight:800;">Correo Electrónico (Obligatorio PA SNAT/2026/00093):</label>
+              <input type="email" id="m-prov-email" class="form-control" placeholder="facturacion@empresa.com" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Tipo de Persona (Decreto 1.808):</label>
+              <select id="m-prov-tipo-persona" class="form-control">
+                <option value="PJ-D">PJ-D • Persona Jurídica Domiciliada</option>
+                <option value="PN-R">PN-R • Persona Natural Residente</option>
+                <option value="PN-NR">PN-NR • Persona Natural No Residente</option>
+                <option value="PJ-ND">PJ-ND • Persona Jurídica No Domiciliada</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Dirección / Domicilio Fiscal:</label>
+              <input type="text" id="m-prov-direccion" class="form-control" placeholder="Dirección fiscal del proveedor">
             </div>
           </div>
 
@@ -1601,6 +2112,452 @@
       </div>
       <div class="modal-footer btn-print-hide">
         <button class="btn btn-secondary" onclick="closeModal('modal-impresion-fiscal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Llamar y Cruzar Entradas de Tienda (Asistente) -> Libro de Compras -->
+  <div class="modal-overlay" id="modal-cruce-entradas-tienda" style="display: none;">
+    <div class="modal-box" style="max-width: 960px;">
+      <div class="modal-header">
+        <div>
+          <h3 style="color: var(--ucg-navy); font-weight: 800;">🔗 Llamar Facturas de Compra desde Entradas de Almacén (Tienda)</h3>
+          <div style="font-size: 0.78rem; color: var(--text-secondary);">Selecciona cualquier ingreso de mercancía registrado por el asistente en tienda para traer su Proveedor, RIF, Fecha y N° de Factura al Libro de Compras.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-cruce-entradas-tienda')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="filters-card" style="margin-bottom: 12px; padding: 10px 14px;">
+          <div class="search-box" style="flex: 2;">
+            <input type="text" id="filtro-tienda-ent-q" placeholder="Buscar por N° de Factura, RIF o Proveedor (ej: 2225, 2242, Disbattery, Angelinev)..." oninput="cargarTablaEntradasTiendaModal()">
+          </div>
+          <div class="select-group">
+            <select id="filtro-tienda-ent-periodo" onchange="cargarTablaEntradasTiendaModal()">
+              <option value="TODOS">📅 Todos los Meses (2026)</option>
+              <option value="2026-10">10 - Octubre 2026</option>
+              <option value="2026-09">09 - Septiembre 2026</option>
+              <option value="2026-08">08 - Agosto 2026</option>
+              <option value="2026-07">07 - Julio 2026</option>
+              <option value="2026-06">06 - Junio 2026</option>
+              <option value="2026-05">05 - Mayo 2026</option>
+              <option value="2026-04">04 - Abril 2026</option>
+              <option value="2026-03">03 - Marzo 2026</option>
+              <option value="2026-02">02 - Febrero 2026</option>
+              <option value="2026-01">01 - Enero 2026</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 8px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>FECHA</th>
+                <th>FACTURA / DOC TIENDA</th>
+                <th>PROVEEDOR / RIF</th>
+                <th class="text-center">REPUESTOS INGRESADOS</th>
+                <th class="text-center">ESTADO FISCAL</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-modal-entradas-tienda">
+              <tr><td colspan="6" class="text-center">Buscando entradas registradas por el asistente...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-cruce-entradas-tienda')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Llamar y Cruzar Salidas de Tienda (Asistente) -> Libro de Ventas -->
+  <div class="modal-overlay" id="modal-cruce-salidas-tienda" style="display: none;">
+    <div class="modal-box" style="max-width: 960px;">
+      <div class="modal-header">
+        <div>
+          <h3 style="color: var(--ucg-navy); font-weight: 800;">🔗 Llamar Ventas / Salidas de Almacén (Cargadas en Tienda)</h3>
+          <div style="font-size: 0.78rem; color: var(--text-secondary);">Cruza las facturas de venta despachadas por el asistente en tienda (rango Desde -> Hasta y cantidad de comprobantes por día) para llevarlas al Libro de Ventas.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-cruce-salidas-tienda')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="filters-card" style="margin-bottom: 12px; padding: 10px 14px;">
+          <div class="search-box" style="flex: 2;">
+            <input type="text" id="filtro-tienda-sal-q" placeholder="Buscar por N° de Factura de Venta (ej: FACT 755, 1980, 2223)..." oninput="cargarTablaSalidasTiendaModal()">
+          </div>
+          <div class="select-group">
+            <select id="filtro-tienda-sal-periodo" onchange="cargarTablaSalidasTiendaModal()">
+              <option value="TODOS">📅 Todos los Meses (2026)</option>
+              <option value="2026-10">10 - Octubre 2026</option>
+              <option value="2026-09">09 - Septiembre 2026</option>
+              <option value="2026-08">08 - Agosto 2026</option>
+              <option value="2026-07">07 - Julio 2026</option>
+              <option value="2026-06">06 - Junio 2026</option>
+              <option value="2026-05">05 - Mayo 2026</option>
+              <option value="2026-04">04 - Abril 2026</option>
+              <option value="2026-03">03 - Marzo 2026</option>
+              <option value="2026-02">02 - Febrero 2026</option>
+              <option value="2026-01">01 - Enero 2026</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 8px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>FECHA DESPACHO</th>
+                <th>RANGO FACTURAS TIENDA (DESDE ➔ HASTA)</th>
+                <th class="text-center">CANT. FACTURAS</th>
+                <th class="text-center">UNIDADES DESPACHADAS</th>
+                <th class="text-center">ESTADO EN LIBRO</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-modal-salidas-tienda">
+              <tr><td colspan="6" class="text-center">Buscando salidas de venta registradas en tienda...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-cruce-salidas-tienda')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: EMITIR COMPROBANTE DE RETENCIÓN ISLR (PA SNAT/2026/00093)       -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-emitir-islr" style="display: none;">
+    <div class="modal-box" style="max-width: 1080px; max-height: 94vh; overflow-y: auto; border-top: 4px solid #0B2447;">
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF; border-bottom: 2px solid #19A7CE;">
+        <div>
+          <div style="font-size: 0.7rem; color: #19A7CE; font-weight: 800; letter-spacing: 0.06em;">UNIÓN CONTABLE GLOBAL • SENIAT PA SNAT/2026/00093 Y DECRETO 1.808</div>
+          <h3 style="color: #FFFFFF; font-size: 1rem; font-weight: 800; margin: 0;">Emitir Comprobante Oficial de Retención de ISLR</h3>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF;" onclick="closeModal('modal-emitir-islr')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 20px;">
+        <form id="form-emitir-islr" onsubmit="guardarComprobanteISLR(event)">
+          <!-- 1. Selector Rápido desde Facturas del Libro de Compras -->
+          <div style="background: #F3F4F6; border: 1px solid #cbd5e1; border-left: 4px solid #19A7CE; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <div>
+                <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447;">🔗 Llamar Factura Directamente del Libro de Compras (Servicios / Honorarios / Proveedores)</div>
+                <div style="font-size: 0.73rem; color: #6B7280;">Selecciona una factura ya cargada en el Libro de Compras para autocompletar RIF, Razón Social, N° Factura, N° Control y Montos:</div>
+              </div>
+              <select id="islr-select-factura-compra" class="form-control" style="max-width: 460px; font-weight: 700; border-color: #19A7CE;" onchange="cargarFacturaCompraEnModalISLR(this.value)">
+                <option value="">-- Seleccionar factura del Libro de Compras (Opcional) --</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 2. Reglas de Numeración (14 caracteres) y Sello de Tiempo -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; background: #FFFFFF; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
+            <div class="form-group" style="margin:0;">
+              <label style="color:#0B2447; font-weight:800;">Período Fiscal (AAAA - MM):</label>
+              <select id="m-islr-periodo" class="form-control" onchange="actualizarProximoNumeroISLR()" required>
+                <option value="2026-10">2026 - 10 (Octubre 2026)</option>
+                <option value="2026-09">2026 - 09 (Septiembre 2026)</option>
+                <option value="2026-08">2026 - 08 (Agosto 2026)</option>
+                <option value="2026-07">2026 - 07 (Julio 2026)</option>
+                <option value="2026-06">2026 - 06 (Junio 2026)</option>
+                <option value="2026-05">2026 - 05 (Mayo 2026)</option>
+                <option value="2026-04">2026 - 04 (Abril 2026)</option>
+                <option value="2026-03">2026 - 03 (Marzo 2026)</option>
+                <option value="2026-02">2026 - 02 (Febrero 2026)</option>
+                <option value="2026-01">2026 - 01 (Enero 2026)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="color:#0B2447; font-weight:800;">N° Comprobante (14 dígitos):</label>
+              <input type="text" id="m-islr-nro-comprobante" class="form-control font-mono font-bold" maxlength="14" pattern="^\d{14}$" title="Debe contener exactamente 14 dígitos numéricos: AAAAMM + 8 dígitos secuenciales" style="border-color:#0B2447; color:#0B2447; background:#f8fafc;" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="color:#0B2447; font-weight:800;">Fecha Emisión (DD/MM/AAAA):</label>
+              <input type="text" id="m-islr-fecha-emision" class="form-control font-mono" placeholder="30/10/2026" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="color:#0B2447; font-weight:800;">Hora Exacta (HH:MM:SS):</label>
+              <input type="text" id="m-islr-hora-emision" class="form-control font-mono" placeholder="14:35:20" required>
+            </div>
+          </div>
+
+          <!-- 3. Datos del Sujeto Retenido (Proveedor / Beneficiario) con Correo Obligatorio PA SNAT/2026/00093 -->
+          <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; background: #FFFFFF;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1.5px solid #0B2447; padding-bottom: 6px;">
+              <span style="font-size: 0.82rem; font-weight: 800; color: #0B2447;">🏢 DATOS DEL SUJETO RETENIDO (PROVEEDOR / BENEFICIARIO)</span>
+              <select id="m-islr-select-proveedor" class="form-control" style="max-width: 340px; font-size: 0.78rem;" onchange="seleccionarProveedorEnModalISLR(this.value)">
+                <option value="">-- Autocompletar desde Directorio de Proveedores --</option>
+              </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1.1fr 2fr 1.3fr; gap: 12px; margin-bottom: 10px;">
+              <div class="form-group" style="margin:0;">
+                <label>N° de RIF (V/E/J/G/P-XXXXXXXX-X) *:</label>
+                <input type="text" id="m-islr-rif" class="form-control font-mono font-bold" placeholder="J-50714716-9" required onblur="detectarTipoPersonaPorRifISLR(this.value)">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Nombre o Razón Social del Proveedor *:</label>
+                <input type="text" id="m-islr-razon" class="form-control" placeholder="UNION GLOBAL 333, C.A." required>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Tipo de Persona (Decreto 1.808) *:</label>
+                <select id="m-islr-tipo-persona" class="form-control font-bold" onchange="recalcularLineasISLR()" required>
+                  <option value="PJ-D">PJ-D • Persona Jurídica Domiciliada</option>
+                  <option value="PN-R">PN-R • Persona Natural Residente (Con Sustraendo)</option>
+                  <option value="PN-NR">PN-NR • Persona Natural No Residente</option>
+                  <option value="PJ-ND">PJ-ND • Persona Jurídica No Domiciliada</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1.6fr 1.4fr 1.2fr; gap: 12px;">
+              <div class="form-group" style="margin:0;">
+                <label>Dirección / Domicilio Fiscal del Sujeto Retenido *:</label>
+                <input type="text" id="m-islr-direccion" class="form-control" placeholder="Dirección fiscal completa del proveedor" required>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="color: #0B2447; font-weight: 800;">📧 Correo Electrónico Proveedor (OBLIGATORIO PA 00093) *:</label>
+                <input type="email" id="m-islr-email" class="form-control" placeholder="facturacion@proveedor.com" style="border: 1.5px solid #19A7CE; background: #f0f9ff; font-weight: 700;" required>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Concepto General de la Retención:</label>
+                <input type="text" id="m-islr-concepto-general" class="form-control" value="ASESORIA ADMINISTRATIVA" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Bloque Multimonedas (Operaciones en Divisas / Indexadas) -->
+          <div style="border: 1px solid #19A7CE; background: #f0f9ff; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 800; color: #0B2447; font-size: 0.82rem; margin: 0;">
+              <input type="checkbox" id="m-islr-multimoneda" style="width: 17px; height: 17px;" onchange="toggleBloqueMultimonedaISLR()">
+              <span>💱 Factura Emitida en Divisas / Indexada (Mostrar Equivalente Multimonedas y Tasa BCV en el Comprobante)</span>
+            </label>
+            <div id="box-islr-multimoneda-fields" style="display: none; align-items: center; gap: 10px;">
+              <span style="font-size: 0.78rem; font-weight: 700; color: #0B2447;">Moneda:</span>
+              <select id="m-islr-moneda" class="form-control" style="width: 90px; padding: 4px 8px;" onchange="recalcularLineasISLR()">
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
+              <span style="font-size: 0.78rem; font-weight: 700; color: #0B2447;">Tasa BCV Aplicable (Bs./Divisa):</span>
+              <input type="number" step="0.0001" id="m-islr-tasa-bcv" class="form-control font-mono font-bold" value="68.50" style="width: 110px; padding: 4px 8px;" oninput="recalcularLineasISLR()">
+            </div>
+          </div>
+
+          <!-- 5. Detalle de la Operación (Tabla del Comprobante) -->
+          <div style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
+            <div style="background: #3F5B8F; color: #FFFFFF; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.8rem; font-weight: 800;">📋 DETALLE DE FACTURAS / DOCUMENTOS OBJETO DE RETENCIÓN ISLR</span>
+              <button type="button" class="btn btn-sm" style="background: #19A7CE; color: #FFFFFF; font-weight: 800; padding: 3px 10px; font-size: 0.75rem;" onclick="agregarFilaDetalleISLR()">
+                + Agregar Otra Factura / Documento
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" style="margin:0; font-size: 0.76rem;">
+                <thead>
+                  <tr style="background: #F3F4F6;">
+                    <th style="width:36px;">OP</th>
+                    <th style="width:95px;">FECHA DOC.</th>
+                    <th style="width:95px;">N° FACTURA</th>
+                    <th style="width:100px;">N° CONTROL</th>
+                    <th style="width:85px;">N.D. / N.C.</th>
+                    <th style="min-width:210px;">CONCEPTO SENIAT (3 DÍG.)</th>
+                    <th style="width:115px;" class="text-right">TOTAL DOC (BS)</th>
+                    <th style="width:115px;" class="text-right">BASE IMP. (BS)</th>
+                    <th style="width:65px;" class="text-center">% BASE</th>
+                    <th style="width:65px;" class="text-center">% TARIFA</th>
+                    <th style="width:95px;" class="text-right">SUSTRAENDO</th>
+                    <th style="width:110px;" class="text-right">ISLR RETENIDO</th>
+                    <th style="width:36px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-modal-islr-items">
+                  <!-- Filas dinámicas -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Resumen de Totales en el Modal -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #F3F4F6; border: 1px solid #cbd5e1; border-left: 4px solid #0B2447; padding: 10px 16px; border-radius: 8px; flex-wrap: wrap; gap: 12px;">
+            <div id="m-islr-resumen-divisa" style="font-size: 0.78rem; color: #3F5B8F; font-weight: 700;">
+              Valor Unidad Tributaria (UT) aplicado: <strong>Bs. <span id="m-islr-ut-label">43,00</span></strong> • Factor Sustraendo PN-R: <strong>83,3334 UT</strong>
+            </div>
+            <div style="display: flex; gap: 18px; align-items: center;">
+              <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: #6B7280; font-weight: 700;">TOTAL DOCUMENTOS</div>
+                <div class="font-mono font-bold" id="m-islr-tot-doc" style="font-size: 0.92rem; color: #0B2447;">Bs. 0,00</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: #6B7280; font-weight: 700;">BASE OBJETO RETENCIÓN</div>
+                <div class="font-mono font-bold" id="m-islr-tot-base" style="font-size: 0.92rem; color: #3F5B8F;">Bs. 0,00</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: #6B7280; font-weight: 700;">SUSTRAENDO APLICADO</div>
+                <div class="font-mono font-bold" id="m-islr-tot-sust" style="font-size: 0.92rem; color: #6B7280;">Bs. 0,00</div>
+              </div>
+              <div style="text-align: right; background: #0B2447; color: #FFFFFF; padding: 6px 14px; border-radius: 6px; border: 1.5px solid #19A7CE;">
+                <div style="font-size: 0.68rem; color: #19A7CE; font-weight: 800;">IMPUESTO ISLR RETENIDO</div>
+                <div class="font-mono font-bold" id="m-islr-tot-ret" style="font-size: 1.05rem; color: #FFFFFF;">Bs. 0,00</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-emitir-islr')">Cancelar</button>
+            <button type="submit" class="btn" id="btn-submit-islr" style="background: #0B2447; color: #FFFFFF; font-weight: 800; border: 1px solid #19A7CE;">
+              ✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: CONFIGURACIÓN UT E IMPRENTA DIGITAL (PA SNAT/2026/00093)        -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-config-islr" style="display: none;">
+    <div class="modal-box" style="max-width: 680px; border-top: 4px solid #0B2447;">
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF;">
+        <h3 style="color: #FFFFFF; font-weight: 800;">⚙️ Parámetros Fiscales ISLR, Unidad Tributaria e Imprenta Digital</h3>
+        <button class="modal-close" style="color: #FFFFFF;" onclick="closeModal('modal-config-islr')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-config-islr" onsubmit="guardarConfigISLR(event)">
+          <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+            1. Datos del Agente de Retención (Cliente Emisor)
+          </div>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Razón Social Agente de Retención:</label>
+              <input type="text" id="cfg-islr-razon" class="form-control" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>RIF Agente de Retención:</label>
+              <input type="text" id="cfg-islr-rif" class="form-control font-mono" required>
+            </div>
+            <div class="form-group" style="grid-column: span 2; margin:0;">
+              <label>Domicilio Fiscal Agente de Retención:</label>
+              <input type="text" id="cfg-islr-dir" class="form-control" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Teléfono Agente de Retención:</label>
+              <input type="text" id="cfg-islr-tel" class="form-control" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Correo Electrónico Agente de Retención:</label>
+              <input type="email" id="cfg-islr-email" class="form-control" required>
+            </div>
+          </div>
+
+          <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+            2. Unidad Tributaria (UT) y Factor de Sustraendo (Decreto 1.808)
+          </div>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Valor Unidad Tributaria Vigente (Bs.):</label>
+              <input type="number" step="0.01" id="cfg-islr-ut" class="form-control font-mono font-bold" value="43.00" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Factor Base de Sustraendo (83,3334 UT):</label>
+              <input type="number" step="0.0001" id="cfg-islr-factor" class="form-control font-mono" value="83.3334" required>
+            </div>
+          </div>
+
+          <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+            3. Trazabilidad de Imprenta Digital Autorizada (PA SNAT/2026/00093)
+          </div>
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color:#0B2447;">
+              <input type="checkbox" id="cfg-islr-aplica-imprenta" checked style="width:16px; height:16px;">
+              <span>Mostrar Pie de Trazabilidad de Imprenta Digital en el Comprobante PDF</span>
+            </label>
+          </div>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group" style="margin:0;">
+              <label>Razón Social de la Imprenta Digital:</label>
+              <input type="text" id="cfg-islr-imp-razon" class="form-control">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>RIF de la Imprenta Digital:</label>
+              <input type="text" id="cfg-islr-imp-rif" class="form-control font-mono">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>N° Providencia Autorización SENIAT:</label>
+              <input type="text" id="cfg-islr-imp-prov" class="form-control font-mono">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Fecha y Hora de Asignación:</label>
+              <input type="text" id="cfg-islr-imp-fecha" class="form-control font-mono">
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-config-islr')">Cancelar</button>
+            <button type="submit" class="btn" style="background:#0B2447; color:#FFFFFF; font-weight:800;">Guardar Configuración</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: TASAS BCV DE CIERRE MENSUAL Y REVALORIZACIÓN DE MESES DECLARADOS-->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-tasas-bcv" style="display: none;">
+    <div class="modal-box" style="max-width: 860px; max-height: 92vh; overflow-y: auto; border-top: 4px solid #0B2447;">
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF; border-bottom: 2px solid #19A7CE;">
+        <div>
+          <div style="font-size: 0.7rem; color: #19A7CE; font-weight: 800; letter-spacing: 0.06em;">UNIÓN CONTABLE GLOBAL • SENIAT PA SNAT/2026/00093 Y ART. 177 RISLR</div>
+          <h3 style="color: #FFFFFF; font-size: 1rem; font-weight: 800; margin: 0;">💱 Tasas Oficiales BCV de Cierre Mensual y Revalorización Bimonetaria (Meses Declarados)</h3>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF;" onclick="closeModal('modal-tasas-bcv')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <div style="background: #f0f9ff; border: 1px solid #19A7CE; border-left: 4px solid #0B2447; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.8rem; color: #0B2447; line-height: 1.45;">
+          <strong>💡 Solución para Meses Ya Declarados (Diciembre 2025 – Septiembre 2026):</strong><br>
+          En los meses históricos donde el inventario solo tenía montos en <strong>Divisas ($ USD)</strong> o los libros fiscales solo tenían montos en <strong>Bolívares (Bs.)</strong>, este módulo aplica automáticamente la <strong>Tasa Oficial BCV de Cierre de cada Mes</strong> para sincronizar la doble expresión monetaria:<br>
+          • <strong>Kardex / Movimientos:</strong> <code>Costo Unitario Bs. = Costo Unitario Divisa × Tasa BCV Cierre del Mes</code>.<br>
+          • <strong>Libro de Compras, Ventas y Retenciones:</strong> <code>Monto Divisa ($) = Monto Bs. ÷ Tasa BCV Cierre del Mes</code>.
+        </div>
+
+        <form id="form-tasas-bcv" onsubmit="guardarYRevalorizarTasasBCV(event)">
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #F3F4F6; padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 14px;">
+            <span style="font-size: 0.82rem; font-weight: 800; color: #0B2447;">📊 Método de Valoración de Inventario Configurado por Defecto:</span>
+            <select id="cfg-metodo-kardex-global" class="form-control" style="max-width: 340px; font-weight: 800; color: #0B2447; border-color: #19A7CE;">
+              <option value="CPP">Costo Promedio Ponderado Móvil (CPP - Estándar Fiscal)</option>
+              <option value="PEPS">PEPS / FIFO (Primero en Entrar, Primero en Salir)</option>
+            </select>
+          </div>
+
+          <div class="table-responsive" style="max-height: 360px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px;">
+            <table class="data-table" style="margin: 0; font-size: 0.8rem;">
+              <thead>
+                <tr style="background: #0B2447; color: #FFFFFF;">
+                  <th style="background:#0B2447; color:#FFFFFF;">PERÍODO FISCAL</th>
+                  <th style="background:#0B2447; color:#FFFFFF;">FECHA CIERRE TASA</th>
+                  <th style="background:#0B2447; color:#FFFFFF;">DIVISA</th>
+                  <th style="background:#0B2447; color:#FFFFFF;" class="text-right">TASA OFICIAL BCV CIERRE (BS./USD)</th>
+                  <th style="background:#0B2447; color:#FFFFFF;">DESCRIPCIÓN / REFERENCIA OFICIAL</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-tasas-bcv-cierre">
+                <tr><td colspan="5" class="text-center">Cargando tasas BCV de cierre mensual...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-tasas-bcv')">Cerrar</button>
+            <button type="submit" class="btn" id="btn-revalorizar-bcv" style="background: #0B2447; color: #FFFFFF; font-weight: 800; border: 1.5px solid #19A7CE;">
+              🔄 Guardar Tasas BCV y Revalorizar Todos los Cierres Mensuales (Bs. ↔ USD)
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

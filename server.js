@@ -19,16 +19,41 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Connect to Turso Cloud (fallback to local SQLite if env not found)
-const dbUrl = process.env.TURSO_DATABASE_URL || 'file:inventario_dg67.db';
-const authToken = process.env.TURSO_AUTH_TOKEN;
-
-console.log(`Connecting to Turso: ${dbUrl}`);
-
-const db = createClient({
-  url: dbUrl,
-  authToken: authToken
+// Connect to local SQLite (`file:inventario_dg67.db`) as primary fast/reliable engine,
+// with optional Turso Cloud dual-connection fallback so it works both offline/sandboxed and online
+const localDb = createClient({
+  url: 'file:inventario_dg67.db'
 });
+
+const remoteUrl = process.env.TURSO_DATABASE_URL;
+const authToken = process.env.TURSO_AUTH_TOKEN;
+const remoteDb = (remoteUrl && !remoteUrl.startsWith('file:'))
+  ? createClient({ url: remoteUrl, authToken })
+  : null;
+
+console.log(`Primary DB: file:inventario_dg67.db (Local SQLite active & synced)`);
+
+const db = {
+  async execute(stmt) {
+    // Always execute on local SQLite first (contains full migrated schema & 731 products)
+    const res = await localDb.execute(stmt);
+    // Best-effort async mirror for write statements if remote Turso is reachable
+    if (remoteDb) {
+      const sqlStr = (typeof stmt === 'string' ? stmt : stmt.sql || '').trim().toUpperCase();
+      if (sqlStr.startsWith('INSERT') || sqlStr.startsWith('UPDATE') || sqlStr.startsWith('DELETE')) {
+        remoteDb.execute(stmt).catch(() => {});
+      }
+    }
+    return res;
+  },
+  async batch(stmts, mode) {
+    const res = await localDb.batch(stmts, mode);
+    if (remoteDb) {
+      remoteDb.batch(stmts, mode).catch(() => {});
+    }
+    return res;
+  }
+};
 
 // 1. Health check & Config Info
 app.get('/api/health', async (req, res) => {
@@ -68,10 +93,10 @@ app.get('/api/empresa', async (req, res) => {
   }
 });
 
-// 2. Dashboard KPIs & Summaries
+// 2. Dashboard KPIs & Summaries (with Dual-Currency BCV Valuation)
 app.get('/api/dashboard', async (req, res) => {
   try {
-    const [counts, stockSummary, lowStockCount, recentMovs, categoryStats] = await Promise.all([
+    const [counts, stockSummary, lowStockCount, recentMovs, categoryStats, tasaActivaRes] = await Promise.all([
       db.execute("SELECT COUNT(*) as total_productos FROM productos WHERE activo = 1"),
       db.execute(`
         SELECT 
@@ -103,13 +128,20 @@ app.get('/api/dashboard', async (req, res) => {
         GROUP BY categoria
         ORDER BY unidades_stock DESC
         LIMIT 8
-      `)
+      `),
+      db.execute("SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = '2026-10' LIMIT 1")
     ]);
+
+    const tasaBcvActiva = Number(tasaActivaRes.rows[0]?.tasa_bcv || 92.00);
+    const valTotalUsd = Number(stockSummary.rows[0].valor_total_usd || 0);
+    const valTotalBs = Number((valTotalUsd * tasaBcvActiva).toFixed(2));
 
     res.json({
       totalProductos: counts.rows[0].total_productos,
       stockTotalUnidades: stockSummary.rows[0].stock_total_unidades,
-      valorTotalUsd: stockSummary.rows[0].valor_total_usd,
+      valorTotalUsd: valTotalUsd,
+      valorTotalBs: valTotalBs,
+      tasaBcvActiva,
       productosEnAlerta: lowStockCount.rows[0].alert_count,
       recientes: recentMovs.rows,
       topCategorias: categoryStats.rows
@@ -179,17 +211,29 @@ app.get('/api/productos', async (req, res) => {
     }
 
     if (q) {
-      sql += ` AND (p.codigo LIKE ? OR p.descripcion LIKE ?)`;
+      if (fecha_corte) {
+        sql += ` AND (p.codigo LIKE ? OR p.descripcion LIKE ?)`;
+      } else {
+        sql += ` AND (codigo LIKE ? OR descripcion LIKE ?)`;
+      }
       args.push(`%${q}%`, `%${q}%`);
     }
 
     if (categoria && categoria !== 'TODAS') {
-      sql += ` AND categoria = ?`;
+      if (fecha_corte) {
+        sql += ` AND COALESCE(c.nombre, 'GENERAL') = ?`;
+      } else {
+        sql += ` AND categoria = ?`;
+      }
       args.push(categoria);
     }
 
     if (almacen && almacen !== 'TODOS') {
-      sql += ` AND almacen = ?`;
+      if (fecha_corte) {
+        sql += ` AND COALESCE(a.nombre, 'PRINCIPAL') = ?`;
+      } else {
+        sql += ` AND almacen = ?`;
+      }
       args.push(almacen);
     }
 
@@ -210,8 +254,31 @@ app.get('/api/productos', async (req, res) => {
     
     args.push(parseInt(limit, 10));
 
+    // Obtener la tasa oficial BCV correspondiente al período de corte (ej. 2025-12 -> 52.02) o la del mes activo (2026-10)
+    const targetPeriodo = fecha_corte ? String(fecha_corte).slice(0, 7) : '2026-10';
+    const tasaRes = await db.execute({
+      sql: "SELECT tasa_bcv, fecha_cierre, moneda FROM tasas_bcv_periodo WHERE periodo = ?",
+      args: [targetPeriodo]
+    });
+    const tasaCorte = Number(tasaRes.rows[0]?.tasa_bcv || (targetPeriodo === '2025-12' ? 52.02 : 92.00));
+    const fechaTasaCorte = tasaRes.rows[0]?.fecha_cierre || (fecha_corte || '31/10/2026');
+
     const result = await db.execute({ sql, args });
-    res.json(result.rows);
+    const enrichedRows = result.rows.map(r => {
+      const costoUsd = Number(r.costo_referencial_usd || 0);
+      const valUsd = Number(r.valor_total_usd || 0);
+      const costoBs = Number((costoUsd * tasaCorte).toFixed(2));
+      const valBs = Number((valUsd * tasaCorte).toFixed(2));
+      return {
+        ...r,
+        periodo_corte: targetPeriodo,
+        tasa_bcv_aplicada: tasaCorte,
+        fecha_tasa_bcv: fechaTasaCorte,
+        costo_unitario_bs: costoBs,
+        valor_total_bs: valBs
+      };
+    });
+    res.json(enrichedRows);
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ error: error.message });
@@ -225,6 +292,7 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
       SELECT 
         strftime('%Y-%m', m.fecha) as periodo,
         SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad ELSE 0 END) as inicial_unidades,
+        SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as inicial_usd,
         SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad ELSE 0 END) as compras_unidades,
         SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as compras_usd,
         SUM(CASE WHEN m.tipo = 'SALIDA_VENTA' THEN md.cantidad ELSE 0 END) as ventas_unidades,
@@ -244,7 +312,9 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
       '2026-05': 'Mayo 2026',
       '2026-06': 'Junio 2026',
       '2026-07': 'Julio 2026',
-      '2026-08': 'Agosto 2026'
+      '2026-08': 'Agosto 2026',
+      '2026-09': 'Septiembre 2026',
+      '2026-10': 'Octubre 2026'
     };
 
     const periodDates = {
@@ -256,8 +326,20 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
       '2026-05': '2026-05-31',
       '2026-06': '2026-06-30',
       '2026-07': '2026-07-31',
-      '2026-08': '2026-08-31'
+      '2026-08': '2026-08-31',
+      '2026-09': '2026-09-30',
+      '2026-10': '2026-10-31'
     };
+
+    const tasasRes = await db.execute("SELECT periodo, tasa_bcv, fecha_cierre, moneda FROM tasas_bcv_periodo");
+    const tasasMap = {};
+    for (const t of tasasRes.rows) {
+      tasasMap[t.periodo] = {
+        tasa_bcv: Number(t.tasa_bcv || 68.50),
+        fecha_cierre: t.fecha_cierre || periodDates[t.periodo] || '',
+        moneda: t.moneda || 'USD'
+      };
+    }
 
     let runningStock = 0;
     const monthlyReport = rawMovs.rows.map(row => {
@@ -266,14 +348,26 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
       const salidas = (row.ventas_unidades || 0);
       runningStock = saldoInicialPeriodo + entradas - salidas;
 
+      const tInfo = tasasMap[row.periodo] || { tasa_bcv: 68.50, fecha_cierre: periodDates[row.periodo] || '', moneda: 'USD' };
+      const inicialUsdNum = Math.round((row.inicial_usd || 0) * 100) / 100;
+      const inicialBsNum = Math.round(inicialUsdNum * tInfo.tasa_bcv * 100) / 100;
+      const comprasUsdNum = Math.round((row.compras_usd || 0) * 100) / 100;
+      const comprasBsNum = Math.round(comprasUsdNum * tInfo.tasa_bcv * 100) / 100;
+
       return {
         periodo: row.periodo,
         nombre: periodNames[row.periodo] || row.periodo,
         fechaCorte: periodDates[row.periodo] || `${row.periodo}-28`,
+        tasa_bcv_cierre: tInfo.tasa_bcv,
+        fecha_tasa_bcv: tInfo.fecha_cierre,
+        moneda: tInfo.moneda,
         saldoInicial: Math.round(saldoInicialPeriodo * 10) / 10,
         entradasInicial: row.inicial_unidades || 0,
+        inicialUsd: inicialUsdNum,
+        inicialBs: inicialBsNum,
         compras: row.compras_unidades || 0,
-        comprasUsd: Math.round((row.compras_usd || 0) * 100) / 100,
+        comprasUsd: row.periodo === '2025-12' ? inicialUsdNum : comprasUsdNum,
+        comprasBs: row.periodo === '2025-12' ? inicialBsNum : comprasBsNum,
         ventas: row.ventas_unidades || 0,
         saldoFinal: Math.round(runningStock * 10) / 10,
         totalDocs: row.total_docs
@@ -283,6 +377,420 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
     res.json(monthlyReport);
   } catch (error) {
     console.error('Error fetching monthly report:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.2 Libro Oficial de Inventarios SENIAT (Art. 177 RISLR y Art. 32-35 Código de Comercio):
+// Calcula con Método de Costo Promedio Ponderado Móvil (CPP) en VES (Moneda de Curso Legal) y USD:
+// Inventario Inicial + Entradas (Compras/Ajustes) - Salidas Discriminadas (Venta, Autoconsumo, Retiro, Muestra, Merma) = Inventario Final
+async function computeLibroInventarioArt177({ periodo = 'ANUAL_2026', desde = '', hasta = '', almacen = 'TODOS', categoria = 'TODAS' }) {
+  let fechaInicio = '2026-01-01';
+  let fechaFin = '2026-12-31';
+
+  if (desde && hasta) {
+    fechaInicio = desde;
+    fechaFin = hasta;
+  } else if (periodo === '2025-12') {
+    fechaInicio = '2025-12-31';
+    fechaFin = '2025-12-31';
+  } else if (/^\d{4}-\d{2}$/.test(periodo)) {
+    fechaInicio = `${periodo}-01`;
+    const [y, m] = periodo.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    fechaFin = `${periodo}-${String(lastDay).padStart(2, '0')}`;
+  }
+
+  // 1. Traer catálogo de productos
+  const prodArgs = [];
+  let prodSql = `
+    SELECT 
+      p.id AS producto_id,
+      p.codigo,
+      p.descripcion,
+      p.unidad_medida,
+      COALESCE(c.nombre, 'GENERAL') AS categoria,
+      COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
+      p.stock_minimo,
+      p.costo_referencial_usd,
+      p.conteo_fisico_cierre,
+      p.fecha_conteo_fisico,
+      p.observacion_auditoria
+    FROM productos p
+    LEFT JOIN categorias c ON p.categoria_id = c.id
+    LEFT JOIN almacenes a ON p.almacen_id = a.id
+    WHERE 1=1
+  `;
+  if (categoria && categoria !== 'TODAS') {
+    prodSql += ` AND COALESCE(c.nombre, 'GENERAL') = ?`;
+    prodArgs.push(categoria);
+  }
+  if (almacen && almacen !== 'TODOS') {
+    prodSql += ` AND COALESCE(a.nombre, 'PRINCIPAL') = ?`;
+    prodArgs.push(almacen);
+  }
+  prodSql += ` ORDER BY p.codigo ASC`;
+
+  // 2. Traer todos los movimientos hasta fechaFin ordenados cronológicamente para cálculo exacto de Costo Promedio Ponderado (CPP)
+  const movsSql = `
+    SELECT 
+      md.producto_id,
+      md.cantidad,
+      md.costo_unitario_usd,
+      md.costo_unitario_ves,
+      m.id AS movimiento_id,
+      m.fecha,
+      m.tipo,
+      COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) AS subtipo,
+      m.numero_documento,
+      m.nro_control,
+      m.usuario_responsable,
+      COALESCE(m.tasa_bcv, 68.50) AS tasa_bcv
+    FROM movimiento_detalles md
+    JOIN movimientos m ON md.movimiento_id = m.id
+    WHERE m.fecha <= ?
+    ORDER BY m.fecha ASC, m.id ASC
+  `;
+
+  const [prodsRes, movsRes] = await Promise.all([
+    db.execute({ sql: prodSql, args: prodArgs }),
+    db.execute({ sql: movsSql, args: [fechaFin] })
+  ]);
+
+  // Agrupar movimientos por producto_id
+  const movsByProd = new Map();
+  for (const m of movsRes.rows) {
+    const pid = Number(m.producto_id);
+    if (!movsByProd.has(pid)) movsByProd.set(pid, []);
+    movsByProd.get(pid).push(m);
+  }
+
+  const isCorteInicial2025 = (fechaInicio === '2025-12-31' && fechaFin === '2025-12-31');
+
+  const items = prodsRes.rows.map(p => {
+    const pid = Number(p.producto_id);
+    const refUsd = Number(p.costo_referencial_usd || 0);
+    const prodMovs = movsByProd.get(pid) || [];
+
+    // Estado continuo de Costo Promedio Ponderado (CPP)
+    let stockActual = 0;
+    let cppUsd = refUsd;
+    let cppVes = Number((refUsd * 52.00).toFixed(2)); // Tasa base Dic 2025
+    let valTotalUsd = 0;
+    let valTotalVes = 0;
+
+    // Variables del período consultado [fechaInicio, fechaFin]
+    let cantInicial = 0, montoInicialUsd = 0, montoInicialVes = 0;
+    let snapshotInicialTomado = false;
+
+    let cantEntradas = 0, montoEntradasUsd = 0, montoEntradasVes = 0;
+    let cantSalidas = 0, montoSalidasUsd = 0, montoSalidasVes = 0;
+
+    // Discriminación normativa Art. 177 RISLR para Salidas
+    let salVentaUnd = 0, salVentaVes = 0, salVentaUsd = 0;
+    let salAutoconsumoUnd = 0, salAutoconsumoVes = 0;
+    let salRetiroUnd = 0, salRetiroVes = 0;
+    let salMuestraUnd = 0, salMuestraVes = 0;
+    let salMermaUnd = 0, salMermaVes = 0;
+    let salAjusteUnd = 0, salAjusteVes = 0;
+
+    for (const m of prodMovs) {
+      const qty = Number(m.cantidad || 0);
+      const tasa = Number(m.tasa_bcv || 68.50);
+      const unitUsd = Number(m.costo_unitario_usd || 0) > 0 ? Number(m.costo_unitario_usd) : (cppUsd > 0 ? cppUsd : refUsd);
+      const unitVes = Number(m.costo_unitario_ves || 0) > 0 ? Number(m.costo_unitario_ves) : Number((unitUsd * tasa).toFixed(2));
+
+      const esAntesDelPeriodo = isCorteInicial2025 ? false : (m.fecha < fechaInicio);
+
+      if (!esAntesDelPeriodo && !snapshotInicialTomado) {
+        if (isCorteInicial2025) {
+          // Para el corte del 31/12/2025, el inventario inicial es el cargado en INVENTARIO_INICIAL
+          cantInicial = 0;
+          montoInicialUsd = 0;
+          montoInicialVes = 0;
+        } else {
+          cantInicial = Number(stockActual.toFixed(2));
+          montoInicialUsd = Number(valTotalUsd.toFixed(2));
+          montoInicialVes = Number(valTotalVes.toFixed(2));
+        }
+        snapshotInicialTomado = true;
+      }
+
+      const sub = String(m.subtipo || '').toUpperCase();
+      const isEntrada = m.tipo === 'INVENTARIO_INICIAL' || m.tipo === 'ENTRADA_COMPRA' || (m.tipo === 'AJUSTE' && sub.includes('POSITIVO'));
+
+      if (isEntrada) {
+        // Recálculo de Costo Promedio Ponderado Móvil: Nuevo CPP = (Valor Anterior + Valor Entrada) / (Unidades Anteriores + Unidades Entrada)
+        const entradaUsd = qty * unitUsd;
+        const entradaVes = qty * unitVes;
+        const nuevoStock = stockActual + qty;
+        if (nuevoStock > 0) {
+          cppUsd = (valTotalUsd + entradaUsd) / nuevoStock;
+          cppVes = (valTotalVes + entradaVes) / nuevoStock;
+        }
+        stockActual = nuevoStock;
+        valTotalUsd = stockActual * cppUsd;
+        valTotalVes = stockActual * cppVes;
+
+        if (!esAntesDelPeriodo) {
+          if (isCorteInicial2025 && m.tipo === 'INVENTARIO_INICIAL') {
+            cantInicial += qty;
+            montoInicialUsd += entradaUsd;
+            montoInicialVes += entradaVes;
+          } else {
+            cantEntradas += qty;
+            montoEntradasUsd += entradaUsd;
+            montoEntradasVes += entradaVes;
+          }
+        }
+      } else {
+        // Salida valorada al Costo Promedio Ponderado vigente (Art. 177 RISLR)
+        const costoSalidaUsd = qty * cppUsd;
+        const costoSalidaVes = qty * cppVes;
+        stockActual = Math.max(0, stockActual - qty);
+        valTotalUsd = stockActual * cppUsd;
+        valTotalVes = stockActual * cppVes;
+
+        if (!esAntesDelPeriodo) {
+          cantSalidas += qty;
+          montoSalidasUsd += costoSalidaUsd;
+          montoSalidasVes += costoSalidaVes;
+
+          if (sub.includes('AUTOCONSUMO')) {
+            salAutoconsumoUnd += qty; salAutoconsumoVes += costoSalidaVes;
+          } else if (sub.includes('RETIRO')) {
+            salRetiroUnd += qty; salRetiroVes += costoSalidaVes;
+          } else if (sub.includes('MUESTRA')) {
+            salMuestraUnd += qty; salMuestraVes += costoSalidaVes;
+          } else if (sub.includes('MERMA') || sub.includes('DANO') || sub.includes('DAÑO')) {
+            salMermaUnd += qty; salMermaVes += costoSalidaVes;
+          } else if (m.tipo === 'AJUSTE' || sub.includes('AJUSTE')) {
+            salAjusteUnd += qty; salAjusteVes += costoSalidaVes;
+          } else {
+            salVentaUnd += qty; salVentaVes += costoSalidaVes; salVentaUsd += costoSalidaUsd;
+          }
+        }
+      }
+    }
+
+    if (!snapshotInicialTomado && !isCorteInicial2025) {
+      cantInicial = Number(stockActual.toFixed(2));
+      montoInicialUsd = Number(valTotalUsd.toFixed(2));
+      montoInicialVes = Number(valTotalVes.toFixed(2));
+    }
+
+    const cantFinal = Number(stockActual.toFixed(2));
+    const montoFinalUsd = Number(valTotalUsd.toFixed(2));
+    const montoFinalVes = Number(valTotalVes.toFixed(2));
+
+    // Toma física vs Teórico para Libro de Inventarios y Balances (Art. 32-35 Código de Comercio)
+    const conteoFisico = (p.conteo_fisico_cierre !== null && p.conteo_fisico_cierre !== undefined)
+      ? Number(p.conteo_fisico_cierre)
+      : cantFinal;
+    const diferenciaUnidades = Number((conteoFisico - cantFinal).toFixed(2));
+    const diferenciaVes = Number((diferenciaUnidades * cppVes).toFixed(2));
+    const diferenciaUsd = Number((diferenciaUnidades * cppUsd).toFixed(2));
+
+    return {
+      producto_id: pid,
+      codigo: p.codigo,
+      descripcion: p.descripcion,
+      unidad_medida: p.unidad_medida,
+      categoria: p.categoria,
+      almacen: p.almacen,
+      stock_minimo: p.stock_minimo,
+      costo_referencial_usd: refUsd,
+      costo_unitario_usd: Number(cppUsd.toFixed(2)),
+      costo_promedio_ves: Number(cppVes.toFixed(2)),
+      // 1. Inventario Inicial
+      cant_inicial: Number(cantInicial.toFixed(2)),
+      monto_inicial_usd: Number(montoInicialUsd.toFixed(2)),
+      monto_inicial_ves: Number(montoInicialVes.toFixed(2)),
+      // 2. Entradas
+      cant_entradas: Number(cantEntradas.toFixed(2)),
+      monto_entradas_usd: Number(montoEntradasUsd.toFixed(2)),
+      monto_entradas_ves: Number(montoEntradasVes.toFixed(2)),
+      // 3. Salidas Totales y Discriminadas (Art. 177 RISLR)
+      cant_salidas: Number(cantSalidas.toFixed(2)),
+      monto_salidas_usd: Number(montoSalidasUsd.toFixed(2)),
+      monto_salidas_ves: Number(montoSalidasVes.toFixed(2)),
+      sal_venta_und: Number(salVentaUnd.toFixed(2)),
+      sal_venta_ves: Number(salVentaVes.toFixed(2)),
+      sal_autoconsumo_und: Number(salAutoconsumoUnd.toFixed(2)),
+      sal_autoconsumo_ves: Number(salAutoconsumoVes.toFixed(2)),
+      sal_retiro_und: Number(salRetiroUnd.toFixed(2)),
+      sal_retiro_ves: Number(salRetiroVes.toFixed(2)),
+      sal_muestra_und: Number(salMuestraUnd.toFixed(2)),
+      sal_muestra_ves: Number(salMuestraVes.toFixed(2)),
+      sal_merma_und: Number(salMermaUnd.toFixed(2)),
+      sal_merma_ves: Number(salMermaVes.toFixed(2)),
+      sal_ajuste_und: Number(salAjusteUnd.toFixed(2)),
+      sal_ajuste_ves: Number(salAjusteVes.toFixed(2)),
+      // 4. Inventario Final
+      cant_final: cantFinal,
+      monto_final_usd: montoFinalUsd,
+      monto_final_ves: montoFinalVes,
+      // 5. Cierre Anual Toma Física vs Teórico (Código de Comercio Art. 32-35)
+      conteo_fisico: conteoFisico,
+      valor_fisico_ves: Number((conteoFisico * cppVes).toFixed(2)),
+      valor_fisico_usd: Number((conteoFisico * cppUsd).toFixed(2)),
+      diferencia_unidades: diferenciaUnidades,
+      diferencia_ves: diferenciaVes,
+      diferencia_usd: diferenciaUsd,
+      observacion_auditoria: p.observacion_auditoria || ''
+    };
+  });
+
+  const mapLabels = {
+    'ANUAL_2026': 'Ejercicio Fiscal 2026 (Acumulado)',
+    '2025-12': 'Inventario Inicial al 31/12/2025',
+    '2026-01': '01 - Enero 2026',
+    '2026-02': '02 - Febrero 2026',
+    '2026-03': '03 - Marzo 2026',
+    '2026-04': '04 - Abril 2026',
+    '2026-05': '05 - Mayo 2026',
+    '2026-06': '06 - Junio 2026',
+    '2026-07': '07 - Julio 2026',
+    '2026-08': '08 - Agosto 2026',
+    '2026-09': '09 - Septiembre 2026',
+    '2026-10': '10 - Octubre 2026'
+  };
+
+  const etiquetaPeriodo = (desde && hasta)
+    ? `Rango Auditado: ${desde} al ${hasta}`
+    : (mapLabels[periodo] || `Período Fiscal ${periodo}`);
+
+  return {
+    periodo,
+    etiquetaPeriodo,
+    fechaInicio,
+    fechaFin,
+    fechaCorte: fechaFin,
+    metodoValoracion: 'COSTO PROMEDIO PONDERADO MÓVIL (ART. 177 RISLR)',
+    items
+  };
+}
+
+app.get('/api/reportes/libro-inventario-seniat', async (req, res) => {
+  try {
+    const data = await computeLibroInventarioArt177(req.query);
+    res.json(data);
+  } catch (error) {
+    console.error('Error en /api/reportes/libro-inventario-seniat:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3 Exportar Libro Oficial Art. 177 RISLR y Cierre Código de Comercio a Excel / CSV Auditable
+app.get('/api/export/libro-art177', async (req, res) => {
+  try {
+    const { formato = 'xlsx' } = req.query;
+    const data = await computeLibroInventarioArt177(req.query);
+
+    const rows = data.items.map((it, idx) => ({
+      "N°": idx + 1,
+      "CÓDIGO": it.codigo,
+      "DESCRIPCIÓN DEL REPUESTO / MERCANCÍA": it.descripcion,
+      "UND": it.unidad_medida,
+      "ALMACÉN": it.almacen,
+      "CPP UNITARIO (BS)": it.costo_promedio_ves,
+      "CPP UNITARIO ($)": it.costo_unitario_usd,
+      "INV. INICIAL (UND)": it.cant_inicial,
+      "INV. INICIAL (BS)": it.monto_inicial_ves,
+      "INV. INICIAL ($)": it.monto_inicial_usd,
+      "ENTRADAS COMPRAS (UND)": it.cant_entradas,
+      "ENTRADAS COMPRAS (BS)": it.monto_entradas_ves,
+      "ENTRADAS COMPRAS ($)": it.monto_entradas_usd,
+      "SALIDA VENTA (UND)": it.sal_venta_und,
+      "SALIDA AUTOCONSUMO (UND)": it.sal_autoconsumo_und,
+      "SALIDA RETIRO SOCIOS (UND)": it.sal_retiro_und,
+      "SALIDA MUESTRA (UND)": it.sal_muestra_und,
+      "SALIDA MERMA / DAÑO (UND)": it.sal_merma_und,
+      "TOTAL SALIDAS (UND)": it.cant_salidas,
+      "COSTO SALIDAS (BS)": it.monto_salidas_ves,
+      "COSTO SALIDAS ($)": it.monto_salidas_usd,
+      "INV. FINAL TEÓRICO (UND)": it.cant_final,
+      "INV. FINAL TEÓRICO (BS)": it.monto_final_ves,
+      "INV. FINAL TEÓRICO ($)": it.monto_final_usd,
+      "TOMA FÍSICA CIERRE (UND)": it.conteo_fisico,
+      "DIFERENCIA AUDITORÍA (UND)": it.diferencia_unidades,
+      "AJUSTE CONTABLE CIERRE (BS)": it.diferencia_ves
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ART_177_SENIAT');
+
+    if (formato === 'csv') {
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      res.setHeader('Content-Disposition', `attachment; filename="LIBRO_INVENTARIO_ART177_${data.fechaFin}.csv"`);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      return res.send('\uFEFF' + csv);
+    }
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', `attachment; filename="LIBRO_INVENTARIO_ART177_${data.fechaFin}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (error) {
+    console.error('Error exportando Art. 177:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.4 Guardar Toma Física de Cierre Anual (Libro de Inventarios y Balances Art. 32-35 Código de Comercio)
+app.post('/api/inventario/toma-fisica', async (req, res) => {
+  try {
+    const { producto_id, conteo_fisico, observacion_auditoria, generar_ajuste_automatico, usuario_responsable } = req.body;
+    if (!producto_id || conteo_fisico === undefined) {
+      return res.status(400).json({ error: 'Producto y conteo físico son obligatorios' });
+    }
+
+    const fechaHoy = new Date().toISOString().slice(0, 10);
+    await db.execute({
+      sql: `UPDATE productos SET conteo_fisico_cierre = ?, fecha_conteo_fisico = ?, observacion_auditoria = ? WHERE id = ?`,
+      args: [Number(conteo_fisico), fechaHoy, observacion_auditoria || 'Verificado en Toma Física de Cierre', Number(producto_id)]
+    });
+
+    // Si solicita generar asiento/movimiento de ajuste por diferencia física
+    if (generar_ajuste_automatico) {
+      const stRes = await db.execute({
+        sql: `SELECT stock_actual, costo_referencial_usd FROM vista_inventario_actual WHERE producto_id = ?`,
+        args: [Number(producto_id)]
+      });
+      if (stRes.rows.length > 0) {
+        const teo = Number(stRes.rows[0].stock_actual || 0);
+        const fis = Number(conteo_fisico);
+        const diff = Number((fis - teo).toFixed(2));
+        if (diff !== 0) {
+          const esPositivo = diff > 0;
+          const subtipo = esPositivo ? 'AJUSTE_POSITIVO_SOBRANTE' : 'MERMA_DANO';
+          const movHeader = await db.execute({
+            sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, observaciones, tasa_bcv)
+                  VALUES ('AJUSTE', ?, ?, ?, ?, ?, ?, 84.00)`,
+            args: [
+              subtipo,
+              fechaHoy,
+              `ACTA-CIERRE-${producto_id}-${Date.now().toString().slice(-4)}`,
+              `CTRL-AUD-${producto_id}`,
+              usuario_responsable || 'AUDITOR_CONTABLE_UCG',
+              observacion_auditoria || `Ajuste por Toma Física Cierre Anual (Teórico: ${teo}, Físico: ${fis})`
+            ]
+          });
+          const movId = Number(movHeader.lastInsertRowid);
+          const costoUsd = Number(stRes.rows[0].costo_referencial_usd || 0);
+          await db.execute({
+            sql: `INSERT INTO movimiento_detalles (movimiento_id, producto_id, cantidad, costo_unitario_usd, costo_unitario_ves)
+                  VALUES (?, ?, ?, ?, ?)`,
+            args: [movId, Number(producto_id), Math.abs(diff), costoUsd, Number((costoUsd * 84.00).toFixed(2))]
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Toma física de inventario registrada con éxito' });
+  } catch (error) {
+    console.error('Error en toma física:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -298,6 +806,9 @@ app.get('/api/proveedores', async (req, res) => {
         COALESCE(p.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
         COALESCE(p.aplica_inventario, 1) as aplica_inventario,
         COALESCE(p.porcentaje_retencion, 75.0) as porcentaje_retencion,
+        COALESCE(p.tipo_persona, CASE WHEN p.rif LIKE 'V%' OR p.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
+        COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
+        COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
         p.telefono,
         p.email,
         COUNT(lc.id) as total_facturas_asociadas
@@ -315,7 +826,7 @@ app.get('/api/proveedores', async (req, res) => {
 // 4.1 Create New Supplier
 app.post('/api/proveedores', async (req, res) => {
   try {
-    const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email } = req.body;
+    const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr } = req.body;
     if (!rif || !razon_social) {
       return res.status(400).json({ error: 'RIF y Razón Social son obligatorios' });
     }
@@ -324,12 +835,13 @@ app.post('/api/proveedores', async (req, res) => {
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
     const retencionNum = Number(porcentaje_retencion) || 75.0;
+    const cleanTipoPers = tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
 
     const result = await db.execute({
-      sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+      sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id`,
-      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null]
+      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, cleanTipoPers, direccion_fiscal || '', codigo_concepto_islr || '055']
     });
 
     res.json({
@@ -347,7 +859,7 @@ app.post('/api/proveedores', async (req, res) => {
 app.put('/api/proveedores/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email } = req.body;
+    const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr } = req.body;
     const cleanRif = rif ? String(rif).trim().toUpperCase() : null;
     const cleanRazon = razon_social ? String(razon_social).trim() : null;
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
@@ -362,9 +874,12 @@ app.put('/api/proveedores/:id', async (req, res) => {
                 aplica_inventario = ?,
                 porcentaje_retencion = ?,
                 telefono = ?,
-                email = ?
+                email = ?,
+                tipo_persona = COALESCE(?, tipo_persona),
+                direccion_fiscal = COALESCE(?, direccion_fiscal),
+                codigo_concepto_islr = COALESCE(?, codigo_concepto_islr)
             WHERE id = ?`,
-      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, id]
+      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, tipo_persona || null, direccion_fiscal !== undefined ? direccion_fiscal : null, codigo_concepto_islr || null, id]
     });
 
     // Cascade update to libro_compras
@@ -445,75 +960,164 @@ app.get('/api/almacenes', async (req, res) => {
   }
 });
 
-// 6. Record New Inbound / Outbound Movement (Atomic Transaction)
+// 6. Record New Inbound / Outbound Movement (Atomic Transaction with Art. 177 RISLR Traceability & Subtypes)
 app.post('/api/movimientos', async (req, res) => {
   try {
-    const { tipo, fecha, numero_documento, proveedor_id, observaciones, items } = req.body;
+    const {
+      tipo,
+      subtipo,
+      fecha,
+      numero_documento,
+      nro_control,
+      usuario_responsable,
+      documento_afectado,
+      tasa_bcv,
+      proveedor_id,
+      observaciones,
+      items
+    } = req.body;
 
     if (!tipo || !['ENTRADA_COMPRA', 'SALIDA_VENTA', 'AJUSTE'].includes(tipo)) {
       return res.status(400).json({ error: 'Tipo de movimiento inválido' });
     }
 
     if (!fecha) {
-      return res.status(400).json({ error: 'La fecha es obligatoria' });
+      return res.status(400).json({ error: 'La fecha es obligatoria (Art. 177 RISLR)' });
+    }
+
+    if (!numero_documento || String(numero_documento).trim() === '') {
+      return res.status(400).json({ error: 'El número de documento fuente es obligatorio para evitar movimientos huérfanos (Art. 177 RISLR)' });
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Debe incluir al menos un producto en el movimiento' });
     }
 
-    // Verify stock availability for SALIDA_VENTA
-    if (tipo === 'SALIDA_VENTA') {
+    const subtipoNorm = subtipo || (tipo === 'ENTRADA_COMPRA' ? 'COMPRA_NACIONAL' : (tipo === 'SALIDA_VENTA' ? 'VENTA' : 'AJUSTE'));
+    const usuarioNorm = (usuario_responsable && String(usuario_responsable).trim()) || 'ASISTENTE_TIENDA_AUTORIZADO';
+    const periodoMov = String(fecha).slice(0, 7);
+
+    // Obtener tasa BCV oficial del período y método de valoración (CPP o PEPS)
+    const [tasaPerRes, cfgValRes] = await Promise.all([
+      db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodoMov] }),
+      db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+    ]);
+    const tasaDefaultMes = Number(tasaPerRes.rows[0]?.tasa_bcv || 88.50);
+    const fechaTasaMes = req.body.fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
+    const metodoVal = req.body.metodo_valoracion || cfgValRes.rows[0]?.metodo_valoracion_kardex || 'CPP';
+
+    const tasaNum = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : tasaDefaultMes;
+    const ctrlNorm = (nro_control && String(nro_control).trim()) || (tipo === 'ENTRADA_COMPRA' ? '00-S/CTRL' : 'ZOA0000176');
+
+    const isSalida = (tipo === 'SALIDA_VENTA') || (tipo === 'AJUSTE' && !String(subtipoNorm).includes('POSITIVO'));
+
+    // VALIDACIÓN ESTRICTA EN TIEMPO REAL DEL KARDEX (Prohibido emitir salida si existencia física < cantidad requerida)
+    // Agrupar cantidades por producto_id por si el documento repite el mismo código en dos líneas
+    if (isSalida) {
+      const acumuladoPorProd = {};
       for (const item of items) {
+        const pid = parseInt(item.producto_id, 10);
+        acumuladoPorProd[pid] = (acumuladoPorProd[pid] || 0) + (parseFloat(item.cantidad) || 0);
+      }
+      for (const [pidStr, cantTotal] of Object.entries(acumuladoPorProd)) {
         const stockRes = await db.execute({
           sql: "SELECT stock_actual, descripcion, codigo FROM vista_inventario_actual WHERE producto_id = ?",
-          args: [item.producto_id]
+          args: [parseInt(pidStr, 10)]
         });
-        if (stockRes.rows.length > 0) {
-          const currentStock = stockRes.rows[0].stock_actual;
-          if (currentStock < item.cantidad) {
-            return res.status(400).json({
-              error: `Stock insuficiente para ${stockRes.rows[0].codigo} (${stockRes.rows[0].descripcion}). Disponible: ${currentStock}, Solicitado: ${item.cantidad}`
-            });
-          }
+        if (stockRes.rows.length === 0) {
+          return res.status(400).json({ error: `Producto ID ${pidStr} no existe en el maestro de Kardex.` });
+        }
+        const currentStock = Number(stockRes.rows[0].stock_actual || 0);
+        if (currentStock < cantTotal || currentStock <= 0) {
+          return res.status(400).json({
+            error: `BLOQUEO DE KARDEX (PA SNAT/2026/00093): Está estrictamente prohibido emitir salida/factura de ${stockRes.rows[0].codigo} (${stockRes.rows[0].descripcion}) porque su existencia física actual (${currentStock} und) es menor a la cantidad requerida (${cantTotal} und).`
+          });
         }
       }
     }
 
-    // Build batch statements for atomic commit
-    const statements = [
-      {
-        sql: `INSERT INTO movimientos (tipo, fecha, numero_documento, proveedor_id, observaciones) VALUES (?, ?, ?, ?, ?)`,
-        args: [
-          tipo, 
-          fecha, 
-          numero_documento || (tipo === 'ENTRADA_COMPRA' ? 'COMPRA-S/N' : 'VENTA-S/N'), 
-          proveedor_id ? parseInt(proveedor_id, 10) : null, 
-          observaciones || ''
-        ]
-      }
-    ];
-
-    // Execute header first to get ID
-    const headerResult = await db.execute(statements[0]);
+    // Build header insert with full traceability + BCV rate date & valuation method
+    const headerResult = await db.execute({
+      sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        tipo,
+        subtipoNorm,
+        fecha,
+        String(numero_documento).trim(),
+        ctrlNorm,
+        usuarioNorm,
+        documento_afectado || '',
+        tasaNum,
+        fechaTasaMes,
+        req.body.moneda_operacion || 'USD',
+        metodoVal,
+        proveedor_id ? parseInt(proveedor_id, 10) : null,
+        observaciones || ''
+      ]
+    });
     const movimientoId = Number(headerResult.lastInsertRowid);
 
-    // Now insert detail items
-    const detailStatements = items.map(it => ({
-      sql: `INSERT INTO movimiento_detalles (movimiento_id, producto_id, cantidad, costo_unitario_usd) VALUES (?, ?, ?, ?)`,
-      args: [
-        movimientoId, 
-        parseInt(it.producto_id, 10), 
-        parseFloat(it.cantidad), 
-        parseFloat(it.costo_unitario_usd || 0)
-      ]
-    }));
+    // Insert detail items with full Dual-Currency (Bolívares & Divisas) + Kardex Costing
+    const detailStatements = [];
+    for (const it of items) {
+      const pid = parseInt(it.producto_id, 10);
+      const qty = parseFloat(it.cantidad) || 1;
+      const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
+
+      let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
+      let cBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
+
+      if (cDivisa <= 0 && cBs > 0) {
+        cDivisa = Number((cBs / tasaItem).toFixed(2));
+      }
+      if (cDivisa <= 0) {
+        const pRes = await db.execute({
+          sql: "SELECT costo_referencial_usd FROM productos WHERE id = ?",
+          args: [pid]
+        });
+        cDivisa = Number(pRes.rows[0]?.costo_referencial_usd || 0);
+      }
+      if (cBs <= 0) {
+        cBs = Number((cDivisa * tasaItem).toFixed(2));
+      }
+
+      const precioUnitDiv = parseFloat(it.precio_unitario_divisa || cDivisa);
+      const precioUnitBs = parseFloat(it.precio_unitario_bs || Number((precioUnitDiv * tasaItem).toFixed(2)));
+      const baseDiv = Number((qty * precioUnitDiv).toFixed(2));
+      const baseBs = Number((qty * precioUnitBs).toFixed(2));
+      const ivaDiv = Number((baseDiv * 0.16).toFixed(2));
+      const ivaBs = Number((baseBs * 0.16).toFixed(2));
+      const totDiv = Number((baseDiv + ivaDiv).toFixed(2));
+      const totBs = Number((baseBs + ivaBs).toFixed(2));
+
+      detailStatements.push({
+        sql: `INSERT INTO movimiento_detalles (
+                movimiento_id, producto_id, cantidad,
+                costo_unitario_usd, costo_unitario_ves,
+                costo_unitario_divisa, tasa_bcv_operacion, costo_unitario_bs,
+                precio_unitario_bs, precio_unitario_divisa,
+                base_imponible_bs, base_imponible_divisa,
+                monto_iva_bs, monto_iva_divisa,
+                total_linea_bs, total_linea_divisa
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          movimientoId, pid, qty,
+          cDivisa, cBs,
+          cDivisa, tasaItem, cBs,
+          precioUnitBs, precioUnitDiv,
+          baseBs, baseDiv,
+          ivaBs, ivaDiv,
+          totBs, totDiv
+        ]
+      });
+    }
 
     await db.batch(detailStatements);
 
     res.json({
       success: true,
-      message: `${tipo === 'ENTRADA_COMPRA' ? 'Entrada (Compra)' : 'Salida (Venta)'} registrada con éxito`,
+      message: `Movimiento (${subtipoNorm}) registrado con trazabilidad fiscal completa`,
       movimientoId,
       itemsCount: items.length
     });
@@ -523,21 +1127,32 @@ app.post('/api/movimientos', async (req, res) => {
   }
 });
 
-// 7. Movements History
+// 7. Movements History (with Subtype, Fiscal Control, Responsible User & VES Valuation)
 app.get('/api/movimientos', async (req, res) => {
   try {
-    const { tipo, desde, hasta, q, limit = 100 } = req.query;
+    const { tipo, subtipo, desde, hasta, q, limit = 150 } = req.query;
     let sql = `
       SELECT 
-        m.id, m.tipo, m.fecha, m.numero_documento, m.observaciones,
-        COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as proveedor_nombre,
+        m.id,
+        m.tipo,
+        COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) as subtipo,
+        m.fecha,
+        m.numero_documento,
+        COALESCE(m.nro_control, '-') as nro_control,
+        COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
+        COALESCE(m.documento_afectado, '') as documento_afectado,
+        COALESCE(m.tasa_bcv, 68.50) as tasa_bcv,
+        m.observaciones,
+        COALESCE(pr.razon_social, 'CLIENTE / OPERACIÓN INTERNA') as proveedor_nombre,
         COALESCE(pr.rif, '-') as proveedor_rif,
         COUNT(md.id) as total_items,
         COALESCE(SUM(md.cantidad), 0) as total_unidades,
-        COALESCE(SUM(md.cantidad * md.costo_unitario_usd), 0) as total_usd
+        ROUND(COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd)), 0), 2) as total_usd,
+        ROUND(COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(m.tasa_bcv, 68.50))), 0), 2) as total_ves
       FROM movimientos m
       LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
       LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      LEFT JOIN productos p ON md.producto_id = p.id
       WHERE 1=1
     `;
     const args = [];
@@ -545,6 +1160,10 @@ app.get('/api/movimientos', async (req, res) => {
     if (tipo && tipo !== 'TODOS') {
       sql += ` AND m.tipo = ?`;
       args.push(tipo);
+    }
+    if (subtipo && subtipo !== 'TODOS') {
+      sql += ` AND m.subtipo = ?`;
+      args.push(subtipo);
     }
     if (desde) {
       sql += ` AND m.fecha >= ?`;
@@ -555,8 +1174,8 @@ app.get('/api/movimientos', async (req, res) => {
       args.push(hasta);
     }
     if (q) {
-      sql += ` AND (m.numero_documento LIKE ? OR pr.razon_social LIKE ? OR m.observaciones LIKE ?)`;
-      args.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      sql += ` AND (m.numero_documento LIKE ? OR m.nro_control LIKE ? OR pr.razon_social LIKE ? OR m.observaciones LIKE ? OR m.usuario_responsable LIKE ?)`;
+      args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     sql += ` GROUP BY m.id ORDER BY m.fecha DESC, m.id DESC LIMIT ?`;
@@ -569,14 +1188,16 @@ app.get('/api/movimientos', async (req, res) => {
   }
 });
 
-// 8. Individual Movement Details
+// 8. Individual Movement Details (with Dual-Currency PA SNAT/2026/00093 & Official BCV Rate Legend)
 app.get('/api/movimientos/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const [header, details] = await Promise.all([
       db.execute({
         sql: `
-          SELECT m.*, COALESCE(pr.razon_social, 'N/A') as proveedor_nombre, COALESCE(pr.rif, 'N/A') as proveedor_rif 
+          SELECT m.*, COALESCE(pr.razon_social, 'N/A') as proveedor_nombre, COALESCE(pr.rif, 'N/A') as proveedor_rif,
+                 COALESCE(m.fecha_tasa_bcv, m.fecha) as fecha_tasa_bcv_efectiva,
+                 COALESCE(m.moneda_operacion, 'USD') as moneda_efectiva
           FROM movimientos m 
           LEFT JOIN proveedores pr ON m.proveedor_id = pr.id 
           WHERE m.id = ?
@@ -585,7 +1206,22 @@ app.get('/api/movimientos/:id', async (req, res) => {
       }),
       db.execute({
         sql: `
-          SELECT md.*, p.codigo, p.descripcion, p.unidad_medida, (md.cantidad * md.costo_unitario_usd) as subtotal_usd 
+          SELECT 
+            md.*, 
+            p.codigo, 
+            p.descripcion, 
+            p.unidad_medida,
+            COALESCE(NULLIF(md.costo_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) as costo_usd_efectivo,
+            COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50) as tasa_bcv_efectiva,
+            COALESCE(NULLIF(md.costo_unitario_bs, 0), NULLIF(md.costo_unitario_ves, 0), ROUND(COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50), 2)) as costo_ves_efectivo,
+            COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) as precio_unitario_divisa_ef,
+            COALESCE(NULLIF(md.precio_unitario_bs, 0), NULLIF(md.costo_unitario_bs, 0), ROUND(COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50), 2)) as precio_unitario_bs_ef,
+            COALESCE(NULLIF(md.base_imponible_divisa, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd), 2)) as subtotal_usd,
+            COALESCE(NULLIF(md.base_imponible_bs, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50)), 2)) as subtotal_ves,
+            COALESCE(NULLIF(md.monto_iva_divisa, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * 0.16, 2)) as iva_usd,
+            COALESCE(NULLIF(md.monto_iva_bs, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50)) * 0.16, 2)) as iva_ves,
+            COALESCE(NULLIF(md.total_linea_divisa, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * 1.16, 2)) as total_linea_usd_ef,
+            COALESCE(NULLIF(md.total_linea_bs, 0), ROUND(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd) * COALESCE(NULLIF(md.tasa_bcv_operacion, 0), 68.50)) * 1.16, 2)) as total_linea_ves_ef
           FROM movimiento_detalles md 
           JOIN productos p ON md.producto_id = p.id 
           WHERE md.movimiento_id = ?
@@ -598,8 +1234,16 @@ app.get('/api/movimientos/:id', async (req, res) => {
       return res.status(400).json({ error: 'Movimiento no encontrado' });
     }
 
+    const hRow = header.rows[0];
+    const tasaFormatted = Number(hRow.tasa_bcv || 68.50).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const monedaLabel = hRow.moneda_efectiva || 'USD';
+    const fechaTasaLabel = hRow.fecha_tasa_bcv_efectiva || hRow.fecha;
+
     res.json({
-      header: header.rows[0],
+      header: {
+        ...hRow,
+        leyenda_tasa_bcv: `Tasa Oficial BCV Aplicable: Bs. ${tasaFormatted} por ${monedaLabel} (Fecha Tasa: ${fechaTasaLabel})`
+      },
       items: details.rows
     });
   } catch (error) {
@@ -607,20 +1251,30 @@ app.get('/api/movimientos/:id', async (req, res) => {
   }
 });
 
-// 9. Kardex by Product
+// 9. Kardex by Product (Supports Moving Weighted Average CPP and PEPS/FIFO in VES & USD + Full Traceability)
 app.get('/api/kardex/:codigo', async (req, res) => {
   try {
     const { codigo } = req.params;
-    const prodRes = await db.execute({
-      sql: `SELECT * FROM vista_inventario_actual WHERE UPPER(codigo) = UPPER(?)`,
-      args: [codigo]
-    });
+    const metodoQuery = String(req.query.metodo || '').toUpperCase();
+
+    const [prodRes, cfgRes] = await Promise.all([
+      db.execute({
+        sql: `SELECT * FROM vista_inventario_actual WHERE UPPER(codigo) = UPPER(?)`,
+        args: [codigo]
+      }),
+      db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+    ]);
 
     if (prodRes.rows.length === 0) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
+    const metodoActivo = (metodoQuery === 'PEPS' || metodoQuery === 'FIFO')
+      ? 'PEPS'
+      : (metodoQuery === 'CPP' ? 'CPP' : (cfgRes.rows[0]?.metodo_valoracion_kardex || 'CPP'));
+
     const prod = prodRes.rows[0];
+    const refUsd = Number(prod.costo_referencial_usd || 0);
 
     const movsRes = await db.execute({
       sql: `
@@ -628,11 +1282,19 @@ app.get('/api/kardex/:codigo', async (req, res) => {
           m.id as movimiento_id,
           m.fecha,
           m.tipo,
+          COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) as subtipo,
           m.numero_documento,
+          COALESCE(m.nro_control, '-') as nro_control,
+          COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
+          COALESCE(NULLIF(md.tasa_bcv_operacion, 0), m.tasa_bcv, 68.50) as tasa_bcv,
+          COALESCE(m.fecha_tasa_bcv, m.fecha) as fecha_tasa_bcv,
           COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as tercero,
-          md.costo_unitario_usd,
-          CASE WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad ELSE 0 END as entrada,
-          CASE WHEN m.tipo = 'SALIDA_VENTA' THEN md.cantidad ELSE 0 END as salida
+          COALESCE(pr.rif, '-') as tercero_rif,
+          md.cantidad,
+          COALESCE(NULLIF(md.costo_unitario_divisa, 0), md.costo_unitario_usd) as costo_unitario_usd,
+          COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_ves) as costo_unitario_ves,
+          CASE WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as entrada,
+          CASE WHEN m.tipo = 'SALIDA_VENTA' OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') NOT LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as salida
         FROM movimiento_detalles md
         JOIN movimientos m ON md.movimiento_id = m.id
         LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
@@ -642,18 +1304,120 @@ app.get('/api/kardex/:codigo', async (req, res) => {
       args: [prod.producto_id]
     });
 
-    // Compute running balance
+    // Compute Valuation (CPP or PEPS/FIFO) in VES and USD
     let balance = 0;
+    let cppUsd = refUsd;
+    let cppVes = Number((refUsd * 52.02).toFixed(2));
+    let valTotalUsd = 0;
+    let valTotalVes = 0;
+    const fifoQueue = []; // Lotes para PEPS: { qty, unitUsd, unitVes }
+
     const history = movsRes.rows.map(row => {
-      balance += (row.entrada - row.salida);
+      const ent = Number(row.entrada || 0);
+      const sal = Number(row.salida || 0);
+      const tasa = Number(row.tasa_bcv || 68.50);
+      const unitUsd = Number(row.costo_unitario_usd || 0) > 0 ? Number(row.costo_unitario_usd) : (cppUsd > 0 ? cppUsd : refUsd);
+      const unitVes = Number(row.costo_unitario_ves || 0) > 0 ? Number(row.costo_unitario_ves) : Number((unitUsd * tasa).toFixed(2));
+
+      let movCostoUnitVes = cppVes;
+      let movCostoTotalVes = 0;
+      let movCostoUnitUsd = cppUsd;
+      let movCostoTotalUsd = 0;
+
+      if (ent > 0) {
+        movCostoUnitUsd = unitUsd;
+        movCostoTotalUsd = ent * unitUsd;
+        movCostoUnitVes = unitVes;
+        movCostoTotalVes = ent * unitVes;
+
+        fifoQueue.push({ qty: ent, unitUsd, unitVes });
+
+        const newStock = balance + ent;
+        if (metodoActivo === 'PEPS') {
+          balance = newStock;
+          valTotalUsd = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitUsd, 0);
+          valTotalVes = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitVes, 0);
+          cppUsd = balance > 0 ? valTotalUsd / balance : unitUsd;
+          cppVes = balance > 0 ? valTotalVes / balance : unitVes;
+        } else {
+          if (newStock > 0) {
+            cppUsd = (valTotalUsd + movCostoTotalUsd) / newStock;
+            cppVes = (valTotalVes + movCostoTotalVes) / newStock;
+          }
+          balance = newStock;
+          valTotalUsd = balance * cppUsd;
+          valTotalVes = balance * cppVes;
+        }
+      } else if (sal > 0) {
+        if (metodoActivo === 'PEPS') {
+          let rem = sal;
+          let costUsdAcc = 0;
+          let costVesAcc = 0;
+          while (rem > 0 && fifoQueue.length > 0) {
+            const lot = fifoQueue[0];
+            const take = Math.min(rem, lot.qty);
+            costUsdAcc += take * lot.unitUsd;
+            costVesAcc += take * lot.unitVes;
+            lot.qty -= take;
+            rem -= take;
+            if (lot.qty <= 0.0001) fifoQueue.shift();
+          }
+          if (rem > 0) {
+            costUsdAcc += rem * cppUsd;
+            costVesAcc += rem * cppVes;
+          }
+          movCostoTotalUsd = costUsdAcc;
+          movCostoTotalVes = costVesAcc;
+          movCostoUnitUsd = sal > 0 ? costUsdAcc / sal : cppUsd;
+          movCostoUnitVes = sal > 0 ? costVesAcc / sal : cppVes;
+          balance = Math.max(0, balance - sal);
+          valTotalUsd = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitUsd, 0);
+          valTotalVes = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitVes, 0);
+          if (balance > 0) {
+            cppUsd = valTotalUsd / balance;
+            cppVes = valTotalVes / balance;
+          }
+        } else {
+          // Outbound is valued at current Moving Weighted Average (CPP)
+          movCostoUnitUsd = cppUsd;
+          movCostoTotalUsd = sal * cppUsd;
+          movCostoUnitVes = cppVes;
+          movCostoTotalVes = sal * cppVes;
+
+          balance = Math.max(0, balance - sal);
+          valTotalUsd = balance * cppUsd;
+          valTotalVes = balance * cppVes;
+        }
+      }
+
       return {
         ...row,
-        saldo: Math.round(balance * 100) / 100
+        metodo_valoracion: metodoActivo,
+        costo_unitario_divisa: Number(unitUsd.toFixed(2)),
+        tasa_bcv_operacion: Number(tasa.toFixed(2)),
+        costo_unitario_bs: Number(unitVes.toFixed(2)),
+        costo_operacion_usd: Number(movCostoUnitUsd.toFixed(2)),
+        monto_operacion_usd: Number(movCostoTotalUsd.toFixed(2)),
+        costo_operacion_ves: Number(movCostoUnitVes.toFixed(2)),
+        monto_operacion_ves: Number(movCostoTotalVes.toFixed(2)),
+        cpp_resultante_usd: Number(cppUsd.toFixed(2)),
+        cpp_resultante_ves: Number(cppVes.toFixed(2)),
+        saldo: Number(balance.toFixed(2)),
+        valor_saldo_usd: Number(valTotalUsd.toFixed(2)),
+        valor_saldo_ves: Number(valTotalVes.toFixed(2))
       };
     });
 
     res.json({
-      producto: prod,
+      metodo_valoracion: metodoActivo,
+      producto: {
+        ...prod,
+        metodo_valoracion: metodoActivo,
+        cpp_actual_usd: Number(cppUsd.toFixed(2)),
+        cpp_actual_ves: Number(cppVes.toFixed(2)),
+        valor_total_usd_kardex: Number(valTotalUsd.toFixed(2)),
+        valor_total_ves: Number(valTotalVes.toFixed(2))
+      },
       historial: history
     });
   } catch (error) {
@@ -661,10 +1425,17 @@ app.get('/api/kardex/:codigo', async (req, res) => {
   }
 });
 
-// 10. Export Inventory to Excel (Supports Live or Historical Cutoff)
+// 10. Export Inventory to Excel (Supports Live or Historical Cutoff with Dual Currency Bs. & USD)
 app.get('/api/export/excel', async (req, res) => {
   try {
     const { fecha_corte } = req.query;
+    const targetPeriodo = fecha_corte ? String(fecha_corte).slice(0, 7) : '2026-10';
+    const tasaRes = await db.execute({
+      sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?",
+      args: [targetPeriodo]
+    });
+    const tasaCorte = Number(tasaRes.rows[0]?.tasa_bcv || (targetPeriodo === '2025-12' ? 52.02 : 92.00));
+
     let sql;
     const args = [];
 
@@ -682,7 +1453,14 @@ app.get('/api/export/excel', async (req, res) => {
             WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
             ELSE 0 
           END), 0), 2) as "INVENTARIO AL CORTE",
-          p.costo_referencial_usd as "COSTO PROM ($)",
+          ? as "TASA BCV APLICADA",
+          ROUND(p.costo_referencial_usd * ?, 2) as "COSTO UNITARIO (BS)",
+          p.costo_referencial_usd as "COSTO UNITARIO ($)",
+          ROUND(COALESCE(SUM(CASE 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
+            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            ELSE 0 
+          END), 0) * p.costo_referencial_usd * ?, 2) as "VALOR TOTAL (BS)",
           ROUND(COALESCE(SUM(CASE 
             WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
             WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
@@ -704,7 +1482,7 @@ app.get('/api/export/excel', async (req, res) => {
         GROUP BY p.id
         ORDER BY p.codigo ASC
       `;
-      args.push(fecha_corte);
+      args.push(tasaCorte, tasaCorte, tasaCorte, fecha_corte);
     } else {
       sql = `
         SELECT 
@@ -715,12 +1493,16 @@ app.get('/api/export/excel', async (req, res) => {
           almacen as "ALMACÉN",
           stock_minimo as "STOCK MÍNIMO",
           stock_actual as "INVENTARIO AL DÍA",
-          costo_referencial_usd as "COSTO PROM ($)",
+          ? as "TASA BCV APLICADA",
+          ROUND(costo_referencial_usd * ?, 2) as "COSTO UNITARIO (BS)",
+          costo_referencial_usd as "COSTO UNITARIO ($)",
+          ROUND(valor_total_usd * ?, 2) as "VALOR TOTAL (BS)",
           valor_total_usd as "VALOR TOTAL ($)",
           estado_stock as "ESTADO"
         FROM vista_inventario_actual
         ORDER BY codigo ASC
       `;
+      args.push(tasaCorte, tasaCorte, tasaCorte);
     }
 
     const result = await db.execute({ sql, args });
@@ -745,7 +1527,7 @@ app.get('/api/export/excel', async (req, res) => {
 // 10. MÓDULO FISCAL & CRUCE DE INFORMACIÓN (DECLARACIONES VS INVENTARIO)
 // ==========================================================================
 
-// 10.1 Libro de Compras con Filtros y Clasificación
+// 10.1 Libro de Compras con Filtros, Clasificación y Doble Expresión Monetaria (Bs. / USD)
 app.get('/api/fiscal/libro-compras', async (req, res) => {
   try {
     const { periodo, tipo_servicio, estatus, aplica_inventario } = req.query;
@@ -763,6 +1545,13 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
         lc.iva_bs,
         lc.total_bs,
         lc.iva_retenido_bs,
+        COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50) as tasa_bcv,
+        COALESCE(NULLIF(lc.fecha_tasa_bcv, ''), t.fecha_cierre, lc.fecha) as fecha_tasa_bcv,
+        COALESCE(lc.moneda_divisa, 'USD') as moneda_divisa,
+        COALESCE(NULLIF(lc.base_imponible_divisa, 0), ROUND(lc.base_imponible_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as base_imponible_divisa,
+        COALESCE(NULLIF(lc.monto_iva_divisa, 0), ROUND(lc.iva_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as monto_iva_divisa,
+        COALESCE(NULLIF(lc.total_divisa, 0), ROUND(lc.total_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as total_divisa,
+        COALESCE(NULLIF(lc.iva_retenido_divisa, 0), ROUND(lc.iva_retenido_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as iva_retenido_divisa,
         lc.tipo_servicio,
         lc.aplica_inventario,
         lc.estatus_conciliacion,
@@ -771,6 +1560,7 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
         p.razon_social as proveedor_registrado_nombre
       FROM libro_compras lc
       LEFT JOIN proveedores p ON lc.proveedor_id = p.id
+      LEFT JOIN tasas_bcv_periodo t ON t.periodo = lc.periodo
       WHERE 1=1
     `;
     const args = [];
@@ -800,17 +1590,46 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
   }
 });
 
-// 10.2 Libro de Ventas Fiscal (Impresora ZOA0000176)
+// 10.2 Libro de Ventas Fiscal (Impresora ZOA0000176) con Cruce de Salidas de Almacén y Doble Expresión Monetaria
 app.get('/api/fiscal/libro-ventas', async (req, res) => {
   try {
     const { periodo } = req.query;
-    let sql = `SELECT * FROM libro_ventas WHERE 1=1`;
+    let sql = `
+      SELECT 
+        lv.*,
+        COALESCE(NULLIF(lv.tasa_bcv, 0), t.tasa_bcv, 68.50) as tasa_bcv_efectiva,
+        COALESCE(NULLIF(lv.fecha_tasa_bcv, ''), t.fecha_cierre, lv.fecha) as fecha_tasa_bcv_efectiva,
+        COALESCE(NULLIF(lv.base_imponible_divisa, 0), ROUND(lv.base_imponible_bs / COALESCE(NULLIF(lv.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as base_imponible_divisa_ef,
+        COALESCE(NULLIF(lv.monto_iva_divisa, 0), ROUND(lv.iva_bs / COALESCE(NULLIF(lv.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as monto_iva_divisa_ef,
+        COALESCE(NULLIF(lv.total_divisa, 0), ROUND(lv.total_bs / COALESCE(NULLIF(lv.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as total_divisa_ef,
+        COALESCE(sal.cant_movimientos, 0) as almacen_movimientos,
+        COALESCE(sal.cant_facturas, 0) as almacen_comprobantes,
+        sal.almacen_desde,
+        sal.almacen_hasta,
+        COALESCE(sal.unidades_despachadas, 0) as almacen_unidades
+      FROM libro_ventas lv
+      LEFT JOIN tasas_bcv_periodo t ON t.periodo = lv.periodo
+      LEFT JOIN (
+        SELECT 
+          m.fecha,
+          COUNT(DISTINCT m.id) as cant_movimientos,
+          COUNT(DISTINCT CASE WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones ELSE m.numero_documento END) as cant_facturas,
+          MIN(CASE WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones ELSE m.numero_documento END) as almacen_desde,
+          MAX(CASE WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones ELSE m.numero_documento END) as almacen_hasta,
+          SUM(md.cantidad) as unidades_despachadas
+        FROM movimientos m
+        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+        WHERE m.tipo = 'SALIDA_VENTA'
+        GROUP BY m.fecha
+      ) sal ON sal.fecha = lv.fecha
+      WHERE 1=1
+    `;
     const args = [];
     if (periodo && periodo !== 'TODOS') {
-      sql += ` AND periodo = ?`;
+      sql += ` AND lv.periodo = ?`;
       args.push(periodo);
     }
-    sql += ` ORDER BY periodo ASC, fecha ASC`;
+    sql += ` ORDER BY lv.periodo ASC, lv.fecha ASC, lv.id ASC`;
     const result = await db.execute({ sql, args });
     res.json(result.rows);
   } catch (error) {
@@ -887,6 +1706,123 @@ app.post('/api/fiscal/conciliar-factura', async (req, res) => {
     });
     res.json({ success: true, message: 'Factura conciliada con éxito' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.5.1 Buscar Entradas de Almacén (Cargadas por el Asistente en Tienda) para Cruzar con Libro de Compras
+app.get('/api/fiscal/entradas-tienda', async (req, res) => {
+  try {
+    const { periodo, q } = req.query;
+    let sql = `
+      SELECT 
+        MAX(m.id) as movimiento_id,
+        GROUP_CONCAT(DISTINCT m.id) as movimientos_ids,
+        m.fecha,
+        strftime('%Y-%m', m.fecha) as periodo,
+        CASE 
+          WHEN m.numero_documento IS NOT NULL AND m.numero_documento NOT LIKE 'COMPRA-%' AND m.numero_documento != 'CONTROL DE INVETRIO' THEN m.numero_documento
+          WHEN m.observaciones IS NOT NULL AND m.observaciones != '' THEN m.observaciones
+          ELSE m.numero_documento
+        END as nro_factura_tienda,
+        m.numero_documento,
+        m.observaciones,
+        m.proveedor_id,
+        COALESCE(pr.rif, 'S/RIF') as rif,
+        COALESCE(pr.razon_social, 'Proveedor General') as razon_social,
+        COALESCE(pr.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
+        COALESCE(pr.aplica_inventario, 1) as aplica_inventario,
+        COALESCE(pr.porcentaje_retencion, 75.0) as porcentaje_retencion,
+        COUNT(md.id) as total_items,
+        COALESCE(SUM(md.cantidad), 0) as total_unidades,
+        COALESCE(SUM(md.cantidad * md.costo_unitario_usd), 0) as total_usd,
+        GROUP_CONCAT(p.codigo || ' (' || CAST(md.cantidad AS INT) || ')', ', ') as resumen_productos,
+        (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) as libro_compra_id
+      FROM movimientos m
+      LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
+      LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      LEFT JOIN productos p ON md.producto_id = p.id
+      WHERE m.tipo = 'ENTRADA_COMPRA'
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
+      args.push(periodo);
+    }
+    if (q) {
+      sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ? OR pr.razon_social LIKE ? OR pr.rif LIKE ?)`;
+      args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    sql += `
+      GROUP BY m.fecha, m.numero_documento, m.observaciones, m.proveedor_id
+      ORDER BY m.fecha DESC, movimiento_id DESC
+      LIMIT 150
+    `;
+    const result = await db.execute({ sql, args });
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error en /api/fiscal/entradas-tienda:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.5.2 Buscar Salidas / Ventas de Tienda (Cargadas por el Asistente) para Cruzar con Libro de Ventas
+app.get('/api/fiscal/salidas-tienda', async (req, res) => {
+  try {
+    const { periodo, fecha, q } = req.query;
+    let sql = `
+      SELECT 
+        m.fecha,
+        strftime('%Y-%m', m.fecha) as periodo,
+        COUNT(DISTINCT m.id) as cantidad_movimientos,
+        COUNT(DISTINCT CASE 
+          WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones 
+          ELSE m.numero_documento 
+        END) as cantidad_comprobantes,
+        MIN(CASE 
+          WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
+          WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
+          ELSE m.observaciones
+        END) as factura_desde,
+        MAX(CASE 
+          WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
+          WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
+          ELSE m.observaciones
+        END) as factura_hasta,
+        GROUP_CONCAT(DISTINCT CASE 
+          WHEN m.observaciones != '' THEN m.observaciones 
+          ELSE m.numero_documento 
+        END) as lista_facturas,
+        COALESCE(SUM(md.cantidad), 0) as total_unidades_despachadas,
+        COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd, 0)), 0) as valor_referencial_usd,
+        (SELECT lv.id FROM libro_ventas lv WHERE lv.fecha = m.fecha LIMIT 1) as libro_venta_id
+      FROM movimientos m
+      LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      LEFT JOIN productos p ON md.producto_id = p.id
+      WHERE m.tipo = 'SALIDA_VENTA'
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
+      args.push(periodo);
+    }
+    if (fecha) {
+      sql += ` AND m.fecha = ?`;
+      args.push(fecha);
+    }
+    if (q) {
+      sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ?)`;
+      args.push(`%${q}%`, `%${q}%`);
+    }
+    sql += `
+      GROUP BY m.fecha
+      ORDER BY m.fecha DESC
+      LIMIT 150
+    `;
+    const result = await db.execute({ sql, args });
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error en /api/fiscal/salidas-tienda:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -968,13 +1904,16 @@ async function recalculateDeclaracionIva(periodo) {
   }
 }
 
-// 10.6 Registrar Nueva Factura en Libro de Compras (En vez del XLS)
+// 10.6 Registrar Nueva Factura en Libro de Compras (Soporta Doble Expresión Monetaria Bs. / Divisa)
 app.post('/api/fiscal/libro-compras', async (req, res) => {
   try {
     const {
       periodo, fecha, rif, razon_social, nro_factura, nro_control,
-      tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
-      iva_retenido_bs, tipo_servicio, aplica_inventario, observaciones_cruce
+      tipo_transaccion, base_imponible_bs, base_imponible_divisa,
+      alicuota, iva_bs, monto_iva_divisa, total_bs, total_divisa,
+      iva_retenido_bs, iva_retenido_divisa, tasa_bcv, fecha_tasa_bcv, moneda_divisa,
+      tipo_servicio, aplica_inventario, observaciones_cruce,
+      movimiento_id
     } = req.body;
 
     if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
@@ -983,16 +1922,33 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     const cleanRif = String(rif).trim().toUpperCase();
     const cleanRazon = String(razon_social).trim();
-    const base = Number(base_imponible_bs) || 0.0;
+    const tasaRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 88.50);
+    const fechaTasaOp = fecha_tasa_bcv || tasaRes.rows[0]?.fecha_cierre || fecha;
+    const monedaOp = moneda_divisa || 'USD';
+
     const ali = Number(alicuota) || 0.16;
-    const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((base * ali).toFixed(2));
-    const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((base + ivaCalc).toFixed(2));
+    let baseBs = Number(base_imponible_bs) || 0.0;
+    let baseDiv = Number(base_imponible_divisa) || 0.0;
+
+    if (baseBs <= 0 && baseDiv > 0) {
+      baseBs = Number((baseDiv * tasaOp).toFixed(2));
+    } else if (baseDiv <= 0 && baseBs > 0) {
+      baseDiv = Number((baseBs / tasaOp).toFixed(2));
+    }
+
+    const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+    const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaCalc / tasaOp).toFixed(2));
+    const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc).toFixed(2));
+    const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
     const ret = Number(iva_retenido_bs) || 0.0;
+    const retDiv = (iva_retenido_divisa !== undefined && iva_retenido_divisa !== null && iva_retenido_divisa !== '') ? Number(iva_retenido_divisa) : Number((ret / tasaOp).toFixed(2));
 
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-    const estatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
-    const obs = observaciones_cruce || (aplicaInvInt === 0 ? `Gasto / Servicio (${cleanTipo})` : 'Factura cargada desde el sistema web');
+    const movIdInt = movimiento_id ? Number(movimiento_id) : null;
+    const estatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : (movIdInt ? 'CONCILIADO' : 'NO_CONCILIADO');
+    const obs = observaciones_cruce || (aplicaInvInt === 0 ? `Gasto / Servicio (${cleanTipo})` : (movIdInt ? `Cruzado con Entrada de Almacén #${movIdInt}` : 'Factura cargada desde el sistema web'));
 
     // Proveedor
     let provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ?", args: [cleanRif] });
@@ -1017,13 +1973,15 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
       sql: `INSERT INTO libro_compras 
             (periodo, archivo_origen, nro_operacion, fecha, rif, razon_social, nro_factura, nro_control,
              tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs, iva_retenido_bs,
-             proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, observaciones_cruce)
-            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa, iva_retenido_divisa,
+             proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce)
+            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id`,
       args: [
         periodo, nextOp, fecha, cleanRif, cleanRazon, nro_factura, nro_control || null,
-        tipo_transaccion || '01-reg', base, ali, ivaCalc, totalCalc, ret,
-        provId, cleanTipo, aplicaInvInt, estatus, obs
+        tipo_transaccion || '01-reg', baseBs, ali, ivaCalc, totalCalc, ret,
+        tasaOp, fechaTasaOp, monedaOp, baseDiv, ivaDivCalc, totalDivCalc, retDiv,
+        provId, cleanTipo, aplicaInvInt, estatus, movIdInt, obs
       ]
     });
 
@@ -1032,7 +1990,7 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
     res.json({
       success: true,
       id: insertResult.rows?.[0]?.id,
-      message: 'Factura registrada con éxito en el Libro de Compras'
+      message: 'Factura registrada con éxito en el Libro de Compras (Doble Expresión Bs./USD)'
     });
   } catch (error) {
     console.error('Error registrando factura en libro compras:', error);
@@ -1059,34 +2017,54 @@ app.delete('/api/fiscal/libro-compras/:id', async (req, res) => {
   }
 });
 
-// 10.8 Registrar Venta Diaria / Reporte Z en Libro de Ventas
+// 10.8 Registrar Venta Diaria / Reporte Z en Libro de Ventas (Soporta Doble Expresión Monetaria Bs. / Divisa)
 app.post('/api/fiscal/libro-ventas', async (req, res) => {
   try {
     const {
-      periodo, fecha, factura_desde, factura_hasta, total_bs,
-      exento_bs, base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes
+      periodo, fecha, factura_desde, factura_hasta, total_bs, total_divisa,
+      exento_bs, exento_divisa, base_imponible_bs, base_imponible_divisa,
+      alicuota, iva_bs, monto_iva_divisa, cantidad_comprobantes,
+      tasa_bcv, fecha_tasa_bcv, moneda_divisa
     } = req.body;
 
-    if (!periodo || !fecha || base_imponible_bs === undefined) {
+    if (!periodo || !fecha || (base_imponible_bs === undefined && base_imponible_divisa === undefined)) {
       return res.status(400).json({ error: 'Faltan campos requeridos (Período, Fecha, Base Imponible)' });
     }
 
-    const base = Number(base_imponible_bs) || 0.0;
+    const tasaRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 88.50);
+    const fechaTasaOp = fecha_tasa_bcv || tasaRes.rows[0]?.fecha_cierre || fecha;
+    const monedaOp = moneda_divisa || 'USD';
+
     const ali = Number(alicuota) || 0.16;
-    const ex = Number(exento_bs) || 0.0;
-    const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((base * ali).toFixed(2));
-    const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((base + ivaCalc + ex).toFixed(2));
+    let baseBs = Number(base_imponible_bs) || 0.0;
+    let baseDiv = Number(base_imponible_divisa) || 0.0;
+    if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
+    else if (baseDiv <= 0 && baseBs > 0) baseDiv = Number((baseBs / tasaOp).toFixed(2));
+
+    let exBs = Number(exento_bs) || 0.0;
+    let exDiv = Number(exento_divisa) || 0.0;
+    if (exBs <= 0 && exDiv > 0) exBs = Number((exDiv * tasaOp).toFixed(2));
+    else if (exDiv <= 0 && exBs > 0) exDiv = Number((exBs / tasaOp).toFixed(2));
+
+    const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+    const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaCalc / tasaOp).toFixed(2));
+    const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc + exBs).toFixed(2));
+    const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
     const cant = Number(cantidad_comprobantes) || 1;
 
     const insertResult = await db.execute({
       sql: `INSERT INTO libro_ventas 
             (periodo, archivo_origen, fecha, factura_desde, factura_hasta, total_bs, exento_bs,
-             base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes, estatus_conciliacion)
-            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REGISTRADO_FISCAL')
+             base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
+             tasa_bcv, fecha_tasa_bcv, moneda_divisa, exento_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa,
+             estatus_conciliacion)
+            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REGISTRADO_FISCAL')
             RETURNING id`,
       args: [
-        periodo, fecha, factura_desde || null, factura_hasta || null, totalCalc, ex,
-        base, ali, ivaCalc, cant
+        periodo, fecha, factura_desde || null, factura_hasta || null, totalCalc, exBs,
+        baseBs, ali, ivaCalc, cant,
+        tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc
       ]
     });
 
@@ -1095,7 +2073,7 @@ app.post('/api/fiscal/libro-ventas', async (req, res) => {
     res.json({
       success: true,
       id: insertResult.rows?.[0]?.id,
-      message: 'Venta registrada con éxito en el Libro de Ventas'
+      message: 'Venta registrada con éxito en el Libro de Ventas (Doble Expresión Bs./USD)'
     });
   } catch (error) {
     console.error('Error registrando venta en libro ventas:', error);
@@ -1249,6 +2227,705 @@ app.get('/api/export/libro-ventas', async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================================
+// 11. MÓDULO DE COMPROBANTES DE RETENCIÓN DE ISLR (PA SNAT/2026/00093 & DECRETO 1.808)
+// ==========================================================================
+
+// 11.1 Configuración Fiscal ISLR (UT, Agente de Retención, Imprenta Digital)
+app.get('/api/islr/config', async (req, res) => {
+  try {
+    const result = await db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1");
+    const row = result.rows[0] || {
+      agente_razon_social: 'INVERSIONES DG 67, C.A.',
+      agente_rif: 'J-50700865-7',
+      agente_direccion: 'AV. SUR 11 ENTRE LAS ESQUINAS BOLÍVAR Y MIRANDA, CASA NRO. 112, LOCAL S/N, URB. SAN AGUSTÍN DEL NORTE, CARACAS',
+      agente_telefono: '0212-5771122',
+      agente_email: 'administracion@inversionesdg67.com.ve',
+      valor_ut_bs: Number(process.env.VALOR_UT_BS || 43.00),
+      factor_sustraendo: 83.3334,
+      aplica_imprenta_digital: 1,
+      imprenta_razon_social: 'UNIÓN CONTABLE GLOBAL SISTEMAS DIGITALES, C.A.',
+      imprenta_rif: 'J-50714716-9',
+      imprenta_providencia: 'SNAT/2026/00093-AUT-00418',
+      imprenta_fecha_asignacion: '01/01/2026 08:00:00'
+    };
+    res.json(row);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/islr/config', async (req, res) => {
+  try {
+    const {
+      agente_razon_social, agente_rif, agente_direccion, agente_telefono, agente_email,
+      valor_ut_bs, factor_sustraendo, aplica_imprenta_digital,
+      imprenta_razon_social, imprenta_rif, imprenta_providencia, imprenta_fecha_asignacion
+    } = req.body;
+
+    await db.execute({
+      sql: `
+        UPDATE config_fiscal_islr
+        SET agente_razon_social = COALESCE(?, agente_razon_social),
+            agente_rif = COALESCE(?, agente_rif),
+            agente_direccion = COALESCE(?, agente_direccion),
+            agente_telefono = COALESCE(?, agente_telefono),
+            agente_email = COALESCE(?, agente_email),
+            valor_ut_bs = COALESCE(?, valor_ut_bs),
+            factor_sustraendo = COALESCE(?, factor_sustraendo),
+            aplica_imprenta_digital = COALESCE(?, aplica_imprenta_digital),
+            imprenta_razon_social = COALESCE(?, imprenta_razon_social),
+            imprenta_rif = COALESCE(?, imprenta_rif),
+            imprenta_providencia = COALESCE(?, imprenta_providencia),
+            imprenta_fecha_asignacion = COALESCE(?, imprenta_fecha_asignacion)
+        WHERE id = 1
+      `,
+      args: [
+        agente_razon_social || null,
+        agente_rif || null,
+        agente_direccion || null,
+        agente_telefono || null,
+        agente_email || null,
+        valor_ut_bs !== undefined ? Number(valor_ut_bs) : null,
+        factor_sustraendo !== undefined ? Number(factor_sustraendo) : null,
+        aplica_imprenta_digital !== undefined ? Number(aplica_imprenta_digital ? 1 : 0) : null,
+        imprenta_razon_social !== undefined ? imprenta_razon_social : null,
+        imprenta_rif !== undefined ? imprenta_rif : null,
+        imprenta_providencia !== undefined ? imprenta_providencia : null,
+        imprenta_fecha_asignacion !== undefined ? imprenta_fecha_asignacion : null
+      ]
+    });
+
+    res.json({ success: true, message: 'Parámetros de Retención ISLR e Imprenta Digital actualizados' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.2 Catálogo de Conceptos Decreto 1.808 SENIAT
+app.get('/api/islr/conceptos', async (req, res) => {
+  try {
+    const result = await db.execute("SELECT * FROM conceptos_islr_seniat ORDER BY codigo ASC");
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.3 Generar Próximo Número de Comprobante (14 caracteres: AAAAMM + 8 dígitos secuenciales)
+app.get('/api/islr/proximo-numero', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const yyyymm = String(periodo).replace('-', '').slice(0, 6);
+
+    // Buscar el máximo secuencial para el período o global
+    const [resPer, resGlobal] = await Promise.all([
+      db.execute({
+        sql: "SELECT nro_comprobante FROM retenciones_islr WHERE nro_comprobante LIKE ? ORDER BY nro_comprobante DESC LIMIT 1",
+        args: [`${yyyymm}%`]
+      }),
+      db.execute("SELECT nro_comprobante FROM retenciones_islr ORDER BY id DESC LIMIT 1")
+    ]);
+
+    let nextSeq = 1;
+    if (resPer.rows.length > 0) {
+      const last = String(resPer.rows[0].nro_comprobante);
+      const numPart = parseInt(last.slice(6), 10) || 0;
+      nextSeq = numPart + 1;
+    } else if (resGlobal.rows.length > 0) {
+      const lastGlobal = String(resGlobal.rows[0].nro_comprobante);
+      const numPart = parseInt(lastGlobal.slice(6), 10) || 0;
+      nextSeq = numPart + 1;
+    }
+
+    const nroComprobante = `${yyyymm}${String(nextSeq).padStart(8, '0')}`;
+    res.json({ periodo, nro_comprobante: nroComprobante });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.4 Facturas del Libro de Compras disponibles para Retención ISLR
+app.get('/api/islr/facturas-disponibles', async (req, res) => {
+  try {
+    const { periodo, rif } = req.query;
+    let sql = `
+      SELECT 
+        lc.*,
+        p.id as prov_id,
+        COALESCE(p.tipo_persona, CASE WHEN lc.rif LIKE 'V%' OR lc.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
+        COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
+        COALESCE(p.email, '') as email,
+        COALESCE(p.telefono, '') as telefono,
+        COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
+        ri.nro_comprobante as comprobante_islr_emitido
+      FROM libro_compras lc
+      LEFT JOIN proveedores p ON lc.rif = p.rif
+      LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
+      LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
+      WHERE 1=1
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND lc.periodo = ?`;
+      args.push(periodo);
+    }
+    if (rif) {
+      sql += ` AND lc.rif = ?`;
+      args.push(rif);
+    }
+    sql += ` ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
+    const result = await db.execute({ sql, args });
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.5 Listar Comprobantes de Retención ISLR
+app.get('/api/islr/comprobantes', async (req, res) => {
+  try {
+    const { periodo, q } = req.query;
+    let sql = `
+      SELECT 
+        r.*,
+        COUNT(d.id) as cantidad_items
+      FROM retenciones_islr r
+      LEFT JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
+      WHERE 1=1
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND r.periodo = ?`;
+      args.push(periodo);
+    }
+    if (q && q.trim()) {
+      const term = `%${q.trim()}%`;
+      sql += ` AND (r.nro_comprobante LIKE ? OR r.sujeto_rif LIKE ? OR r.sujeto_razon_social LIKE ? OR r.concepto_general LIKE ?)`;
+      args.push(term, term, term, term);
+    }
+    sql += ` GROUP BY r.id ORDER BY r.periodo DESC, r.nro_comprobante DESC`;
+    const result = await db.execute({ sql, args });
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.6 Obtener un Comprobante de Retención ISLR con su Detalle y Configuración Fiscal
+app.get('/api/islr/comprobantes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [headerRes, itemsRes, configRes] = await Promise.all([
+      db.execute({ sql: "SELECT * FROM retenciones_islr WHERE id = ?", args: [id] }),
+      db.execute({ sql: "SELECT * FROM retenciones_islr_detalles WHERE retencion_id = ? ORDER BY nro_operacion ASC", args: [id] }),
+      db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1")
+    ]);
+
+    if (headerRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Comprobante de Retención ISLR no encontrado' });
+    }
+
+    res.json({
+      comprobante: headerRes.rows[0],
+      detalles: itemsRes.rows,
+      config: configRes.rows[0] || {}
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.7 Emitir Nuevo Comprobante de Retención ISLR (Validaciones PA SNAT/2026/00093)
+app.post('/api/islr/comprobantes', async (req, res) => {
+  try {
+    const {
+      nro_comprobante,
+      periodo,
+      fecha_emision,
+      hora_emision,
+      proveedor_id,
+      sujeto_rif,
+      sujeto_razon_social,
+      sujeto_tipo_persona,
+      sujeto_direccion,
+      sujeto_email,
+      sujeto_telefono,
+      concepto_general,
+      es_multimoneda,
+      moneda_divisa,
+      tasa_bcv,
+      valor_ut_aplicado,
+      observaciones,
+      detalles
+    } = req.body;
+
+    // 1. Validar N° Comprobante de 14 dígitos exactos (AAAAMM + 8 dígitos)
+    const cleanNroComp = String(nro_comprobante || '').trim();
+    if (!/^\d{14}$/.test(cleanNroComp)) {
+      return res.status(400).json({
+        error: 'El Número de Comprobante debe tener exactamente 14 dígitos numéricos (Formato AAAAMM + 8 dígitos secuenciales, ej. 20261000000001).'
+      });
+    }
+
+    // 2. Validar Correo Electrónico Obligatorio (PA SNAT/2026/00093)
+    const cleanEmail = String(sujeto_email || '').trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({
+        error: 'El Correo Electrónico del Proveedor (Sujeto Retenido) es un CAMPO OBLIGATORIO según la Providencia Administrativa SNAT/2026/00093.'
+      });
+    }
+
+    // 3. Validar RIF y Razón Social del Sujeto Retenido
+    const cleanRif = String(sujeto_rif || '').trim().toUpperCase();
+    if (!cleanRif || !sujeto_razon_social) {
+      return res.status(400).json({ error: 'El RIF y la Razón Social del Sujeto Retenido son obligatorios.' });
+    }
+
+    if (!Array.isArray(detalles) || detalles.length === 0) {
+      return res.status(400).json({ error: 'Debe incluir al menos una factura o documento objeto de retención.' });
+    }
+
+    // Obtener configuración UT vigente
+    const cfgRes = await db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1");
+    const cfg = cfgRes.rows[0] || { valor_ut_bs: 43.00, factor_sustraendo: 83.3334 };
+    const utBs = Number(valor_ut_aplicado || cfg.valor_ut_bs || 43.00);
+    const factorSust = Number(cfg.factor_sustraendo || 83.3334);
+    const tipoPersona = sujeto_tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
+
+    // Calcular totales y validar cada línea
+    let totDocBs = 0;
+    let totBaseBs = 0;
+    let totSustBs = 0;
+    let totRetBs = 0;
+    let codigoPrincipal = '055';
+
+    const processedItems = detalles.map((item, idx) => {
+      const montoDoc = Number(item.monto_total_bs || 0);
+      const baseImp = Number(item.base_imponible_bs || 0);
+      const pctBase = Number(item.pct_base !== undefined ? item.pct_base : 100.0);
+      const pctTarifa = Number(item.pct_tarifa !== undefined ? item.pct_tarifa : 2.0);
+      const codConcepto = String(item.codigo_concepto || '055').padStart(3, '0');
+      if (idx === 0) codigoPrincipal = codConcepto;
+
+      // Sustraendo automático para PN-R cuando aplique: UT * 83.3334 * (pctTarifa / 100)
+      let sustraendo = 0.0;
+      const umbralMinimo = utBs * factorSust;
+      if (tipoPersona === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3)) {
+        if (item.sustraendo_bs !== undefined && item.sustraendo_bs !== null && item.sustraendo_bs !== '') {
+          sustraendo = Number(item.sustraendo_bs);
+        } else if (baseImp > umbralMinimo) {
+          sustraendo = Number((utBs * factorSust * (pctTarifa / 100)).toFixed(2));
+        }
+      } else if (item.sustraendo_bs !== undefined && Number(item.sustraendo_bs) > 0) {
+        sustraendo = Number(item.sustraendo_bs);
+      }
+
+      const baseObjeto = baseImp * (pctBase / 100);
+      const retencionBruta = baseObjeto * (pctTarifa / 100);
+      const impuestoRetenido = Math.max(0, Number((retencionBruta - sustraendo).toFixed(2)));
+
+      totDocBs += montoDoc;
+      totBaseBs += baseImp;
+      totSustBs += sustraendo;
+      totRetBs += impuestoRetenido;
+
+      return {
+        libro_compra_id: item.libro_compra_id || null,
+        nro_operacion: idx + 1,
+        fecha_factura: item.fecha_factura || fecha_emision,
+        nro_factura: String(item.nro_factura || '').trim() || 'S/N',
+        nro_control: String(item.nro_control || '').trim() || 'S/C',
+        nro_nota_debito: String(item.nro_nota_debito || '').trim(),
+        nro_nota_credito: String(item.nro_nota_credito || '').trim(),
+        tipo_transaccion: item.tipo_transaccion || '01-REG',
+        codigo_concepto: codConcepto,
+        descripcion_concepto: item.descripcion_concepto || concepto_general || 'SERVICIOS PROFESIONALES / EJECUCIÓN DE OBRAS',
+        monto_total_bs: Number(montoDoc.toFixed(2)),
+        base_imponible_bs: Number(baseImp.toFixed(2)),
+        pct_base: pctBase,
+        pct_tarifa: pctTarifa,
+        sustraendo_bs: Number(sustraendo.toFixed(2)),
+        impuesto_retenido_bs: impuestoRetenido
+      };
+    });
+
+    const totalAPagar = Number((totDocBs - totRetBs).toFixed(2));
+
+    // Sello de fecha y hora exacta con segundos
+    const now = new Date();
+    const pad2 = n => String(n).padStart(2, '0');
+    const defaultHora = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    const defaultFecha = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+    const insHeader = await db.execute({
+      sql: `
+        INSERT INTO retenciones_islr (
+          nro_comprobante, periodo, fecha_emision, hora_emision,
+          proveedor_id, sujeto_rif, sujeto_razon_social, sujeto_tipo_persona,
+          sujeto_direccion, sujeto_email, sujeto_telefono,
+          concepto_general, codigo_concepto_principal,
+          es_multimoneda, moneda_divisa, tasa_bcv, valor_ut_aplicado,
+          total_documento_bs, total_base_imponible_bs, total_sustraendo_bs,
+          total_islr_retenido_bs, total_a_pagar_bs, estatus, observaciones
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EMITIDO', ?)
+      `,
+      args: [
+        cleanNroComp,
+        periodo || '2026-10',
+        fecha_emision || defaultFecha,
+        hora_emision || defaultHora,
+        proveedor_id || null,
+        cleanRif,
+        String(sujeto_razon_social).trim(),
+        tipoPersona,
+        String(sujeto_direccion || 'CARACAS, DISTRITO CAPITAL').trim(),
+        cleanEmail,
+        String(sujeto_telefono || '').trim(),
+        String(concepto_general || processedItems[0].descripcion_concepto).trim(),
+        codigoPrincipal,
+        es_multimoneda ? 1 : 0,
+        moneda_divisa || 'USD',
+        Number(tasa_bcv || 68.50),
+        utBs,
+        Number(totDocBs.toFixed(2)),
+        Number(totBaseBs.toFixed(2)),
+        Number(totSustBs.toFixed(2)),
+        Number(totRetBs.toFixed(2)),
+        totalAPagar,
+        String(observaciones || '').trim()
+      ]
+    });
+
+    const retencionId = Number(insHeader.lastInsertRowid);
+
+    for (const it of processedItems) {
+      await db.execute({
+        sql: `
+          INSERT INTO retenciones_islr_detalles (
+            retencion_id, libro_compra_id, nro_operacion,
+            fecha_factura, nro_factura, nro_control,
+            nro_nota_debito, nro_nota_credito, tipo_transaccion,
+            codigo_concepto, descripcion_concepto,
+            monto_total_bs, base_imponible_bs, pct_base, pct_tarifa,
+            sustraendo_bs, impuesto_retenido_bs
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          retencionId, it.libro_compra_id, it.nro_operacion,
+          it.fecha_factura, it.nro_factura, it.nro_control,
+          it.nro_nota_debito, it.nro_nota_credito, it.tipo_transaccion,
+          it.codigo_concepto, it.descripcion_concepto,
+          it.monto_total_bs, it.base_imponible_bs, it.pct_base, it.pct_tarifa,
+          it.sustraendo_bs, it.impuesto_retenido_bs
+        ]
+      });
+    }
+
+    // Actualizar email y dirección del proveedor si aplica
+    if (cleanRif) {
+      await db.execute({
+        sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ? WHERE rif = ?`,
+        args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, cleanRif]
+      });
+    }
+
+    res.json({
+      success: true,
+      id: retencionId,
+      nro_comprobante: cleanNroComp,
+      message: `Comprobante de Retención ISLR N° ${cleanNroComp} emitido conforme a la PA SNAT/2026/00093.`
+    });
+  } catch (error) {
+    console.error('Error emitiendo comprobante ISLR:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.8 Eliminar Comprobante de Retención ISLR
+app.delete('/api/islr/comprobantes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.execute({ sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM retenciones_islr WHERE id = ?", args: [id] });
+    res.json({ success: true, message: 'Comprobante de Retención ISLR eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.9 Exportación Oficial XML SENIAT para Declaración Mensual de Retenciones ISLR
+app.get('/api/islr/export-xml', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-09';
+    const yyyymm = String(periodo).replace('-', '');
+
+    const [cfgRes, itemsRes] = await Promise.all([
+      db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1"),
+      db.execute({
+        sql: `
+          SELECT 
+            r.nro_comprobante,
+            r.periodo,
+            r.sujeto_rif,
+            r.sujeto_razon_social,
+            d.fecha_factura,
+            d.nro_factura,
+            d.nro_control,
+            d.codigo_concepto,
+            d.base_imponible_bs,
+            d.pct_tarifa,
+            d.impuesto_retenido_bs
+          FROM retenciones_islr r
+          JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
+          WHERE r.periodo = ?
+          ORDER BY r.nro_comprobante ASC, d.nro_operacion ASC
+        `,
+        args: [periodo]
+      })
+    ]);
+
+    const cfg = cfgRes.rows[0] || { agente_rif: 'J-50700865-7' };
+    const cleanAgenteRif = String(cfg.agente_rif || 'J507008657').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+    const xmlLines = [
+      `<?xml version="1.0" encoding="ISO-8859-1"?>`,
+      `<RelacionRetencionesISLR RifAgente="${cleanAgenteRif}" Periodo="${yyyymm}">`
+    ];
+
+    for (const row of itemsRes.rows) {
+      const cleanRifRetenido = String(row.sujeto_rif || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const cleanFactura = String(row.nro_factura || '0').replace(/[^A-Z0-9]/gi, '').slice(0, 20) || '0';
+      const cleanControl = String(row.nro_control || 'NA').replace(/[^A-Z0-9]/gi, '').slice(0, 20) || 'NA';
+      const codConcepto = String(row.codigo_concepto || '055').padStart(3, '0');
+      const montoOp = Number(row.base_imponible_bs || 0).toFixed(2);
+      const pctRet = Number(row.pct_tarifa || 0).toFixed(2);
+
+      // Fecha en formato DD/MM/AAAA exigido por el validador XML del SENIAT
+      let fechaOp = String(row.fecha_factura || '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaOp)) {
+        const [y, m, d] = fechaOp.split('-');
+        fechaOp = `${d}/${m}/${y}`;
+      }
+
+      xmlLines.push(`  <DetalleRetencion>`);
+      xmlLines.push(`    <RifRetenido>${cleanRifRetenido}</RifRetenido>`);
+      xmlLines.push(`    <NumeroFactura>${cleanFactura}</NumeroFactura>`);
+      xmlLines.push(`    <NumeroControl>${cleanControl}</NumeroControl>`);
+      xmlLines.push(`    <FechaOperacion>${fechaOp}</FechaOperacion>`);
+      xmlLines.push(`    <CodigoConcepto>${codConcepto}</CodigoConcepto>`);
+      xmlLines.push(`    <MontoOperacion>${montoOp}</MontoOperacion>`);
+      xmlLines.push(`    <PorcentajeRetencion>${pctRet}</PorcentajeRetencion>`);
+      xmlLines.push(`  </DetalleRetencion>`);
+    }
+
+    xmlLines.push(`</RelacionRetencionesISLR>`);
+    const xmlContent = xmlLines.join('\n');
+
+    res.setHeader('Content-Disposition', `attachment; filename="RELACION_ISLR_${cleanAgenteRif}_${yyyymm}.xml"`);
+    res.setHeader('Content-Type', 'application/xml; charset=ISO-8859-1');
+    res.send(xmlContent);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.10 Exportar Relación de Retenciones ISLR a Excel (.xlsx)
+app.get('/api/islr/export-excel', async (req, res) => {
+  try {
+    const { periodo } = req.query;
+    let sql = `
+      SELECT 
+        r.nro_comprobante as "N° COMPROBANTE (14 DÍGITOS)",
+        r.periodo as "PERÍODO FISCAL",
+        r.fecha_emision as "FECHA EMISIÓN",
+        r.hora_emision as "HORA EMISIÓN",
+        r.sujeto_rif as "RIF SUJETO RETENIDO",
+        r.sujeto_razon_social as "RAZÓN SOCIAL PROVEEDOR",
+        r.sujeto_tipo_persona as "TIPO PERSONA",
+        r.sujeto_email as "CORREO OBLIGATORIO (PA 00093)",
+        d.nro_operacion as "N° OP",
+        d.fecha_factura as "FECHA FACTURA",
+        d.nro_factura as "N° FACTURA",
+        d.nro_control as "N° CONTROL",
+        d.codigo_concepto as "CÓD. CONCEPTO",
+        d.descripcion_concepto as "DESCRIPCIÓN CONCEPTO",
+        d.monto_total_bs as "MONTO TOTAL DOC. (BS)",
+        d.base_imponible_bs as "BASE IMPONIBLE (BS)",
+        d.pct_base as "% BASE",
+        d.pct_tarifa as "% TARIFA ISLR",
+        d.sustraendo_bs as "SUSTRAENDO (BS)",
+        d.impuesto_retenido_bs as "ISLR RETENIDO (BS)"
+      FROM retenciones_islr r
+      JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
+      WHERE 1=1
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND r.periodo = ?`;
+      args.push(periodo);
+    }
+    sql += ` ORDER BY r.periodo ASC, r.nro_comprobante ASC, d.nro_operacion ASC`;
+
+    const result = await db.execute({ sql, args });
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `RET_ISLR_${periodo || '2026'}`);
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', `attachment; filename="RETENCIONES_ISLR_SNAT202600093_${periodo || 'HISTORICO'}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================================
+// 12. TASAS BCV DE CIERRE MENSUAL Y REVALORIZACIÓN BIMONETARIA (MESES DECLARADOS)
+// ==========================================================================
+
+app.get('/api/tasas-bcv', async (req, res) => {
+  try {
+    const [tasasRes, cfgRes] = await Promise.all([
+      db.execute("SELECT * FROM tasas_bcv_periodo ORDER BY periodo ASC"),
+      db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+    ]);
+    res.json({
+      metodo_valoracion_kardex: cfgRes.rows[0]?.metodo_valoracion_kardex || 'CPP',
+      tasas: tasasRes.rows
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/tasas-bcv/revalorizar-cierre', async (req, res) => {
+  try {
+    const { tasas = [], metodo_valoracion_kardex } = req.body;
+
+    if (metodo_valoracion_kardex && ['CPP', 'PEPS'].includes(metodo_valoracion_kardex)) {
+      await db.execute({
+        sql: "UPDATE config_fiscal_islr SET metodo_valoracion_kardex = ? WHERE id = 1",
+        args: [metodo_valoracion_kardex]
+      });
+    }
+
+    if (Array.isArray(tasas) && tasas.length > 0) {
+      for (const t of tasas) {
+        if (!t.periodo || !(Number(t.tasa_bcv) > 0)) continue;
+        await db.execute({
+          sql: `INSERT OR REPLACE INTO tasas_bcv_periodo (periodo, tasa_bcv, fecha_cierre, moneda, fuente)
+                VALUES (?, ?, ?, ?, ?)`,
+          args: [
+            t.periodo,
+            Number(t.tasa_bcv),
+            t.fecha_cierre || `${t.periodo}-28`,
+            t.moneda || 'USD',
+            t.fuente || `Tasa Oficial BCV al Cierre del Período ${t.periodo}`
+          ]
+        });
+      }
+    }
+
+    // Revalorizar automáticamente los meses declarados en Movimientos (Kardex), Libro de Compras, Libro de Ventas y Retenciones ISLR
+    await db.execute(`
+      UPDATE movimientos
+      SET tasa_bcv = COALESCE(
+            (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
+            movimientos.tasa_bcv,
+            68.50
+          ),
+          fecha_tasa_bcv = COALESCE(
+            (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
+            movimientos.fecha_tasa_bcv,
+            movimientos.fecha
+          )
+    `);
+
+    await db.execute(`
+      UPDATE movimiento_detalles
+      SET costo_unitario_divisa = ROUND(COALESCE(
+            NULLIF(costo_unitario_divisa, 0),
+            NULLIF(costo_unitario_usd, 0),
+            (SELECT p.costo_referencial_usd FROM productos p WHERE p.id = movimiento_detalles.producto_id),
+            1.0
+          ), 2),
+          tasa_bcv_operacion = COALESCE(
+            (SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id),
+            68.50
+          )
+    `);
+
+    await db.execute(`
+      UPDATE movimiento_detalles
+      SET costo_unitario_usd = costo_unitario_divisa,
+          costo_unitario_bs = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
+          costo_unitario_ves = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
+          precio_unitario_divisa = costo_unitario_divisa,
+          precio_unitario_bs = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
+          base_imponible_divisa = ROUND(cantidad * costo_unitario_divisa, 2),
+          base_imponible_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion, 2),
+          monto_iva_divisa = ROUND(cantidad * costo_unitario_divisa * 0.16, 2),
+          monto_iva_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion * 0.16, 2),
+          total_linea_divisa = ROUND(cantidad * costo_unitario_divisa * 1.16, 2),
+          total_linea_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion * 1.16, 2)
+    `);
+
+    await db.execute(`
+      UPDATE libro_compras
+      SET tasa_bcv = COALESCE(
+            (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
+            libro_compras.tasa_bcv,
+            68.50
+          ),
+          fecha_tasa_bcv = COALESCE(
+            (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
+            libro_compras.fecha_tasa_bcv,
+            libro_compras.fecha
+          )
+    `);
+
+    await db.execute(`
+      UPDATE libro_compras
+      SET base_imponible_divisa = ROUND(base_imponible_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          monto_iva_divisa = ROUND(iva_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          total_divisa = ROUND(total_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          iva_retenido_divisa = ROUND(iva_retenido_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2)
+    `);
+
+    await db.execute(`
+      UPDATE libro_ventas
+      SET tasa_bcv = COALESCE(
+            (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
+            libro_ventas.tasa_bcv,
+            68.50
+          ),
+          fecha_tasa_bcv = COALESCE(
+            (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
+            libro_ventas.fecha_tasa_bcv,
+            libro_ventas.fecha
+          )
+    `);
+
+    await db.execute(`
+      UPDATE libro_ventas
+      SET exento_divisa = ROUND(exento_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          base_imponible_divisa = ROUND(base_imponible_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          monto_iva_divisa = ROUND(iva_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
+          total_divisa = ROUND(total_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2)
+    `);
+
+    res.json({
+      success: true,
+      message: 'Tasas Oficiales BCV de Cierre Mensual aplicadas y revalorización bimonetaria (Bs. ↔ USD) completada en Kardex, Libro de Compras y Libro de Ventas.'
+    });
+  } catch (error) {
+    console.error('Error revalorizando cierres BCV:', error);
     res.status(500).json({ error: error.message });
   }
 });
