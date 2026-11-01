@@ -445,6 +445,187 @@ async function loadCatalogs() {
   }
 }
 
+let dashboardModoMoneda = 'BS';
+
+function toggleDashboardMoneda(modo) {
+  dashboardModoMoneda = modo;
+  const btnBs = document.getElementById('btn-dash-mon-bs');
+  const btnUsd = document.getElementById('btn-dash-mon-usd');
+  if (btnBs && btnUsd) {
+    if (modo === 'BS') {
+      btnBs.style.background = '#0B2447';
+      btnBs.style.color = '#ffffff';
+      btnUsd.style.background = 'transparent';
+      btnUsd.style.color = '#475569';
+    } else {
+      btnUsd.style.background = '#0B2447';
+      btnUsd.style.color = '#ffffff';
+      btnBs.style.background = 'transparent';
+      btnBs.style.color = '#475569';
+    }
+  }
+  const thTop = document.getElementById('th-top-facturado');
+  if (thTop) thTop.textContent = modo === 'BS' ? 'FACTURADO (BS.)' : 'FACTURADO ($ USD)';
+
+  if (state.dashboard) {
+    renderDashboardMonthly(state.dashboard);
+    renderDashboardTopProducts(state.dashboard);
+  }
+}
+
+function filtrarStockAlerta() {
+  switchTab('tab-inventario');
+  const sel = document.getElementById('inv-filter-estado');
+  if (sel) {
+    sel.value = 'SOLICITAR MATERIAL';
+    loadProducts();
+  }
+}
+
+function renderDashboardMonthly(data) {
+  const tbody = document.getElementById('tbody-dashboard-monthly');
+  if (!tbody) return;
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isBs = dashboardModoMoneda === 'BS';
+
+  const meses = data.flujoMensual || [];
+  if (meses.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px;">No hay movimientos registrados.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = meses.map(m => {
+    const comprasMonto = isBs ? `Bs. ${fmtBs(m.compras_bs)}` : `$${fmtUsd(m.compras_usd)}`;
+    const ventasMonto = isBs ? `Bs. ${fmtBs(m.ventas_bs)}` : `$${fmtUsd(m.ventas_usd)}`;
+    const balanceUnd = Number(m.unidades_compradas || 0) - Number(m.unidades_vendidas || 0);
+    const balanceColor = balanceUnd >= 0 ? '#059669' : '#dc2626';
+    const balanceIcon = balanceUnd >= 0 ? '▲ +' : '▼ ';
+    const labelMes = NOMBRES_MESES_CIERRE[m.periodo] || m.periodo;
+
+    const totVolume = Number(m.unidades_compradas || 0) + Number(m.unidades_vendidas || 0);
+    const pctVentas = totVolume > 0 ? Math.round((Number(m.unidades_vendidas || 0) / totVolume) * 100) : 0;
+    const pctCompras = totVolume > 0 ? 100 - pctVentas : 0;
+
+    return `
+      <tr>
+        <td style="padding: 9px 12px;">
+          <div class="font-bold" style="color: #0B2447;">${m.periodo}</div>
+          <div style="font-size: 0.72rem; color: #64748b;">${labelMes}</div>
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 9px 12px; color: #0284c7;">
+          Bs. ${Number(m.tasa_bcv || 0).toFixed(4)}
+        </td>
+        <td class="text-right font-mono" style="padding: 9px 12px;">
+          <div class="font-bold" style="color: #0369a1;">${comprasMonto}</div>
+          <div style="font-size: 0.72rem; color: #64748b;">${m.unidades_compradas} und (${m.cant_compras} docs)</div>
+        </td>
+        <td class="text-right font-mono" style="padding: 9px 12px;">
+          <div class="font-bold" style="color: #059669;">${ventasMonto}</div>
+          <div style="font-size: 0.72rem; color: #64748b;">${m.unidades_vendidas} und (${m.cant_ventas} ZOA)</div>
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 9px 12px; color: ${balanceColor};">
+          ${balanceIcon}${Math.abs(balanceUnd)} und
+        </td>
+        <td style="padding: 9px 12px;">
+          <div style="display:flex; justify-content:space-between; font-size: 0.68rem; color:#64748b; margin-bottom: 2px;">
+            <span>V: ${pctVentas}%</span>
+            <span>C: ${pctCompras}%</span>
+          </div>
+          <div class="mini-flow-bar">
+            <div class="mini-flow-ventas" style="width: ${pctVentas}%;" title="Ventas: ${pctVentas}%"></div>
+            <div class="mini-flow-compras" style="width: ${pctCompras}%;" title="Compras: ${pctCompras}%"></div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderDashboardTopProducts(data) {
+  const tbody = document.getElementById('tbody-top-vendidos');
+  if (!tbody) return;
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isBs = dashboardModoMoneda === 'BS';
+
+  const prods = data.topProductosVendidos || [];
+  if (prods.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px;">No hay datos de ventas registradas.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = prods.map((p, idx) => {
+    const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-default'));
+    const facturado = isBs ? `Bs. ${fmtBs(p.total_ventas_bs)}` : `$${fmtUsd(p.total_ventas_usd)}`;
+    const stockColor = p.stock_actual > 0 ? '#059669' : '#dc2626';
+
+    return `
+      <tr>
+        <td class="text-center" style="padding: 8px 6px;">
+          <span class="rank-badge ${rankClass}">${idx + 1}</span>
+        </td>
+        <td style="padding: 8px 10px;">
+          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">${p.codigo}</div>
+          <div style="font-size: 0.72rem; color: #475569; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.descripcion}">${p.descripcion}</div>
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #059669;">
+          ${p.unidades_vendidas}
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #0B2447;">
+          ${facturado}
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${stockColor};">
+          ${p.stock_actual}
+        </td>
+        <td class="text-center" style="padding: 8px 6px;">
+          <button class="btn btn-sm btn-secondary" onclick="viewKardex('${p.codigo}')" style="padding: 2px 7px; font-size: 10px;" title="Ver Kardex">
+            🔍
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderDashboardCritical(data) {
+  const tbody = document.getElementById('tbody-criticos-reorden');
+  if (!tbody) return;
+
+  const prods = data.productosCriticos || [];
+  if (prods.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 16px; color: #059669; font-weight: 700;">✅ Todo el inventario se encuentra por encima del stock mínimo.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = prods.map(p => {
+    return `
+      <tr>
+        <td style="padding: 8px 10px;">
+          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">${p.codigo}</div>
+          <div style="font-size: 0.72rem; color: #475569; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.descripcion}">${p.descripcion}</div>
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${p.stock_actual <= 0 ? '#dc2626' : '#d97706'};">
+          ${p.stock_actual}
+        </td>
+        <td class="text-right font-mono" style="padding: 8px 10px; color: #64748b;">
+          ${p.stock_minimo}
+        </td>
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #dc2626;">
+          -${p.deficit}
+        </td>
+        <td class="text-center" style="padding: 8px 6px;">
+          <button class="btn btn-sm btn-emerald" onclick="switchTab('tab-entrada')" style="padding: 3px 8px; font-size: 11px;" title="Registrar Entrada">
+            + Reponer
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
 // 4. Dashboard KPIs & Distribution
 async function loadDashboard() {
   try {
@@ -452,13 +633,61 @@ async function loadDashboard() {
     const data = await res.json();
     state.dashboard = data;
 
-    // Set KPI cards
-    document.getElementById('kpi-total-productos').textContent = data.totalProductos.toLocaleString();
-    document.getElementById('kpi-stock-unidades').textContent = Math.round(data.stockTotalUnidades).toLocaleString();
+    const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // 5 KPI Cards
     const valUsdDash = Number(data.valorTotalUsd || 0);
-    const valBsDash = Number(data.valorTotalBs || (valUsdDash * 92.00));
-    document.getElementById('kpi-valor-total').innerHTML = `Bs. ${valBsDash.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <div style="font-size:0.78rem; color:#059669; font-weight:700;">($${valUsdDash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • Tasa BCV ${Number(data.tasaBcvActiva || 92.00).toFixed(2)})</div>`;
-    document.getElementById('kpi-alertas-stock').textContent = data.productosEnAlerta;
+    const valBsDash = Number(data.valorTotalBs || 0);
+    const tasaAct = Number(data.tasaBcvActiva || 889.26);
+
+    const elValBs = document.getElementById('kpi-dash-valor-bs');
+    const elValUsd = document.getElementById('kpi-dash-valor-usd');
+    if (elValBs) elValBs.textContent = `Bs. ${fmtBs(valBsDash)}`;
+    if (elValUsd) elValUsd.textContent = `$${fmtUsd(valUsdDash)} USD • Tasa BCV: Bs. ${tasaAct.toFixed(2)}`;
+
+    const elStock = document.getElementById('kpi-dash-stock-unidades');
+    const elCatSub = document.getElementById('kpi-dash-cat-count');
+    if (elStock) elStock.textContent = `${Math.round(data.stockTotalUnidades).toLocaleString()} und`;
+    if (elCatSub) elCatSub.textContent = `${data.totalProductos} repuestos en catálogo`;
+
+    const elRot = document.getElementById('kpi-dash-rotacion');
+    const elDiasCob = document.getElementById('kpi-dash-dias-cobertura');
+    if (elRot) elRot.textContent = `${data.rotacionInventario}x anual`;
+    if (elDiasCob) elDiasCob.textContent = `Cobertura media: ${data.diasInventario} días de stock`;
+
+    const elDisp = document.getElementById('kpi-dash-disponibilidad');
+    const elOptSub = document.getElementById('kpi-dash-stock-optimo');
+    if (elDisp) elDisp.textContent = `${data.nivelServicio}%`;
+    if (elOptSub) elOptSub.textContent = `${data.stockOptimo} productos con stock óptimo`;
+
+    const elAlertas = document.getElementById('kpi-dash-alertas');
+    const elAlertDet = document.getElementById('kpi-dash-alertas-detalle');
+    if (elAlertas) elAlertas.textContent = `${data.productosEnAlerta} alertas`;
+    if (elAlertDet) elAlertDet.textContent = `${data.productosAgotados} agotados (${data.productosEnAlerta - data.productosAgotados} bajo mín.)`;
+
+    // Resumen Anual Compras vs Ventas
+    const tot = data.totalesAnio || {};
+    const elTotCompM = document.getElementById('dash-tot-compras-monto');
+    const elTotCompU = document.getElementById('dash-tot-compras-und');
+    if (elTotCompM) elTotCompM.textContent = `Bs. ${fmtBs(tot.totComprasBs)} ($${fmtUsd(tot.totComprasUsd)})`;
+    if (elTotCompU) elTotCompU.textContent = `${(tot.totUnidadesCompradas || 0).toLocaleString()} unidades adquiridas`;
+
+    const elTotVentM = document.getElementById('dash-tot-ventas-monto');
+    const elTotVentU = document.getElementById('dash-tot-ventas-und');
+    if (elTotVentM) elTotVentM.textContent = `Bs. ${fmtBs(tot.totVentasBs)} ($${fmtUsd(tot.totVentasUsd)})`;
+    if (elTotVentU) elTotVentU.textContent = `${(tot.totUnidadesVendidas || 0).toLocaleString()} unidades despachadas`;
+
+    const elTotBalM = document.getElementById('dash-tot-balance-monto');
+    const elTotBalU = document.getElementById('dash-tot-balance-und');
+    const balNeto = (tot.totUnidadesCompradas || 0) - (tot.totUnidadesVendidas || 0);
+    if (elTotBalM) elTotBalM.textContent = `${balNeto >= 0 ? '+' : ''}${balNeto.toLocaleString()} unidades`;
+    if (elTotBalU) elTotBalU.textContent = `Saldo físico neto en almacén`;
+
+    // Render Subsections
+    renderDashboardMonthly(data);
+    renderDashboardTopProducts(data);
+    renderDashboardCritical(data);
 
     // Render Category Distribution
     const categoryBars = document.getElementById('category-bars');

@@ -249,30 +249,104 @@ app.get('/api/empresa', async (req, res) => {
   }
 });
 
-// 2. Dashboard KPIs & Summaries (with Dual-Currency BCV Valuation)
+// 2. Dashboard KPIs & Summaries (with Dual-Currency BCV Valuation & Complete Inventory Intelligence)
 app.get('/api/dashboard', async (req, res) => {
   try {
-    const [counts, stockSummary, lowStockCount, recentMovs, categoryStats, tasaActivaRes] = await Promise.all([
+    const [
+      counts,
+      stockSummary,
+      lowStockCount,
+      zeroStockCount,
+      tasaCfgRes,
+      monthlyFlowRes,
+      topSalesRes,
+      criticalProductsRes,
+      categoryStats,
+      recentMovs
+    ] = await Promise.all([
       db.execute("SELECT COUNT(*) as total_productos FROM productos WHERE activo = 1"),
       db.execute(`
         SELECT 
           COALESCE(SUM(stock_actual), 0) as stock_total_unidades,
-          COALESCE(SUM(CASE WHEN stock_actual > 0 THEN valor_total_usd ELSE 0 END), 0) as valor_total_usd
+          COALESCE(SUM(CASE WHEN stock_actual > 0 THEN valor_total_usd ELSE 0 END), 0) as valor_total_usd,
+          COUNT(CASE WHEN stock_actual > stock_minimo THEN 1 END) as stock_optimo_count,
+          COUNT(CASE WHEN stock_actual <= stock_minimo AND stock_actual > 0 THEN 1 END) as stock_alerta_count,
+          COUNT(CASE WHEN stock_actual <= 0 THEN 1 END) as stock_agotado_count
         FROM vista_inventario_actual
       `),
       db.execute("SELECT COUNT(*) as alert_count FROM vista_inventario_actual WHERE estado_stock = 'SOLICITAR MATERIAL'"),
+      db.execute("SELECT COUNT(*) as zero_count FROM vista_inventario_actual WHERE stock_actual <= 0"),
+      db.execute("SELECT metodo_valoracion_kardex, tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1"),
       db.execute(`
         SELECT 
-          m.id, m.tipo, m.fecha, m.numero_documento, m.observaciones,
-          COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as proveedor_nombre,
-          COUNT(md.id) as total_items,
-          COALESCE(SUM(md.cantidad), 0) as total_unidades
-        FROM movimientos m
-        LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
-        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-        GROUP BY m.id
-        ORDER BY m.fecha DESC, m.id DESC
+          t.periodo,
+          t.fecha_cierre,
+          t.tasa_bcv,
+          COALESCE(comp.cant_compras, 0) as cant_compras,
+          COALESCE(comp.unidades_compradas, 0) as unidades_compradas,
+          ROUND(COALESCE(comp.monto_compras_usd, 0), 2) as compras_usd,
+          ROUND(COALESCE(comp.monto_compras_bs, 0), 2) as compras_bs,
+          COALESCE(vent.cant_ventas, 0) as cant_ventas,
+          COALESCE(vent.unidades_vendidas, 0) as unidades_vendidas,
+          ROUND(COALESCE(vent.monto_ventas_usd, 0), 2) as ventas_usd,
+          ROUND(COALESCE(vent.monto_ventas_bs, 0), 2) as ventas_bs
+        FROM tasas_bcv_periodo t
+        LEFT JOIN (
+          SELECT 
+            substr(m.fecha, 1, 7) as mes,
+            count(distinct m.id) as cant_compras,
+            sum(md.cantidad) as unidades_compradas,
+            sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.costo_unitario_usd, 0))) as monto_compras_usd,
+            sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.costo_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_compras_bs
+          FROM movimientos m
+          JOIN movimiento_detalles md ON m.id = md.movimiento_id
+          WHERE m.tipo IN ('ENTRADA_COMPRA', 'INVENTARIO_INICIAL')
+          GROUP BY substr(m.fecha, 1, 7)
+        ) comp ON t.periodo = comp.mes
+        LEFT JOIN (
+          SELECT 
+            substr(m.fecha, 1, 7) as mes,
+            count(distinct m.id) as cant_ventas,
+            sum(md.cantidad) as unidades_vendidas,
+            sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.precio_unitario_divisa, md.costo_unitario_usd, 0))) as monto_ventas_usd,
+            sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.precio_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_ventas_bs
+          FROM movimientos m
+          JOIN movimiento_detalles md ON m.id = md.movimiento_id
+          WHERE m.tipo = 'SALIDA_VENTA'
+          GROUP BY substr(m.fecha, 1, 7)
+        ) vent ON t.periodo = vent.mes
+        ORDER BY t.periodo ASC
+      `),
+      db.execute(`
+        SELECT 
+          p.id, p.codigo, p.descripcion, COALESCE(c.nombre, 'GENERAL') as categoria,
+          p.stock_minimo,
+          v.stock_actual,
+          COALESCE(SUM(md.cantidad), 0) as unidades_vendidas,
+          ROUND(COALESCE(SUM(COALESCE(md.total_linea_divisa, md.cantidad * p.costo_referencial_usd)), 0), 2) as total_ventas_usd,
+          ROUND(COALESCE(SUM(COALESCE(md.total_linea_bs, md.cantidad * p.costo_referencial_usd * 889.58)), 0), 2) as total_ventas_bs
+        FROM productos p
+        JOIN vista_inventario_actual v ON p.id = v.producto_id
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        JOIN movimiento_detalles md ON p.id = md.producto_id
+        JOIN movimientos m ON md.movimiento_id = m.id
+        WHERE m.tipo = 'SALIDA_VENTA'
+        GROUP BY p.id
+        ORDER BY unidades_vendidas DESC
         LIMIT 10
+      `),
+      db.execute(`
+        SELECT 
+          p.id, p.codigo, p.descripcion, COALESCE(c.nombre, 'GENERAL') as categoria,
+          p.stock_minimo, v.stock_actual,
+          ROUND(p.stock_minimo - v.stock_actual, 1) as deficit,
+          p.costo_referencial_usd
+        FROM vista_inventario_actual v
+        JOIN productos p ON v.producto_id = p.id
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE v.stock_actual <= p.stock_minimo
+        ORDER BY deficit DESC
+        LIMIT 8
       `),
       db.execute(`
         SELECT 
@@ -285,22 +359,73 @@ app.get('/api/dashboard', async (req, res) => {
         ORDER BY unidades_stock DESC
         LIMIT 8
       `),
-      db.execute("SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = '2026-10' LIMIT 1")
+      db.execute(`
+        SELECT 
+          m.id, m.tipo, m.fecha, m.numero_documento, m.observaciones,
+          COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as proveedor_nombre,
+          COUNT(md.id) as total_items,
+          COALESCE(SUM(md.cantidad), 0) as total_unidades
+        FROM movimientos m
+        LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
+        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+        GROUP BY m.id
+        ORDER BY m.fecha DESC, m.id DESC
+        LIMIT 8
+      `)
     ]);
 
-    const tasaBcvActiva = Number(tasaActivaRes.rows[0]?.tasa_bcv || 92.00);
-    const valTotalUsd = Number(stockSummary.rows[0].valor_total_usd || 0);
+    const cfg = tasaCfgRes.rows[0] || {};
+    const tasaBcvActiva = Number(cfg.tasa_bcv_activa_dia || 889.26);
+    const fechaBcvActiva = cfg.fecha_bcv_activa_dia || '2026-11-01';
+    const valTotalUsd = Number(stockSummary.rows[0]?.valor_total_usd || 0);
     const valTotalBs = Number((valTotalUsd * tasaBcvActiva).toFixed(2));
+    const totProductos = Number(counts.rows[0]?.total_productos || 0);
+    const stockOptimo = Number(stockSummary.rows[0]?.stock_optimo_count || 0);
+    const stockAlerta = Number(stockSummary.rows[0]?.stock_alerta_count || 0);
+    const stockAgotado = Number(stockSummary.rows[0]?.stock_agotado_count || 0);
+    const nivelServicio = totProductos > 0 ? Number(((stockOptimo / totProductos) * 100).toFixed(1)) : 100;
+
+    let totComprasUsd = 0, totComprasBs = 0, totVentasUsd = 0, totVentasBs = 0;
+    let totUnidadesCompradas = 0, totUnidadesVendidas = 0;
+    for (const m of monthlyFlowRes.rows) {
+      totComprasUsd += Number(m.compras_usd || 0);
+      totComprasBs += Number(m.compras_bs || 0);
+      totVentasUsd += Number(m.ventas_usd || 0);
+      totVentasBs += Number(m.ventas_bs || 0);
+      totUnidadesCompradas += Number(m.unidades_compradas || 0);
+      totUnidadesVendidas += Number(m.unidades_vendidas || 0);
+    }
+
+    const stockUnidades = Number(stockSummary.rows[0]?.stock_total_unidades || 0);
+    const rotacionInventario = stockUnidades > 0 ? Number((totUnidadesVendidas / stockUnidades).toFixed(2)) : 0;
+    const diasInventario = totUnidadesVendidas > 0 ? Math.round((stockUnidades / (totUnidadesVendidas / 300))) : 365;
 
     res.json({
-      totalProductos: counts.rows[0].total_productos,
-      stockTotalUnidades: stockSummary.rows[0].stock_total_unidades,
+      totalProductos: totProductos,
+      stockTotalUnidades: stockUnidades,
       valorTotalUsd: valTotalUsd,
       valorTotalBs: valTotalBs,
       tasaBcvActiva,
-      productosEnAlerta: lowStockCount.rows[0].alert_count,
-      recientes: recentMovs.rows,
-      topCategorias: categoryStats.rows
+      fechaBcvActiva,
+      productosEnAlerta: lowStockCount.rows[0]?.alert_count || 0,
+      productosAgotados: stockAgotado,
+      nivelServicio,
+      stockOptimo,
+      rotacionInventario,
+      diasInventario,
+      totalesAnio: {
+        totComprasUsd: Math.round(totComprasUsd * 100) / 100,
+        totComprasBs: Math.round(totComprasBs * 100) / 100,
+        totVentasUsd: Math.round(totVentasUsd * 100) / 100,
+        totVentasBs: Math.round(totVentasBs * 100) / 100,
+        totUnidadesCompradas,
+        totUnidadesVendidas
+      },
+      flujoMensual: monthlyFlowRes.rows,
+      topProductosVendidos: topSalesRes.rows,
+      productosCriticos: criticalProductsRes.rows,
+      topCategorias: categoryStats.rows,
+      recientes: recentMovs.rows
     });
   } catch (error) {
     console.error('Error fetching dashboard:', error);

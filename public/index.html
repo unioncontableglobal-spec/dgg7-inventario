@@ -410,49 +410,172 @@
         </div>
       </div>
 
-      <!-- KPI Cards Grid -->
-      <div class="kpi-grid">
-        <div class="kpi-card card-cyan">
-          <div class="kpi-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      <!-- Fila 2: 5 KPI Cards Ejecutivos de Gestión de Inventario -->
+      <div class="kpi-grid-5">
+        <!-- 1. Valorización Total -->
+        <div class="kpi-card-rich border-cyan">
+          <div class="kpi-rich-top">
+            <span class="kpi-rich-label">VALOR TOTAL INVENTARIO</span>
+            <div class="kpi-rich-icon" style="background:#e0f2fe; color:#0369a1;">💰</div>
           </div>
-          <div class="kpi-info">
-            <span class="kpi-label">Total Repuestos</span>
-            <span class="kpi-value" id="kpi-total-productos">--</span>
-            <span class="kpi-detail">En 80 categorías activas</span>
+          <div class="kpi-rich-val font-mono" id="kpi-dash-valor-bs">Bs. --</div>
+          <div class="kpi-rich-sub" id="kpi-dash-valor-usd">$0.00 USD</div>
+        </div>
+
+        <!-- 2. Unidades en Almacén -->
+        <div class="kpi-card-rich border-indigo">
+          <div class="kpi-rich-top">
+            <span class="kpi-rich-label">UNIDADES EN STOCK FÍSICO</span>
+            <div class="kpi-rich-icon" style="background:#ede9fe; color:#6d28d9;">📦</div>
+          </div>
+          <div class="kpi-rich-val font-mono" id="kpi-dash-stock-unidades">--</div>
+          <div class="kpi-rich-sub" id="kpi-dash-cat-count">731 productos en catálogo</div>
+        </div>
+
+        <!-- 3. Rotación Anual (Turnover) -->
+        <div class="kpi-card-rich border-emerald">
+          <div class="kpi-rich-top">
+            <span class="kpi-rich-label">ROTACIÓN ANUAL (TURNOVER)</span>
+            <div class="kpi-rich-icon" style="background:#dcfce7; color:#15803d;">🔄</div>
+          </div>
+          <div class="kpi-rich-val font-mono" id="kpi-dash-rotacion">--</div>
+          <div class="kpi-rich-sub" id="kpi-dash-dias-cobertura">Cobertura media: -- días</div>
+        </div>
+
+        <!-- 4. Nivel de Servicio / Disponibilidad -->
+        <div class="kpi-card-rich border-purple">
+          <div class="kpi-rich-top">
+            <span class="kpi-rich-label">DISPONIBILIDAD DE STOCK</span>
+            <div class="kpi-rich-icon" style="background:#f3e8ff; color:#7e22ce;">🎯</div>
+          </div>
+          <div class="kpi-rich-val font-mono" id="kpi-dash-disponibilidad">--%</div>
+          <div class="kpi-rich-sub" id="kpi-dash-stock-optimo">-- productos con stock óptimo</div>
+        </div>
+
+        <!-- 5. Alertas Críticas & Quiebre -->
+        <div class="kpi-card-rich border-amber">
+          <div class="kpi-rich-top">
+            <span class="kpi-rich-label">ALERTAS DE REPOSICIÓN</span>
+            <div class="kpi-rich-icon" style="background:#fef3c7; color:#b45309;">⚠️</div>
+          </div>
+          <div class="kpi-rich-val font-mono" id="kpi-dash-alertas" style="color:#b45309;">--</div>
+          <div class="kpi-rich-sub" style="justify-content:space-between;">
+            <span id="kpi-dash-alertas-detalle">-- agotados</span>
+            <a href="javascript:void(0)" onclick="filtrarStockAlerta()" style="font-weight:800; color:#0369a1; text-decoration:underline;">Ver &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila 3: Módulo de Detalle Mensual de Ventas, Compras y Movimientos de Inventario -->
+      <div class="panel-card" style="margin-bottom: 24px; border: 1.5px solid #cbd5e1; border-top: 4px solid #0B2447;">
+        <div class="panel-header" style="flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0; color: #0B2447; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+              <span>📊 Detalle Mensual de Ventas, Compras y Movimientos de Inventario (2025 – 2026)</span>
+            </h3>
+            <p style="margin: 3px 0 0 0; font-size: 0.78rem; color: #64748b;">
+              Trazabilidad consolidada mes a mes con Tasa Oficial BCV de Cierre, desglose de unidades y totales bimonetarios.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <div class="btn-group" style="display: flex; background: #e2e8f0; padding: 2px; border-radius: 8px;">
+              <button type="button" class="btn btn-sm" id="btn-dash-mon-bs" onclick="toggleDashboardMoneda('BS')" style="background: #0B2447; color: #ffffff; font-weight: 800; padding: 4px 12px; font-size: 0.76rem; border-radius: 6px;">🇻🇪 En Bolívares (Bs.)</button>
+              <button type="button" class="btn btn-sm" id="btn-dash-mon-usd" onclick="toggleDashboardMoneda('USD')" style="background: transparent; color: #475569; font-weight: 800; padding: 4px 12px; font-size: 0.76rem; border-radius: 6px;">💵 En Divisas ($ USD)</button>
+            </div>
           </div>
         </div>
 
-        <div class="kpi-card card-indigo">
-          <div class="kpi-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        <!-- 3 Tarjetas de Resumen Anual -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div style="border-left: 3px solid #0284c7; padding-left: 12px;">
+            <div style="font-size: 0.72rem; font-weight: 800; color: #0284c7; text-transform: uppercase;">TOTAL COMPRAS REGISTRADAS</div>
+            <div class="font-mono font-bold" id="dash-tot-compras-monto" style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
+            <div style="font-size: 0.75rem; color: #64748b;" id="dash-tot-compras-und">-- unidades</div>
           </div>
-          <div class="kpi-info">
-            <span class="kpi-label">Unidades en Existencia</span>
-            <span class="kpi-value" id="kpi-stock-unidades">--</span>
-            <span class="kpi-detail">Almacenes Multimarcas y Autoperiquitos</span>
+          <div style="border-left: 3px solid #059669; padding-left: 12px;">
+            <div style="font-size: 0.72rem; font-weight: 800; color: #059669; text-transform: uppercase;">TOTAL VENTAS FACTURADAS</div>
+            <div class="font-mono font-bold" id="dash-tot-ventas-monto" style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
+            <div style="font-size: 0.75rem; color: #64748b;" id="dash-tot-ventas-und">-- unidades</div>
           </div>
-        </div>
-
-        <div class="kpi-card card-emerald">
-          <div class="kpi-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-          </div>
-          <div class="kpi-info">
-            <span class="kpi-label">Valorización de Inventario</span>
-            <span class="kpi-value" id="kpi-valor-total">--</span>
-            <span class="kpi-detail">Calculado a costo referencial USD</span>
+          <div style="border-left: 3px solid #4f46e5; padding-left: 12px;">
+            <div style="font-size: 0.72rem; font-weight: 800; color: #4f46e5; text-transform: uppercase;">BALANCE NETO DE EXISTENCIA</div>
+            <div class="font-mono font-bold" id="dash-tot-balance-monto" style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
+            <div style="font-size: 0.75rem; color: #64748b;" id="dash-tot-balance-und">Entradas netas en almacén</div>
           </div>
         </div>
 
-        <div class="kpi-card card-amber">
-          <div class="kpi-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        <!-- Tabla Mensual Interactiva -->
+        <div class="table-responsive" style="border: 1px solid #e2e8f0; border-radius: 8px; max-height: 420px; overflow-y: auto;">
+          <table class="data-table" id="table-dashboard-monthly" style="margin: 0; font-size: 0.81rem;">
+            <thead>
+              <tr style="background: #0B2447; color: #ffffff;">
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px;">PERÍODO FISCAL</th>
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">TASA BCV CIERRE</th>
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">COMPRAS (UND / MONTO)</th>
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">VENTAS (UND / MONTO)</th>
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">BALANCE NETO</th>
+                <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; width: 140px;">PROPORCIÓN V/C</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-dashboard-monthly">
+              <tr><td colspan="6" class="text-center" style="padding: 18px;">Cargando flujo mensual de compras y ventas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Fila 4: 2 Paneles Grandes: Top Más Vendidos y Radar de Productos Críticos -->
+      <div class="dashboard-split" style="margin-bottom: 24px;">
+        <!-- Top 10 Productos Más Vendidos -->
+        <div class="panel-card" style="border-top: 4px solid #059669;">
+          <div class="panel-header" style="justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 0.95rem; color: #0B2447; display: flex; align-items: center; gap: 6px;">
+              <span>🏆 Top 10 Productos Más Vendidos (Mayor Rotación)</span>
+            </h3>
+            <span style="font-size: 0.72rem; color: #059669; font-weight: 800; background: #ecfdf5; padding: 2px 8px; border-radius: 4px;">Demanda Activa</span>
           </div>
-          <div class="kpi-info">
-            <span class="kpi-label">Alertas de Reposición</span>
-            <span class="kpi-value alert-text" id="kpi-alertas-stock">--</span>
-            <span class="kpi-detail">Stock ≤ Mínimo requerido</span>
+          <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+            <table class="data-table" id="table-top-vendidos" style="margin: 0; font-size: 0.8rem;">
+              <thead>
+                <tr>
+                  <th style="width: 36px; text-align: center;">#</th>
+                  <th>CÓDIGO & DESCRIPCIÓN</th>
+                  <th class="text-right">VENDIDAS</th>
+                  <th class="text-right" id="th-top-facturado">FACTURADO (BS.)</th>
+                  <th class="text-right">STOCK DISP.</th>
+                  <th style="width: 45px; text-align: center;"></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-top-vendidos">
+                <tr><td colspan="6" class="text-center">Cargando productos más vendidos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Radar de Productos Críticos en Punto de Reorden -->
+        <div class="panel-card" style="border-top: 4px solid #dc2626;">
+          <div class="panel-header" style="justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 0.95rem; color: #0B2447; display: flex; align-items: center; gap: 6px;">
+              <span>⚠️ Radar de Repuestos en Punto de Reorden (Quiebre)</span>
+            </h3>
+            <button class="btn-text" onclick="filtrarStockAlerta()" style="font-weight: 800; color: #dc2626;">Ver todas las alertas &rarr;</button>
+          </div>
+          <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+            <table class="data-table" id="table-criticos-reorden" style="margin: 0; font-size: 0.8rem;">
+              <thead>
+                <tr>
+                  <th>CÓDIGO & REPUESTO</th>
+                  <th class="text-right">STOCK ACTUAL</th>
+                  <th class="text-right">MÍNIMO</th>
+                  <th class="text-right">DÉFICIT</th>
+                  <th style="text-align: center;">ACCIÓN</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-criticos-reorden">
+                <tr><td colspan="5" class="text-center">Cargando alertas de inventario...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -668,70 +791,91 @@
                 🏛️ Tasa Oficial BCV Aplicable: Bs. 889,58 por USD (Fecha: Hoy)
               </div>
             </div>
-            <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
-              <div class="form-field">
-                <label for="ent-subtipo">Tipificación de Entrada *</label>
-                <select id="ent-subtipo" required>
-                  <option value="COMPRA_NACIONAL">📥 Compra Nacional (Factura Fiscal)</option>
-                  <option value="NOTA_RECEPCION">📦 Nota de Recepción / Entrega</option>
-                  <option value="DEVOLUCION_VENTA">🔄 Devolución en Venta (Nota de Crédito)</option>
-                  <option value="AJUSTE_POSITIVO_SOBRANTE">⚖️ Ajuste Positivo / Sobrante Toma Física</option>
-                </select>
+            <!-- Two Elegant Sub-Cards: Soporte Fiscal vs Recepción Física Almacén -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 8px;">
+              <!-- Tarjeta 1: Factura Fiscal del Proveedor -->
+              <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-top: 4px solid #19A7CE; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+                <div style="font-size: 0.82rem; font-weight: 800; color: #0B2447; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                  <span style="display: flex; align-items: center; gap: 6px;">📄 Soporte Fiscal (Factura del Proveedor)</span>
+                  <span style="font-size: 0.7rem; color: #19A7CE; background: #f0f9ff; padding: 2px 8px; border-radius: 4px; font-weight: 700;">Base Imponible e IVA</span>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                  <div class="form-field" style="grid-column: span 2;">
+                    <label for="ent-proveedor">Proveedor Fiscal *</label>
+                    <select id="ent-proveedor" required>
+                      <option value="">Seleccione Proveedor...</option>
+                    </select>
+                  </div>
+
+                  <div class="form-field">
+                    <label for="ent-factura">N° Factura / Documento *</label>
+                    <input type="text" id="ent-factura" placeholder="Ej: FACT 00002252" required>
+                  </div>
+
+                  <div class="form-field">
+                    <label for="ent-control">N° Control Fiscal SENIAT *</label>
+                    <input type="text" id="ent-control" placeholder="Ej: 00-004589" value="00-" required>
+                  </div>
+
+                  <div class="form-field">
+                    <label for="ent-fecha-factura">Fecha de Factura *</label>
+                    <input type="date" id="ent-fecha-factura" required onchange="onCambioFechaFacturaEntrada()">
+                  </div>
+
+                  <div class="form-field">
+                    <label for="ent-tasa">Tasa BCV Factura (Bs./USD) *</label>
+                    <input type="number" step="any" min="0.0001" id="ent-tasa" required oninput="calculateEntryTotals()" title="Tasa oficial BCV de la Factura Fiscal" style="font-weight: 700; color: #0B2447;">
+                  </div>
+
+                  <div class="form-field" style="grid-column: span 2;">
+                    <label for="ent-fecha-tasa">Fecha Tasa de Factura *</label>
+                    <input type="date" id="ent-fecha-tasa" required oninput="calculateEntryTotals()">
+                  </div>
+                </div>
               </div>
 
-              <div class="form-field">
-                <label for="ent-fecha-factura">Fecha de la Factura Fiscal *</label>
-                <input type="date" id="ent-fecha-factura" required onchange="onCambioFechaFacturaEntrada()">
-              </div>
+              <!-- Tarjeta 2: Recepción Física y Kardex -->
+              <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-top: 4px solid #10B981; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+                <div style="font-size: 0.82rem; font-weight: 800; color: #0B2447; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                  <span style="display: flex; align-items: center; gap: 6px;">📦 Recepción Física y Kardex Almacén</span>
+                  <span style="font-size: 0.7rem; color: #059669; background: #ecfdf5; padding: 2px 8px; border-radius: 4px; font-weight: 700;">Stock Real</span>
+                </div>
 
-              <div class="form-field">
-                <label for="ent-fecha">Fecha de Entrada a Almacén (Kardex) *</label>
-                <input type="date" id="ent-fecha" required onchange="onCambioFechaAlmacenEntrada()">
-              </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                  <div class="form-field">
+                    <label for="ent-fecha">Fecha Entrada a Almacén *</label>
+                    <input type="date" id="ent-fecha" required onchange="onCambioFechaAlmacenEntrada()">
+                  </div>
 
-              <div class="form-field">
-                <label for="ent-factura">N° Factura / Nota / Acta *</label>
-                <input type="text" id="ent-factura" placeholder="Ej: FACT 00002252" required>
-              </div>
+                  <div class="form-field">
+                    <label for="ent-subtipo">Tipificación de Entrada *</label>
+                    <select id="ent-subtipo" required>
+                      <option value="COMPRA_NACIONAL">📥 Compra Nacional (Factura Fiscal)</option>
+                      <option value="NOTA_RECEPCION">📦 Nota Recepción / Entrega</option>
+                      <option value="DEVOLUCION_VENTA">🔄 Devolución en Venta (NC)</option>
+                      <option value="AJUSTE_POSITIVO_SOBRANTE">⚖️ Ajuste Sobrante Toma Física</option>
+                    </select>
+                  </div>
 
-              <div class="form-field">
-                <label for="ent-control">N° Control Fiscal SENIAT *</label>
-                <input type="text" id="ent-control" placeholder="Ej: 00-004589" value="00-" required>
-              </div>
+                  <div class="form-field">
+                    <label for="ent-modo-moneda">Moneda de Carga *</label>
+                    <select id="ent-modo-moneda" onchange="calculateEntryTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
+                      <option value="BS" selected>🇻🇪 Bolívares (Bs.) ➔ USD</option>
+                      <option value="DIVISA">💵 Divisas ($ USD) ➔ Bs.</option>
+                    </select>
+                  </div>
 
-              <div class="form-field">
-                <label for="ent-proveedor">Proveedor Fiscal *</label>
-                <select id="ent-proveedor" required>
-                  <option value="">Seleccione Proveedor...</option>
-                </select>
-              </div>
+                  <div class="form-field">
+                    <label for="ent-usuario">Usuario Responsable *</label>
+                    <input type="text" id="ent-usuario" value="ASISTENTE_ALMACEN_TIENDA" required>
+                  </div>
 
-              <div class="form-field">
-                <label for="ent-modo-moneda">Moneda de Carga (Conversión Bidireccional) *</label>
-                <select id="ent-modo-moneda" onchange="calculateEntryTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
-                  <option value="BS" selected>🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
-                  <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
-                </select>
-              </div>
-
-              <div class="form-field">
-                <label for="ent-tasa">Tasa BCV de la Factura (Bs./USD) *</label>
-                <input type="number" step="any" min="0.0001" id="ent-tasa" required oninput="calculateEntryTotals()" title="Tasa oficial BCV de la Factura Fiscal">
-              </div>
-
-              <div class="form-field">
-                <label for="ent-fecha-tasa">Fecha Tasa de Factura *</label>
-                <input type="date" id="ent-fecha-tasa" required oninput="calculateEntryTotals()">
-              </div>
-
-              <div class="form-field">
-                <label for="ent-usuario">Usuario Responsable *</label>
-                <input type="text" id="ent-usuario" value="ASISTENTE_ALMACEN_TIENDA" required>
-              </div>
-
-              <div class="form-field" style="grid-column: span 2;">
-                <label for="ent-obs">Observaciones / Trazabilidad Almacén</label>
-                <input type="text" id="ent-obs" placeholder="Nota o acta de soporte de recepción de mercancía">
+                  <div class="form-field" style="grid-column: span 2;">
+                    <label for="ent-obs">Observaciones / Trazabilidad Almacén</label>
+                    <input type="text" id="ent-obs" placeholder="Nota o acta de recepción física en almacén">
+                  </div>
+                </div>
               </div>
             </div>
           </div>

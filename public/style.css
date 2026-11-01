@@ -1089,6 +1089,9 @@ select:focus, input:focus {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-field label {
@@ -1098,13 +1101,17 @@ select:focus, input:focus {
 }
 
 .form-field input, .form-field select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 9px 12px;
+  padding: 8px 10px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   outline: none;
 }
 
@@ -3182,3 +3189,115 @@ body {
     border-bottom: none;
   }
 }
+
+/* ========================================================================== */
+/* DASHBOARD EJECUTIVO CORPORATIVO & GESTIÓN DE INVENTARIOS                   */
+/* ========================================================================== */
+
+.kpi-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.kpi-card-rich {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card-rich:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(11, 36, 71, 0.08);
+}
+
+.kpi-card-rich::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.kpi-card-rich.border-cyan::before { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.kpi-card-rich.border-emerald::before { background: linear-gradient(90deg, #059669, #34d399); }
+.kpi-card-rich.border-indigo::before { background: linear-gradient(90deg, #4f46e5, #818cf8); }
+.kpi-card-rich.border-purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+.kpi-card-rich.border-amber::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+.kpi-rich-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.kpi-rich-label {
+  font-size: 0.73rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-rich-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kpi-rich-val {
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: #0B2447;
+  line-height: 1.2;
+}
+
+.kpi-rich-sub {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.rank-1 { background: #FEF3C7; color: #B45309; border: 1px solid #FCD34D; }
+.rank-2 { background: #E2E8F0; color: #475569; border: 1px solid #CBD5E1; }
+.rank-3 { background: #FFEDD5; color: #C2410C; border: 1px solid #FDBA74; }
+.rank-default { background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0; }
+
+.mini-flow-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #E2E8F0;
+  width: 100%;
+  margin-top: 4px;
+}
+.mini-flow-ventas { background: #059669; }
+.mini-flow-compras { background: #0284c7; }
