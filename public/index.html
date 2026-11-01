@@ -554,11 +554,68 @@
 
       <!-- Inventory Table -->
       <div class="panel-card table-panel">
-        <div class="table-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <span id="inv-count-badge">Mostrando 0 productos</span>
-          <div id="inv-bcv-summary-badge" style="font-size:0.82rem; font-weight:700; color:#0B2447; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 12px; border-radius:6px;">
-            💱 Tasa Oficial BCV Aplicable: Bs. -- por USD
+        
+        <!-- BARRA SUPERIOR EJECUTIVA: TASA OFICIAL BCV Y VALOR TOTAL DEL INVENTARIO -->
+        <div class="inv-bcv-banner" id="inv-bcv-banner">
+          
+          <!-- Bloque 1: Alcance del Catálogo & Existencias -->
+          <div class="inv-bcv-col inv-bcv-scope-col">
+            <div class="inv-bcv-badge-pill">
+              <span class="inv-bcv-pulse"></span>
+              <span class="inv-bcv-badge-text">SENIAT • PA 00093 / ART. 177 RISLR</span>
+            </div>
+            <div class="inv-bcv-title-main" id="inv-count-badge">
+              📌 Catálogo al Día: <strong>80 Productos</strong>
+            </div>
+            <div class="inv-bcv-subtitle" id="inv-scope-detail">
+              Existencias auditadas en Bolívares y Divisas
+            </div>
           </div>
+
+          <div class="inv-bcv-divider"></div>
+
+          <!-- Bloque 2: Tasa Oficial BCV Aplicable -->
+          <div class="inv-bcv-col inv-bcv-rate-col">
+            <div class="inv-bcv-tag">
+              <span class="inv-tag-icon">🏛️</span>
+              <span>TASA OFICIAL BCV APLICABLE</span>
+            </div>
+            <div class="inv-bcv-rate-value font-mono" id="inv-bcv-rate-text">
+              Bs. 889,5800 <span class="inv-bcv-unit">/ USD</span>
+            </div>
+            <div class="inv-bcv-rate-date" id="inv-bcv-date-text">
+              Vigencia Oficial: <strong>30/10/2026</strong>
+            </div>
+          </div>
+
+          <div class="inv-bcv-divider"></div>
+
+          <!-- Bloque 3: Valoración Total del Inventario -->
+          <div class="inv-bcv-col inv-bcv-total-col">
+            <div class="inv-bcv-tag inv-tag-emerald">
+              <span class="inv-tag-icon">💼</span>
+              <span>VALOR TOTAL DEL INVENTARIO</span>
+            </div>
+            <div class="inv-bcv-total-bs font-mono" id="inv-bcv-total-bs">
+              Bs. 26.169.477,67
+            </div>
+            <div class="inv-bcv-total-usd-row">
+              <span class="inv-usd-label">Equivalente en Divisas:</span>
+              <span class="inv-usd-pill font-mono" id="inv-bcv-total-usd">$29,417.79 USD</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Sub-barra informativa de control de tabla -->
+        <div class="table-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:#f8fafc; padding:8px 18px; border-bottom:1px solid #e2e8f0; font-size:0.75rem;">
+          <span style="color:#64748b; font-weight:600;">
+            📊 Lista detallada por repuesto: Costo Promedio Ponderado Móvil (CPP) y doble expresión fiscal
+          </span>
+          <div id="inv-bcv-summary-badge" style="display:none;"></div>
+          <span style="color:#0B2447; font-weight:700;">
+            Sincronizado con Turso Cloud • Ejercicio 2026
+          </span>
         </div>
         <div class="table-responsive table-scroll">
           <table class="data-table" id="table-inventario">
@@ -607,8 +664,8 @@
           <div class="form-section">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
               <h3 class="section-title" style="margin:0;">1. Trazabilidad del Documento Fuente y Tasa Oficial BCV (Art. 177 RISLR / PA 00093)</h3>
-              <div id="ent-bcv-legend-banner" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; padding:4px 12px; border-radius:6px; font-size:0.76rem; font-weight:800;">
-                Tasa Oficial BCV Aplicable: Bs. 88,50 por USD (Fecha: Hoy)
+              <div id="ent-bcv-legend-banner" style="background: linear-gradient(135deg, #0B2447 0%, #19376D 100%); color: #FFFFFF; border: 1.5px solid #19A7CE; padding: 6px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 800; box-shadow: 0 2px 8px rgba(11,36,71,0.2);">
+                🏛️ Tasa Oficial BCV Aplicable: Bs. 889,58 por USD (Fecha: Hoy)
               </div>
             </div>
             <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
@@ -703,7 +760,7 @@
                 </tbody>
                 <tfoot>
                   <tr style="background:#f8fafc;">
-                    <td colspan="4" class="text-right font-bold" id="ent-footer-legend" style="color:#0B2447;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD:</td>
+                    <td colspan="4" class="text-right font-bold" id="ent-footer-legend" style="color:#0B2447;">🏛️ Tasa Oficial BCV Aplicable: Bs. 889,58 por USD:</td>
                     <td class="text-right font-mono font-bold" id="total-entrada-base">Bs. 0,00 ($0.00)</td>
                     <td class="text-right font-mono font-bold" id="total-entrada-iva">Bs. 0,00 ($0.00)</td>
                     <td class="text-right font-mono font-bold" id="total-entrada-usd" style="color:#0B2447; font-size:0.92rem;">Bs. 0,00 ($0.00)</td>
@@ -741,8 +798,8 @@
           <div class="form-section">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
               <h3 class="section-title" style="margin:0;">1. Tipificación Fiscal, Método de Valoración y Tasa BCV (Art. 177 RISLR / PA 00093)</h3>
-              <div id="sal-bcv-legend-banner" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; padding:4px 12px; border-radius:6px; font-size:0.76rem; font-weight:800;">
-                Tasa Oficial BCV Aplicable: Bs. 88,50 por USD (Fecha: Hoy)
+              <div id="sal-bcv-legend-banner" style="background: linear-gradient(135deg, #0B2447 0%, #19376D 100%); color: #FFFFFF; border: 1.5px solid #19A7CE; padding: 6px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 800; box-shadow: 0 2px 8px rgba(11,36,71,0.2);">
+                🏛️ Tasa Oficial BCV Aplicable: Bs. 889,58 por USD (Fecha: Hoy)
               </div>
             </div>
             <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
@@ -840,7 +897,7 @@
                 </tbody>
                 <tfoot>
                   <tr style="background:#f8fafc;">
-                    <td colspan="5" class="text-right font-bold" id="sal-footer-legend" style="color:#0B2447;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD:</td>
+                    <td colspan="5" class="text-right font-bold" id="sal-footer-legend" style="color:#0B2447;">🏛️ Tasa Oficial BCV Aplicable: Bs. 889,58 por USD:</td>
                     <td class="text-right font-mono font-bold" id="total-salida-base">Bs. 0,00 ($0.00)</td>
                     <td class="text-right font-mono font-bold" id="total-salida-total" style="color:#be123c; font-size:0.92rem;">Bs. 0,00 ($0.00)</td>
                     <td></td>
@@ -2102,7 +2159,7 @@
           <div style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
               <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
-              <span id="m-comp-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:2px 8px; border-radius:4px; border:1px solid #19A7CE;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD</span>
+              <span id="m-comp-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:4px 10px; border-radius:6px; border:1.5px solid #19A7CE; box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏛️ Tasa Oficial BCV: Bs. 889,58 por USD</span>
             </div>
             <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
               <div class="form-group" style="margin:0;">
@@ -2272,7 +2329,7 @@
           <div style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
               <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
-              <span id="m-vent-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:2px 8px; border-radius:4px; border:1px solid #19A7CE;">Tasa Oficial BCV Aplicable: Bs. 88,50 por USD</span>
+              <span id="m-vent-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:4px 10px; border-radius:6px; border:1.5px solid #19A7CE; box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏛️ Tasa Oficial BCV: Bs. 889,58 por USD</span>
             </div>
             <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
               <div class="form-group" style="margin:0;">

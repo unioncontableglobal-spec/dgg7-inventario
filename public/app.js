@@ -527,18 +527,33 @@ async function loadProducts() {
       }
     });
 
+    const rateFormatted = tasaAplicada.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    const valorBsFormatted = sumValorBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const valorUsdFormatted = sumValorUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     if (countBadge) {
       if (fechaCorte === '2025-12-31') {
-        countBadge.innerHTML = `🏁 <strong>Inventario Inicial al Cierre 31/12/2025:</strong> ${products.length} productos`;
+        countBadge.innerHTML = `🏁 Inventario Inicial (31/12/2025): <strong>${products.length} Productos</strong>`;
       } else if (fechaCorte) {
-        countBadge.innerHTML = `📅 <strong>Inventario al Corte (${fechaCorte}):</strong> ${products.length} productos`;
+        countBadge.innerHTML = `📅 Inventario al Corte (${fechaCorte}): <strong>${products.length} Productos</strong>`;
       } else {
-        countBadge.innerHTML = `📌 <strong>Inventario en Vivo:</strong> ${products.length} productos`;
+        countBadge.innerHTML = `📌 Catálogo al Día: <strong>${products.length} Productos</strong>`;
       }
     }
 
+    // Actualizar elementos dedicados del Banner Ejecutivo Bimonetario
+    const rateEl = document.getElementById('inv-bcv-rate-text');
+    const dateEl = document.getElementById('inv-bcv-date-text');
+    const totBsEl = document.getElementById('inv-bcv-total-bs');
+    const totUsdEl = document.getElementById('inv-bcv-total-usd');
+
+    if (rateEl) rateEl.innerHTML = `Bs. ${rateFormatted} <span class="inv-bcv-unit">/ USD</span>`;
+    if (dateEl) dateEl.innerHTML = `Vigencia Oficial: <strong>${fechaTasaAplicada || 'Al día'}</strong>`;
+    if (totBsEl) totBsEl.textContent = `Bs. ${valorBsFormatted}`;
+    if (totUsdEl) totUsdEl.textContent = `$${valorUsdFormatted} USD`;
+
     if (bcvBadge) {
-      bcvBadge.innerHTML = `💱 <strong>Tasa Oficial BCV Aplicable: Bs. ${tasaAplicada.toLocaleString('es-VE', { minimumFractionDigits: 2 })} por USD</strong> (${fechaTasaAplicada}) &nbsp;|&nbsp; Valor Total Inventario: <strong style="color:#059669;">Bs. ${sumValorBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</strong> <span style="color:#0369a1;">($${sumValorUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>`;
+      bcvBadge.innerHTML = `💱 <strong>Tasa Oficial BCV: Bs. ${rateFormatted} por USD</strong> (${fechaTasaAplicada}) &nbsp;|&nbsp; Valor Total: <strong style="color:#059669;">Bs. ${valorBsFormatted}</strong> <span style="color:#0369a1;">($${valorUsdFormatted} USD)</span>`;
     }
 
     const tbody = document.getElementById('tbody-inventario');
@@ -641,7 +656,7 @@ function onEntryProductChange(rowId) {
   const selectedOpt = select.options[select.selectedIndex];
   const costInput = tr.querySelector('.ent-cost-input');
   const costBsInput = tr.querySelector('.ent-cost-bs-input');
-  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   
   if (selectedOpt && selectedOpt.dataset.cost) {
     const cUsd = parseFloat(selectedOpt.dataset.cost) || 0;
@@ -654,7 +669,7 @@ function onEntryProductChange(rowId) {
 function onEntryCostInput(rowId, editedCurrency) {
   const tr = document.getElementById(rowId);
   if (!tr) return;
-  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const costUsdInput = tr.querySelector('.ent-cost-input');
   const costBsInput = tr.querySelector('.ent-cost-bs-input');
 
@@ -669,12 +684,12 @@ function onEntryCostInput(rowId, editedCurrency) {
 }
 
 function calculateEntryTotals(skipInputSync = false) {
-  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const fechaTasa = document.getElementById('ent-fecha-tasa')?.value || document.getElementById('ent-fecha')?.value || '';
   const modoMoneda = document.getElementById('ent-modo-moneda')?.value || 'DIVISA';
   const fmtBsLocal = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const legendText = `Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
+  const legendText = `🏛️ Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
   const banner = document.getElementById('ent-bcv-legend-banner');
   if (banner) banner.textContent = legendText;
   const footLegend = document.getElementById('ent-footer-legend');
@@ -799,7 +814,7 @@ function onExitProductChange(rowId) {
 function onExitPriceInput(rowId, editedCurrency) {
   const tr = document.getElementById(rowId);
   if (!tr) return;
-  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const priceUsdInput = tr.querySelector('.sal-price-usd-input');
   const priceBsInput = tr.querySelector('.sal-price-bs-input');
 
@@ -840,12 +855,12 @@ function validateExitRow(rowId) {
 }
 
 function calculateExitTotals(skipInputSync = false) {
-  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const fechaTasa = document.getElementById('sal-fecha-tasa')?.value || document.getElementById('sal-fecha')?.value || '';
   const modoMoneda = document.getElementById('sal-modo-moneda')?.value || 'DIVISA';
   const fmtBsLocal = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const legendText = `Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
+  const legendText = `🏛️ Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
   const banner = document.getElementById('sal-bcv-legend-banner');
   if (banner) banner.textContent = legendText;
   const footLegend = document.getElementById('sal-footer-legend');
@@ -910,7 +925,7 @@ async function handleMovementSubmit(event, tipo) {
   const nroControl = document.getElementById(isEntrada ? 'ent-control' : 'sal-control')?.value.trim() || '';
   const usuarioResp = document.getElementById(isEntrada ? 'ent-usuario' : 'sal-usuario')?.value.trim() || 'ASISTENTE_TIENDA';
   const subtipo = document.getElementById(isEntrada ? 'ent-subtipo' : 'sal-subtipo')?.value || (isEntrada ? 'COMPRA_NACIONAL' : 'VENTA');
-  const tasaBcv = parseFloat(document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.value || '88.50') || 88.50;
+  const tasaBcv = parseFloat(document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fecha);
   const fechaTasaBcv = document.getElementById(isEntrada ? 'ent-fecha-tasa' : 'sal-fecha-tasa')?.value || fecha;
   const metodoVal = isEntrada ? (state.metodoValoracionKardex || 'CPP') : (document.getElementById('sal-metodo-val')?.value || 'CPP');
   const obs = document.getElementById(isEntrada ? 'ent-obs' : 'sal-obs').value.trim();

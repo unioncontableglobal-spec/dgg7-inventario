@@ -3001,3 +3001,184 @@ body {
     justify-content: center;
   }
 }
+
+/* ==========================================================================
+   BANNER EJECUTIVO: TASA BCV Y VALORACIÓN BIMONETARIA DE INVENTARIO
+   (DISEÑO CORPORATIVO UNIÓN CONTABLE GLOBAL)
+   ========================================================================== */
+.inv-bcv-banner {
+  display: grid;
+  grid-template-columns: 1fr auto 1.15fr auto 1.35fr;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #0B2447 0%, #19376D 100%);
+  color: #FFFFFF;
+  padding: 18px 24px;
+  border-radius: 12px 12px 0 0;
+  margin: 0;
+  border-bottom: 2.5px solid #19A7CE;
+  box-shadow: 0 4px 18px rgba(11, 36, 71, 0.22);
+}
+
+.inv-bcv-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.inv-bcv-divider {
+  width: 1px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.inv-bcv-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(25, 167, 206, 0.2);
+  border: 1px solid rgba(25, 167, 206, 0.45);
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.inv-bcv-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #19A7CE;
+  box-shadow: 0 0 8px #19A7CE;
+  animation: pulseCyan 2s infinite;
+}
+
+@keyframes pulseCyan {
+  0% { box-shadow: 0 0 0 0 rgba(25, 167, 206, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(25, 167, 206, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(25, 167, 206, 0); }
+}
+
+.inv-bcv-badge-text {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #7dd3fc;
+  letter-spacing: 0.06em;
+}
+
+.inv-bcv-title-main {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  line-height: 1.25;
+}
+
+.inv-bcv-title-main strong {
+  color: #7dd3fc;
+}
+
+.inv-bcv-subtitle {
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+
+.inv-bcv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #93c5fd;
+  text-transform: uppercase;
+}
+
+.inv-bcv-tag.inv-tag-emerald {
+  color: #6ee7b7;
+}
+
+.inv-tag-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.inv-bcv-rate-value {
+  font-size: 1.32rem;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.inv-bcv-unit {
+  font-size: 0.75rem;
+  color: #93c5fd;
+  font-weight: 700;
+}
+
+.inv-bcv-rate-date {
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+
+.inv-bcv-rate-date strong {
+  color: #FFFFFF;
+}
+
+.inv-bcv-total-bs {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: #34d399; /* Verde esmeralda luminoso sobre azul marino */
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+}
+
+.inv-bcv-total-usd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.inv-usd-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: rgba(25, 167, 206, 0.22);
+  border: 1px solid rgba(25, 167, 206, 0.5);
+  border-radius: 6px;
+  font-weight: 800;
+  color: #7dd3fc;
+  font-size: 0.78rem;
+}
+
+/* Fallback badge en caso de renderizado inline */
+#inv-bcv-summary-badge {
+  background: linear-gradient(135deg, #0B2447 0%, #19376D 100%) !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #19A7CE !important;
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+  box-shadow: 0 4px 10px rgba(11, 36, 71, 0.2) !important;
+}
+
+/* Responsividad para Tablets y Móviles (iPhone Pro / Plus / iPad) */
+@media (max-width: 992px) {
+  .inv-bcv-banner {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+  .inv-bcv-divider {
+    display: none;
+  }
+  .inv-bcv-col {
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .inv-bcv-col:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
