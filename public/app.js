@@ -449,24 +449,6 @@ let dashboardModoMoneda = 'BS';
 
 function toggleDashboardMoneda(modo) {
   dashboardModoMoneda = modo;
-  const btnBs = document.getElementById('btn-dash-mon-bs');
-  const btnUsd = document.getElementById('btn-dash-mon-usd');
-  if (btnBs && btnUsd) {
-    if (modo === 'BS') {
-      btnBs.style.background = '#0B2447';
-      btnBs.style.color = '#ffffff';
-      btnUsd.style.background = 'transparent';
-      btnUsd.style.color = '#475569';
-    } else {
-      btnUsd.style.background = '#0B2447';
-      btnUsd.style.color = '#ffffff';
-      btnBs.style.background = 'transparent';
-      btnBs.style.color = '#475569';
-    }
-  }
-  const thTop = document.getElementById('th-top-facturado');
-  if (thTop) thTop.textContent = modo === 'BS' ? 'FACTURADO (BS.)' : 'FACTURADO ($ USD)';
-
   if (state.dashboard) {
     renderDashboardMonthly(state.dashboard);
     renderDashboardTopProducts(state.dashboard);
@@ -488,7 +470,6 @@ function renderDashboardMonthly(data) {
 
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const isBs = dashboardModoMoneda === 'BS';
 
   const meses = data.flujoMensual || [];
   if (meses.length === 0) {
@@ -497,11 +478,16 @@ function renderDashboardMonthly(data) {
   }
 
   tbody.innerHTML = meses.map(m => {
-    const comprasMonto = isBs ? `Bs. ${fmtBs(m.compras_bs)}` : `$${fmtUsd(m.compras_usd)}`;
-    const ventasMonto = isBs ? `Bs. ${fmtBs(m.ventas_bs)}` : `$${fmtUsd(m.ventas_usd)}`;
+    const comprasBs = Number(m.compras_bs || 0);
+    const comprasUsd = Number(m.compras_usd || 0);
+    const ventasBs = Number(m.ventas_bs || 0);
+    const ventasUsd = Number(m.ventas_usd || 0);
+    const balanceBs = comprasBs - ventasBs;
+    const balanceUsd = comprasUsd - ventasUsd;
     const balanceUnd = Number(m.unidades_compradas || 0) - Number(m.unidades_vendidas || 0);
-    const balanceColor = balanceUnd >= 0 ? '#059669' : '#dc2626';
-    const balanceIcon = balanceUnd >= 0 ? '▲ +' : '▼ ';
+
+    const balanceColor = balanceBs >= 0 ? '#059669' : '#dc2626';
+    const balanceIcon = balanceBs >= 0 ? '▲ +' : '▼ ';
     const labelMes = NOMBRES_MESES_CIERRE[m.periodo] || m.periodo;
 
     const totVolume = Number(m.unidades_compradas || 0) + Number(m.unidades_vendidas || 0);
@@ -510,25 +496,26 @@ function renderDashboardMonthly(data) {
 
     return `
       <tr>
-        <td style="padding: 9px 12px;">
-          <div class="font-bold" style="color: #0B2447;">${m.periodo}</div>
+        <td style="padding: 10px 12px;">
+          <div class="font-bold" style="color: #0B2447; font-size: 0.85rem;">${m.periodo}</div>
           <div style="font-size: 0.72rem; color: #64748b;">${labelMes}</div>
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 9px 12px; color: #0284c7;">
+        <td class="text-right font-mono font-bold" style="padding: 10px 12px; color: #0284c7;">
           Bs. ${Number(m.tasa_bcv || 0).toFixed(4)}
         </td>
-        <td class="text-right font-mono" style="padding: 9px 12px;">
-          <div class="font-bold" style="color: #0369a1;">${comprasMonto}</div>
-          <div style="font-size: 0.72rem; color: #64748b;">${m.unidades_compradas} und (${m.cant_compras} docs)</div>
+        <td class="text-right font-mono" style="padding: 10px 12px;">
+          <div class="font-bold" style="color: #0369a1; font-size: 0.88rem;">Bs. ${fmtBs(comprasBs)}</div>
+          <div style="font-size: 0.72rem; color: #166534; font-family: monospace;">$${fmtUsd(comprasUsd)} USD • ${m.unidades_compradas} und</div>
         </td>
-        <td class="text-right font-mono" style="padding: 9px 12px;">
-          <div class="font-bold" style="color: #059669;">${ventasMonto}</div>
-          <div style="font-size: 0.72rem; color: #64748b;">${m.unidades_vendidas} und (${m.cant_ventas} ZOA)</div>
+        <td class="text-right font-mono" style="padding: 10px 12px;">
+          <div class="font-bold" style="color: #059669; font-size: 0.88rem;">Bs. ${fmtBs(ventasBs)}</div>
+          <div style="font-size: 0.72rem; color: #166534; font-family: monospace;">$${fmtUsd(ventasUsd)} USD • ${m.unidades_vendidas} und</div>
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 9px 12px; color: ${balanceColor};">
-          ${balanceIcon}${Math.abs(balanceUnd)} und
+        <td class="text-right font-mono font-bold" style="padding: 10px 12px;">
+          <div style="color: ${balanceColor}; font-size: 0.88rem;">${balanceIcon}Bs. ${fmtBs(Math.abs(balanceBs))}</div>
+          <div style="font-size: 0.72rem; color: #64748b; font-family: monospace;">${balanceIcon}$${fmtUsd(Math.abs(balanceUsd))} USD • ${balanceUnd >= 0 ? '+' : ''}${balanceUnd} und</div>
         </td>
-        <td style="padding: 9px 12px;">
+        <td style="padding: 10px 12px;">
           <div style="display:flex; justify-content:space-between; font-size: 0.68rem; color:#64748b; margin-bottom: 2px;">
             <span>V: ${pctVentas}%</span>
             <span>C: ${pctCompras}%</span>
@@ -549,7 +536,6 @@ function renderDashboardTopProducts(data) {
 
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const isBs = dashboardModoMoneda === 'BS';
 
   const prods = data.topProductosVendidos || [];
   if (prods.length === 0) {
@@ -559,7 +545,6 @@ function renderDashboardTopProducts(data) {
 
   tbody.innerHTML = prods.map((p, idx) => {
     const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-default'));
-    const facturado = isBs ? `Bs. ${fmtBs(p.total_ventas_bs)}` : `$${fmtUsd(p.total_ventas_usd)}`;
     const stockColor = p.stock_actual > 0 ? '#059669' : '#dc2626';
 
     return `
@@ -572,10 +557,11 @@ function renderDashboardTopProducts(data) {
           <div style="font-size: 0.72rem; color: #475569; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.descripcion}">${p.descripcion}</div>
         </td>
         <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #059669;">
-          ${p.unidades_vendidas}
+          ${p.unidades_vendidas} und
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #0B2447;">
-          ${facturado}
+        <td class="text-right font-mono" style="padding: 8px 10px;">
+          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">Bs. ${fmtBs(p.total_ventas_bs)}</div>
+          <div style="font-size: 0.7rem; color: #166534; font-family: monospace;">$${fmtUsd(p.total_ventas_usd)} USD</div>
         </td>
         <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${stockColor};">
           ${p.stock_actual}
@@ -670,24 +656,26 @@ async function loadDashboard() {
     const tot = data.totalesAnio || {};
     const elTotCompM = document.getElementById('dash-tot-compras-monto');
     const elTotCompU = document.getElementById('dash-tot-compras-und');
-    if (elTotCompM) elTotCompM.textContent = `Bs. ${fmtBs(tot.totComprasBs)} ($${fmtUsd(tot.totComprasUsd)})`;
-    if (elTotCompU) elTotCompU.textContent = `${(tot.totUnidadesCompradas || 0).toLocaleString()} unidades adquiridas`;
+    if (elTotCompM) elTotCompM.textContent = `Bs. ${fmtBs(tot.totComprasBs)}`;
+    if (elTotCompU) elTotCompU.textContent = `Ref: $${fmtUsd(tot.totComprasUsd)} USD • ${(tot.totUnidadesCompradas || 0).toLocaleString()} unds adquiridas`;
 
     const elTotVentM = document.getElementById('dash-tot-ventas-monto');
     const elTotVentU = document.getElementById('dash-tot-ventas-und');
-    if (elTotVentM) elTotVentM.textContent = `Bs. ${fmtBs(tot.totVentasBs)} ($${fmtUsd(tot.totVentasUsd)})`;
-    if (elTotVentU) elTotVentU.textContent = `${(tot.totUnidadesVendidas || 0).toLocaleString()} unidades despachadas`;
+    if (elTotVentM) elTotVentM.textContent = `Bs. ${fmtBs(tot.totVentasBs)}`;
+    if (elTotVentU) elTotVentU.textContent = `Ref: $${fmtUsd(tot.totVentasUsd)} USD • ${(tot.totUnidadesVendidas || 0).toLocaleString()} unds facturadas`;
 
     const elTotBalM = document.getElementById('dash-tot-balance-monto');
     const elTotBalU = document.getElementById('dash-tot-balance-und');
-    const balNeto = (tot.totUnidadesCompradas || 0) - (tot.totUnidadesVendidas || 0);
-    if (elTotBalM) elTotBalM.textContent = `${balNeto >= 0 ? '+' : ''}${balNeto.toLocaleString()} unidades`;
-    if (elTotBalU) elTotBalU.textContent = `Saldo físico neto en almacén`;
+    const balNetoBs = Number(tot.totComprasBs || 0) - Number(tot.totVentasBs || 0);
+    const balNetoUsd = Number(tot.totComprasUsd || 0) - Number(tot.totVentasUsd || 0);
+    const balNetoUnd = (tot.totUnidadesCompradas || 0) - (tot.totUnidadesVendidas || 0);
+    if (elTotBalM) elTotBalM.textContent = `${balNetoBs >= 0 ? '+' : ''}Bs. ${fmtBs(balNetoBs)}`;
+    if (elTotBalU) elTotBalU.textContent = `Ref: ${balNetoUsd >= 0 ? '+' : ''}$${fmtUsd(balNetoUsd)} USD • ${balNetoUnd >= 0 ? '+' : ''}${balNetoUnd.toLocaleString()} unds netas`;
 
     // Render Subsections
     renderDashboardMonthly(data);
     renderDashboardTopProducts(data);
-    renderDashboardCritical(data);
+    if (typeof renderDashboardCritical === 'function') renderDashboardCritical(data);
 
     // Render Category Distribution
     const categoryBars = document.getElementById('category-bars');
