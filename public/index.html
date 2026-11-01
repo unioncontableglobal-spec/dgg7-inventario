@@ -2230,183 +2230,299 @@
 
   <!-- Modal: Registrar Factura en Libro de Compras -->
   <div class="modal-overlay" id="modal-nueva-compra" style="display: none;">
-    <div class="modal-box" style="max-width: 680px;">
-      <div class="modal-header">
-        <h3 style="color: var(--ucg-navy); font-weight: 800;">📥 Registrar Factura en Libro de Compras</h3>
-        <button class="modal-close" onclick="closeModal('modal-nueva-compra')">&times;</button>
+    <div class="modal-box" style="max-width: 980px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(11, 36, 71, 0.35); border: 1px solid #cbd5e1;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0B2447 0%, #19376D 100%); color: #fff; padding: 16px 24px; border-bottom: 2px solid #19A7CE; flex-shrink: 0;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.4rem;">📥</span>
+            <h3 style="color: #ffffff; font-weight: 800; font-size: 1.2rem; margin: 0; letter-spacing: -0.02em;">Registrar Factura en Libro de Compras Fiscal</h3>
+            <span style="background: rgba(25, 167, 206, 0.25); color: #7dd3fc; border: 1px solid #19A7CE; font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 700;">SENIAT Art. 75-76 RLIVA • PA SNAT/2026/00093</span>
+          </div>
+          <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px;">
+            Trazabilidad exacta entre Fecha de Factura Fiscal vs Fecha de Recepción en Almacén / Registro en Libro y Doble Expresión Monetaria.
+          </div>
+        </div>
+        <button class="modal-close" style="color: #ffffff; opacity: 0.85; font-size: 1.6rem;" onclick="closeModal('modal-nueva-compra')">&times;</button>
       </div>
-      <div class="modal-body">
+
+      <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; max-height: calc(92vh - 85px);">
         <form id="form-nueva-compra" onsubmit="guardarNuevaCompra(event)">
           <input type="hidden" id="m-comp-movimiento-id" value="">
 
-          <!-- Buscador Inteligente de Entradas de Tienda (Cruce con Asistente) -->
-          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-              <span style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy);">🔗 1. Selecciona el Tipo de Compra a Registrar:</span>
-              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('MERCANCIA')" id="btn-modo-mercancia" style="padding: 4px 10px; font-size: 11px; background: var(--ucg-navy); color: #fff;">📦 Mercancía / Repuestos (Inventario)</button>
-                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('GASTO')" id="btn-modo-gasto" style="padding: 4px 10px; font-size: 11px;">⚖️ Servicio / Gasto (Ej. Unión Global - ISLR)</button>
-                <button type="button" class="btn btn-sm btn-secondary" onclick="setModoModalCompra('ACTIVO')" id="btn-modo-activo" style="padding: 4px 10px; font-size: 11px;">🏢 Compra de Activo Fijo / Equipos</button>
+          <!-- Tipología de Operación -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <span>⚡ 1. Selecciona el Tipo de Compra a Registrar:</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+              <button type="button" class="btn-tipo-compra active" onclick="setModoModalCompra('MERCANCIA')" id="btn-modo-mercancia" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 2px solid #0B2447; background: #0B2447; color: #fff; border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <span style="font-size: 1.5rem;">📦</span>
+                <div>
+                  <div style="font-weight: 800; font-size: 0.85rem;">Mercancía / Repuestos</div>
+                  <div style="font-size: 0.72rem; opacity: 0.85;">Kardex físico + Libro Compras (Almacén)</div>
+                </div>
+              </button>
+              <button type="button" class="btn-tipo-compra" onclick="setModoModalCompra('GASTO')" id="btn-modo-gasto" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1.5px solid #cbd5e1; background: #f8fafc; color: #1e293b; border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <span style="font-size: 1.5rem;">⚖️</span>
+                <div>
+                  <div style="font-weight: 800; font-size: 0.85rem;">Servicio / Gasto Operativo</div>
+                  <div style="font-size: 0.72rem; color: #64748b;">Unión Global, fletes, alquiler + ISLR</div>
+                </div>
+              </button>
+              <button type="button" class="btn-tipo-compra" onclick="setModoModalCompra('ACTIVO')" id="btn-modo-activo" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1.5px solid #cbd5e1; background: #f8fafc; color: #1e293b; border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <span style="font-size: 1.5rem;">🏢</span>
+                <div>
+                  <div style="font-weight: 800; font-size: 0.85rem;">Activo Fijo / Equipos</div>
+                  <div style="font-size: 0.72rem; color: #64748b;">Mobiliario, computación y activos</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bloque: Entradas de Almacén Pendientes de Incorporar al Libro de Compras -->
+          <div id="box-buscador-entrada-tienda" style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem;">📋</span>
+                <strong style="font-size: 0.85rem; color: #166534;">Entradas de Almacén Pendientes por Incorporar al Libro de Compras:</strong>
+                <span id="badge-contador-pendientes" style="background: #166534; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 12px;">Cargando...</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" class="btn btn-sm" onclick="toggleVistaEntradasPendientes()" id="btn-toggle-pendientes" style="background: #ffffff; border: 1px solid #86efac; color: #166534; font-size: 0.76rem; font-weight: 700; padding: 3px 10px;">
+                  👁️ Ocultar / Mostrar Lista
+                </button>
               </div>
             </div>
-            <div id="box-buscador-entrada-tienda">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" id="m-comp-buscar-tienda" class="form-control" placeholder="Escribe N° de Factura o Proveedor cargado por el asistente (ej: 2225, 2242, Disbattery, Angelinev)..." oninput="buscarEntradasTiendaParaCompra(this.value)" style="font-size: 0.82rem;">
-                <button type="button" class="btn btn-sm btn-emerald" onclick="buscarEntradasTiendaParaCompra(document.getElementById('m-comp-buscar-tienda').value)" style="white-space: nowrap;">🔍 Buscar Entrada</button>
+
+            <!-- Filtros de la lista rápida -->
+            <div id="wrapper-lista-entradas-pendientes">
+              <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <div style="position: relative; flex: 2; min-width: 220px;">
+                  <input type="text" id="m-comp-buscar-tienda" class="form-control" placeholder="🔍 Filtrar por N° de Factura, RIF, Proveedor o Repuesto (ej: 2225, Partzeus, Century)..." oninput="filtrarEntradasPendientesTienda(this.value)" style="font-size: 0.82rem; padding-left: 10px;">
+                </div>
+                <select id="m-comp-filtro-periodo" class="form-control" style="flex: 1; min-width: 170px; font-size: 0.82rem; font-weight: 700;" onchange="cargarEntradasPendientesTienda()">
+                  <option value="TODOS" selected>📅 Todos los Meses (Pendientes)</option>
+                  <option value="2026-10">10 - Octubre 2026</option>
+                  <option value="2026-09">09 - Septiembre 2026</option>
+                  <option value="2026-08">08 - Agosto 2026</option>
+                  <option value="2026-07">07 - Julio 2026</option>
+                  <option value="2026-06">06 - Junio 2026</option>
+                  <option value="2026-05">05 - Mayo 2026</option>
+                  <option value="2026-04">04 - Abril 2026</option>
+                  <option value="2026-03">03 - Marzo 2026</option>
+                  <option value="2026-02">02 - Febrero 2026</option>
+                  <option value="2026-01">01 - Enero 2026</option>
+                </select>
               </div>
-              <div id="lista-resultados-entrada-tienda" style="max-height: 150px; overflow-y: auto; margin-top: 8px; display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;"></div>
-              <div id="badge-entrada-vinculada" style="display: none; margin-top: 8px; padding: 6px 10px; background: #dcfce7; color: #166534; border-radius: 6px; font-size: 0.78rem; font-weight: 700;"></div>
+
+              <!-- Tabla de entradas pendientes -->
+              <div style="max-height: 220px; overflow-y: auto; background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);">
+                <table class="data-table" style="font-size: 0.78rem; margin: 0; width: 100%;">
+                  <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 2; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">
+                    <tr>
+                      <th style="padding: 6px 10px;">RECEPCIÓN ALMACÉN</th>
+                      <th style="padding: 6px 10px;">FACTURA / DOC</th>
+                      <th style="padding: 6px 10px;">PROVEEDOR & RIF</th>
+                      <th style="padding: 6px 10px; text-align: center;">REPUESTOS / UNDS</th>
+                      <th style="padding: 6px 10px; text-align: right;">BASE REF. ($ / BS.)</th>
+                      <th style="padding: 6px 10px; text-align: center;">ACCIÓN</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-entradas-pendientes-tienda">
+                    <tr><td colspan="6" class="text-center" style="padding: 14px; color: #64748b;">Cargando entradas de almacén...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Banner de Vinculación Activa -->
+            <div id="badge-entrada-vinculada" style="display: none; margin-top: 10px; padding: 10px 14px; background: #ecfdf5; border: 1.5px solid #10b981; border-radius: 8px; color: #065f46; font-size: 0.8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div id="texto-entrada-vinculada"></div>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="desvincularEntradaTienda()" style="font-size: 0.74rem; padding: 3px 8px;">
+                ❌ Desvincular / Modo Manual
+              </button>
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>Período Fiscal:</label>
-              <select id="m-comp-periodo" class="form-control" required>
-                <option value="2026-10" selected>10 - Octubre 2026</option>
-                <option value="2026-11">11 - Noviembre 2026</option>
-                <option value="2026-12">12 - Diciembre 2026</option>
-                <option value="2026-09">09 - Septiembre 2026</option>
-                <option value="2026-08">08 - Agosto 2026</option>
-                <option value="2026-07">07 - Julio 2026</option>
-                <option value="2026-06">06 - Junio 2026</option>
-                <option value="2026-05">05 - Mayo 2026</option>
-                <option value="2026-04">04 - Abril 2026</option>
-                <option value="2026-03">03 - Marzo 2026</option>
-                <option value="2026-02">02 - Febrero 2026</option>
-                <option value="2026-01">01 - Enero 2026</option>
-              </select>
+          <!-- Card 1: Trazabilidad del Documento Fuente y Proveedor -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <span>📄 2. Trazabilidad del Documento Fuente y Proveedor Fiscal:</span>
             </div>
-            <div class="form-group">
-              <label>Fecha de Emisión Factura:</label>
-              <input type="date" id="m-comp-fecha" class="form-control" required>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Período Fiscal Impositivo *</label>
+                <select id="m-comp-periodo" class="form-control" required onchange="onCambioPeriodoModalCompra()">
+                  <option value="2026-10" selected>10 - Octubre 2026</option>
+                  <option value="2026-11">11 - Noviembre 2026</option>
+                  <option value="2026-12">12 - Diciembre 2026</option>
+                  <option value="2026-09">09 - Septiembre 2026</option>
+                  <option value="2026-08">08 - Agosto 2026</option>
+                  <option value="2026-07">07 - Julio 2026</option>
+                  <option value="2026-06">06 - Junio 2026</option>
+                  <option value="2026-05">05 - Mayo 2026</option>
+                  <option value="2026-04">04 - Abril 2026</option>
+                  <option value="2026-03">03 - Marzo 2026</option>
+                  <option value="2026-02">02 - Febrero 2026</option>
+                  <option value="2026-01">01 - Enero 2026</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Fecha de la Factura Fiscal (Emisión) *</label>
+                <input type="date" id="m-comp-fecha" class="form-control" required onchange="onCambioFechaFacturaCompra()">
+                <span style="font-size: 0.7rem; color: #64748b;">Fecha impresa en la factura del proveedor</span>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Fecha de Recepción / Registro en Libro *</label>
+                <input type="date" id="m-comp-fecha-recepcion" class="form-control" required onchange="onCambioFechaRecepcionCompra()">
+                <span style="font-size: 0.7rem; color: #64748b;">Fecha física de llegada al almacén / registro</span>
+              </div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: 1.2fr 1.2fr 1.3fr 2fr; gap: 12px;">
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">N° Factura Fiscal *</label>
+                <input type="text" id="m-comp-factura" class="form-control font-mono font-bold" placeholder="ej: 0004128" required>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">N° Control Fiscal SENIAT *</label>
+                <input type="text" id="m-comp-control" class="form-control font-mono" placeholder="ej: 00-004512">
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">RIF Proveedor *</label>
+                <input type="text" id="m-comp-rif" class="form-control font-mono font-bold" placeholder="J-12345678-9" required onblur="autoCompletarProveedorPorRif(this.value)">
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Razón Social / Proveedor *</label>
+                <input type="text" id="m-comp-razon" class="form-control" placeholder="Nombre fiscal de la empresa o proveedor" required>
+              </div>
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>RIF Proveedor:</label>
-              <input type="text" id="m-comp-rif" class="form-control" placeholder="J-12345678-9" required onblur="autoCompletarProveedorPorRif(this.value)">
+          <!-- Card 2: Tasa Oficial BCV y Doble Expresión Monetaria -->
+          <div style="background: #f0f9ff; border: 1.5px solid #19A7CE; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 1.1rem;">💱</span>
+                <span style="font-size: 0.82rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em;">3. Tasa Oficial BCV y Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
+              </div>
+              <span id="m-comp-bcv-legend" style="font-size: 0.78rem; font-weight: 800; color: #0B2447; background: #ffffff; padding: 4px 12px; border-radius: 6px; border: 1.5px solid #19A7CE; box-shadow: 0 1px 4px rgba(0,0,0,0.06);">🏛️ Tasa Oficial BCV: Bs. 889,58 por USD</span>
             </div>
-            <div class="form-group">
-              <label>Razón Social / Nombre Proveedor:</label>
-              <input type="text" id="m-comp-razon" class="form-control" placeholder="Nombre de la empresa o proveedor" required>
-            </div>
-          </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>N° Factura Fiscal:</label>
-              <input type="text" id="m-comp-factura" class="form-control" placeholder="ej: 0004128" required>
-            </div>
-            <div class="form-group">
-              <label>N° Control Fiscal:</label>
-              <input type="text" id="m-comp-control" class="form-control" placeholder="ej: 00-004512">
-            </div>
-          </div>
-
-          <div style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA SNAT/2026/00093):</span>
-              <span id="m-comp-bcv-legend" style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:4px 10px; border-radius:6px; border:1.5px solid #19A7CE; box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏛️ Tasa Oficial BCV: Bs. 889,58 por USD</span>
-            </div>
-            <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
-              <div class="form-group" style="margin:0;">
-                <label>Modo de Carga del Monto:</label>
-                <select id="m-comp-modo-moneda" class="form-control" style="font-weight:700; color:#0B2447;" onchange="onCambioModoMonedaCompra()">
-                  <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
+            <div class="form-grid" style="grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Modo de Carga del Monto:</label>
+                <select id="m-comp-modo-moneda" class="form-control" style="font-weight: 700; color: #0B2447;" onchange="onCambioModoMonedaCompra()">
+                  <option value="BS" selected>🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
                   <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
                 </select>
               </div>
-              <div class="form-group" style="margin:0;">
-                <label>Tasa Oficial BCV (Bs./USD):</label>
-                <input type="number" step="0.01" id="m-comp-tasa-bcv" class="form-control font-mono font-bold" value="88.50" oninput="calcularIvaCompra()">
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Tasa BCV de la Factura (Bs./USD) *</label>
+                <input type="number" step="any" min="0.0001" id="m-comp-tasa-bcv" class="form-control font-mono font-bold" oninput="calcularIvaCompra()">
+                <span style="font-size: 0.7rem; color: #0369a1;">Tasa oficial del día de la factura</span>
               </div>
-              <div class="form-group" style="margin:0;">
-                <label>Fecha de la Tasa BCV:</label>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Fecha de la Tasa BCV *</label>
                 <input type="date" id="m-comp-fecha-tasa" class="form-control font-mono" oninput="calcularIvaCompra()">
+                <span style="font-size: 0.7rem; color: #0369a1;">Fecha fijada por el BCV</span>
+              </div>
+            </div>
+
+            <!-- Montos, IVA y Totales -->
+            <div style="background: #ffffff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+              <div class="form-grid" style="grid-template-columns: 1.2fr 1.2fr 1fr 1.2fr; gap: 12px;">
+                <div class="form-group" style="margin: 0;">
+                  <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Base Imponible (Bs.) *</label>
+                  <input type="number" step="0.01" id="m-comp-base" class="form-control font-mono font-bold" placeholder="0.00" required oninput="calcularIvaCompra('BS')" style="font-size: 1rem; color: #0B2447;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Base Imponible ($ USD)</label>
+                  <input type="number" step="0.01" id="m-comp-base-divisa" class="form-control font-mono font-bold" placeholder="0.00" oninput="calcularIvaCompra('USD')" style="font-size: 1rem; color: #166534;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Alícuota IVA</label>
+                  <select id="m-comp-alicuota" class="form-control" onchange="calcularIvaCompra()">
+                    <option value="0.16" selected>General (16%)</option>
+                    <option value="0.08">Reducida (8%)</option>
+                    <option value="0.0">Exento (0%)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Impuesto IVA (Bs. / $)</label>
+                  <input type="number" step="0.01" id="m-comp-iva" class="form-control font-mono" placeholder="0.00" readonly style="background: #f1f5f9; font-weight: 700; color: #0B2447;">
+                  <div id="m-comp-iva-divisa-lbl" style="font-size: 0.72rem; color: #0369a1; font-family: monospace; font-weight: 700; margin-top: 3px;">Ref: $0.00 USD</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Totales y Retención IVA -->
+            <div class="form-grid" style="grid-template-columns: 1.5fr 1.5fr; gap: 14px;">
+              <div class="form-group" style="margin: 0; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
+                <label style="font-weight: 800; color: #0B2447; font-size: 0.82rem;">Total Factura Fiscal (Bs. / Equivalente USD):</label>
+                <input type="number" step="0.01" id="m-comp-total" class="form-control font-mono" readonly style="background: #f8fafc; font-weight: 800; font-size: 1.15rem; color: #0B2447; border: 1px solid #cbd5e1;">
+                <div id="m-comp-total-divisa-lbl" style="font-size: 0.78rem; color: #0B2447; font-family: monospace; font-weight: 800; margin-top: 4px;">Equivalente: $0.00 USD</div>
+              </div>
+              <div class="form-group" style="margin: 0; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
+                <label style="font-weight: 800; color: #0B2447; font-size: 0.82rem;">Retención de IVA (PA SNAT/2026/00093):</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <select id="m-comp-ret-pct" class="form-control" style="width: 105px; font-weight: 700;" onchange="calcularIvaCompra()">
+                    <option value="0.75" selected>75% Ord.</option>
+                    <option value="1.00">100% Esp.</option>
+                    <option value="0.00">0% Sin Ret.</option>
+                  </select>
+                  <input type="number" step="0.01" id="m-comp-ret" class="form-control font-mono" placeholder="0.00" readonly style="background: #f8fafc; font-weight: 700; color: #dc2626; border: 1px solid #cbd5e1;">
+                </div>
+                <div id="m-comp-ret-divisa-lbl" style="font-size: 0.74rem; color: #64748b; font-family: monospace; margin-top: 4px;">Ref. Retenido: $0.00 USD</div>
               </div>
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
-            <div class="form-group">
-              <label>Base Imponible (Bs.):</label>
-              <input type="number" step="0.01" id="m-comp-base" class="form-control font-mono font-bold" placeholder="0.00" required oninput="calcularIvaCompra('BS')">
+          <!-- Card 3: Clasificación Contable, Inventario y Retención ISLR -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <span>⚙️ 4. Clasificación Contable, Inventario y Retención ISLR:</span>
             </div>
-            <div class="form-group">
-              <label>Base Imponible ($ USD):</label>
-              <input type="number" step="0.01" id="m-comp-base-divisa" class="form-control font-mono" placeholder="0.00" oninput="calcularIvaCompra('DIVISA')">
-            </div>
-            <div class="form-group">
-              <label>Alícuota IVA:</label>
-              <select id="m-comp-alicuota" class="form-control" onchange="calcularIvaCompra()">
-                <option value="0.16" selected>General (16%)</option>
-                <option value="0.08">Reducida (8%)</option>
-                <option value="0.0">Exento (0%)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Impuesto IVA (Bs. / $):</label>
-              <input type="number" step="0.01" id="m-comp-iva" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
-              <div id="m-comp-iva-divisa-lbl" style="font-size:0.72rem; color:#0369a1; font-family:monospace; font-weight:700; margin-top:2px;">Ref: $0.00 USD</div>
-            </div>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>Total Factura (Bs. / Equivalente USD):</label>
-              <input type="number" step="0.01" id="m-comp-total" class="form-control font-mono" readonly style="background:#f1f5f9; font-weight:800; font-size:1.05rem; color:var(--ucg-navy);">
-              <div id="m-comp-total-divisa-lbl" style="font-size:0.76rem; color:#0B2447; font-family:monospace; font-weight:800; margin-top:3px;">Equivalente: $0.00 USD</div>
-            </div>
-            <div class="form-group">
-              <label>IVA Retenido (Bs.):</label>
-              <div style="display:flex; gap:8px;">
-                <select id="m-comp-ret-pct" class="form-control" style="width:90px;" onchange="calcularIvaCompra()">
-                  <option value="0.75" selected>75%</option>
-                  <option value="1.00">100%</option>
-                  <option value="0.00">0%</option>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Clasificación de la Operación / Gasto:</label>
+                <select id="m-comp-tipo" class="form-control">
+                  <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario Tienda)</option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (Unión Contable Global)</option>
+                  <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas, Software y Máquinas Fiscales</option>
+                  <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento de Instalaciones</option>
+                  <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
+                  <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo, Mobiliario y Equipos</option>
+                  <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos Deducibles</option>
                 </select>
-                <input type="number" step="0.01" id="m-comp-ret" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
               </div>
-              <div id="m-comp-ret-divisa-lbl" style="font-size:0.72rem; color:#64748b; font-family:monospace; margin-top:3px;">Ref. Retenido: $0.00 USD</div>
+              <div class="form-group" style="margin: 0;">
+                <label style="font-weight: 700; color: #0B2447; font-size: 0.8rem;">Observaciones / Documento Soporte:</label>
+                <input type="text" id="m-comp-obs" class="form-control" placeholder="Detalle o justificación contable de la compra">
+              </div>
             </div>
-          </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>Clasificación de Servicio:</label>
-              <select id="m-comp-tipo" class="form-control">
-                <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
-                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
-                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
-                <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
-                <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
-                <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
-              </select>
-            </div>
-            <div class="form-group" style="display: flex; align-items: center; padding-top: 20px;">
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                <input type="checkbox" id="m-comp-aplica-inv" checked style="width:18px; height:18px;">
-                <span>¿Afecta Inventario Físico de Repuestos?</span>
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 8px;">
+                <input type="checkbox" id="m-comp-aplica-inv" checked style="width: 18px; height: 18px;">
+                <span style="font-size: 0.82rem; font-weight: 700; color: #0B2447;">¿Afecta Inventario Físico de Repuestos (Kardex)?</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: #eff6ff; border: 1px solid #93c5fd; padding: 8px 12px; border-radius: 8px;">
+                <input type="checkbox" id="m-comp-ir-islr" style="width: 18px; height: 18px;">
+                <span style="font-size: 0.82rem; font-weight: 800; color: #1e40af;">🧾 Al guardar, abrir Comprobante de Retención ISLR (Ej. Unión Global)</span>
               </label>
             </div>
           </div>
 
-          <div class="form-group">
-            <label>Observaciones de Cruce:</label>
-            <input type="text" id="m-comp-obs" class="form-control" placeholder="Detalle o justificación de la compra">
-          </div>
-
-          <div class="modal-footer" style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; font-weight:800; color:#0B2447; cursor:pointer; background:#f0f9ff; padding:6px 10px; border-radius:6px; border:1px solid #19A7CE;">
-              <input type="checkbox" id="m-comp-ir-islr" style="width:16px; height:16px;">
-              <span>🧾 Al guardar, abrir Comprobante de Retención ISLR (Ej. Servicios Unión Global)</span>
-            </label>
-            <div style="display:flex; gap:8px;">
+          <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-light); background: #f8fafc; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; margin: 0 -24px -20px -24px;">
+            <div style="font-size: 0.76rem; color: #64748b;">
+              🔒 Conforme al Decreto 1.808 y Providencia SNAT/2026/00093
+            </div>
+            <div style="display: flex; gap: 10px;">
               <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-compra')">Cancelar</button>
-              <button type="submit" class="btn btn-navy" id="btn-save-compra">Guardar en Libro de Compras</button>
+              <button type="submit" class="btn btn-navy" id="btn-save-compra" style="padding: 8px 18px; font-weight: 800;">
+                💾 Guardar Factura en Libro de Compras
+              </button>
             </div>
           </div>
         </form>

@@ -62,6 +62,7 @@ localDb.execute("ALTER TABLE movimientos ADD COLUMN fecha_factura TEXT;").catch(
 localDb.execute("ALTER TABLE movimientos ADD COLUMN tasa_bcv_factura REAL;").catch(() => {});
 localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN tasa_bcv_activa_dia REAL;").catch(() => {});
 localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN fecha_bcv_activa_dia TEXT;").catch(() => {});
+localDb.execute("ALTER TABLE libro_compras ADD COLUMN fecha_recepcion TEXT;").catch(() => {});
 localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => {});
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
@@ -1824,6 +1825,7 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
         lc.id,
         lc.periodo,
         lc.fecha,
+        COALESCE(lc.fecha_recepcion, lc.fecha) as fecha_recepcion,
         lc.nro_operacion,
         lc.rif,
         lc.razon_social,
@@ -2001,11 +2003,10 @@ app.post('/api/fiscal/conciliar-factura', async (req, res) => {
 // 10.5.1 Buscar Entradas de Almacén (Cargadas por el Asistente en Tienda) para Cruzar con Libro de Compras
 app.get('/api/fiscal/entradas-tienda', async (req, res) => {
   try {
-    const { periodo, q } = req.query;
+    const { periodo, q, soloPendientes } = req.query;
     let sql = `
       SELECT 
-        MAX(m.id) as movimiento_id,
-        GROUP_CONCAT(DISTINCT m.id) as movimientos_ids,
+        m.id as movimiento_id,
         m.fecha,
         strftime('%Y-%m', m.fecha) as periodo,
         CASE 
@@ -2014,6 +2015,12 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
           ELSE m.numero_documento
         END as nro_factura_tienda,
         m.numero_documento,
+        COALESCE(m.fecha_factura, m.fecha) as fecha_factura,
+        m.fecha as fecha_recepcion,
+        COALESCE(m.nro_control, '') as nro_control,
+        COALESCE(m.tasa_bcv_factura, m.tasa_bcv, 889.58) as tasa_bcv_factura,
+        COALESCE(m.tasa_bcv, 889.58) as tasa_bcv,
+        COALESCE(m.fecha_tasa_bcv, m.fecha_factura, m.fecha) as fecha_tasa_bcv,
         m.observaciones,
         m.proveedor_id,
         COALESCE(pr.rif, 'S/RIF') as rif,
@@ -2023,7 +2030,11 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
         COALESCE(pr.porcentaje_retencion, 75.0) as porcentaje_retencion,
         COUNT(md.id) as total_items,
         COALESCE(SUM(md.cantidad), 0) as total_unidades,
-        COALESCE(SUM(md.cantidad * md.costo_unitario_usd), 0) as total_usd,
+        COALESCE(SUM(COALESCE(md.base_imponible_bs, md.total_linea_bs, 0)), 0) as base_imponible_bs,
+        COALESCE(SUM(COALESCE(md.base_imponible_divisa, md.total_linea_divisa, md.cantidad * md.costo_unitario_usd, 0)), 0) as base_imponible_divisa,
+        COALESCE(SUM(COALESCE(md.monto_iva_bs, 0)), 0) as iva_bs,
+        COALESCE(SUM(COALESCE(md.total_linea_bs, 0)), 0) as total_bs,
+        COALESCE(SUM(COALESCE(md.total_linea_divisa, md.cantidad * md.costo_unitario_usd, 0)), 0) as total_usd,
         GROUP_CONCAT(p.codigo || ' (' || CAST(md.cantidad AS INT) || ')', ', ') as resumen_productos,
         (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) as libro_compra_id
       FROM movimientos m
@@ -2041,10 +2052,13 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
       sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ? OR pr.razon_social LIKE ? OR pr.rif LIKE ?)`;
       args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
+    if (soloPendientes === 'true' || soloPendientes === '1') {
+      sql += ` AND (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) IS NULL`;
+    }
     sql += `
-      GROUP BY m.fecha, m.numero_documento, m.observaciones, m.proveedor_id
-      ORDER BY m.fecha DESC, movimiento_id DESC
-      LIMIT 150
+      GROUP BY m.id
+      ORDER BY m.fecha DESC, m.id DESC
+      LIMIT 200
     `;
     const result = await db.execute({ sql, args });
     res.json(result.rows);
@@ -2196,7 +2210,7 @@ async function recalculateDeclaracionIva(periodo) {
 app.post('/api/fiscal/libro-compras', async (req, res) => {
   try {
     const {
-      periodo, fecha, rif, razon_social, nro_factura, nro_control,
+      periodo, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
       tipo_transaccion, base_imponible_bs, base_imponible_divisa,
       alicuota, iva_bs, monto_iva_divisa, total_bs, total_divisa,
       iva_retenido_bs, iva_retenido_divisa, tasa_bcv, fecha_tasa_bcv, moneda_divisa,
@@ -2205,13 +2219,14 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
     } = req.body;
 
     if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios (Período, Fecha, RIF, Proveedor, Nro Factura)' });
+      return res.status(400).json({ error: 'Faltan campos obligatorios (Período, Fecha de Factura, RIF, Proveedor, Nro Factura)' });
     }
 
     const cleanRif = String(rif).trim().toUpperCase();
     const cleanRazon = String(razon_social).trim();
+    const fechaRecepcionOp = fecha_recepcion || fecha;
     const tasaRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
-    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 88.50);
+    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 889.58);
     const fechaTasaOp = fecha_tasa_bcv || tasaRes.rows[0]?.fecha_cierre || fecha;
     const monedaOp = moneda_divisa || 'USD';
 
@@ -2259,19 +2274,30 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     const insertResult = await db.execute({
       sql: `INSERT INTO libro_compras 
-            (periodo, archivo_origen, nro_operacion, fecha, rif, razon_social, nro_factura, nro_control,
+            (periodo, archivo_origen, nro_operacion, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
              tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs, iva_retenido_bs,
              tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa, iva_retenido_divisa,
              proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce)
-            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id`,
       args: [
-        periodo, nextOp, fecha, cleanRif, cleanRazon, nro_factura, nro_control || null,
+        periodo, nextOp, fecha, fechaRecepcionOp, cleanRif, cleanRazon, nro_factura, nro_control || null,
         tipo_transaccion || '01-reg', baseBs, ali, ivaCalc, totalCalc, ret,
         tasaOp, fechaTasaOp, monedaOp, baseDiv, ivaDivCalc, totalDivCalc, retDiv,
         provId, cleanTipo, aplicaInvInt, estatus, movIdInt, obs
       ]
     });
+
+    if (movIdInt) {
+      await db.execute({
+        sql: `UPDATE movimientos 
+              SET nro_control = COALESCE(NULLIF(nro_control, ''), ?),
+                  fecha_factura = COALESCE(fecha_factura, ?),
+                  tasa_bcv_factura = COALESCE(tasa_bcv_factura, ?)
+              WHERE id = ?`,
+        args: [nro_control || '', fecha, tasaOp, movIdInt]
+      }).catch(e => console.warn('Could not sync back to movimientos:', e.message));
+    }
 
     await recalculateDeclaracionIva(periodo);
 

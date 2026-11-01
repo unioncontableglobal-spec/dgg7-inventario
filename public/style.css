@@ -3301,3 +3301,21 @@ body {
 }
 .mini-flow-ventas { background: #059669; }
 .mini-flow-compras { background: #0284c7; }
+
+/* Botones de Tipología en Modal de Compras */
+.btn-tipo-compra {
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.btn-tipo-compra:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+}
+.btn-tipo-compra.active {
+  background: var(--ucg-navy) !important;
+  border-color: var(--ucg-navy) !important;
+  color: #ffffff !important;
+}
+.btn-tipo-compra.active div div:last-child {
+  color: #bfdbfe !important;
+}

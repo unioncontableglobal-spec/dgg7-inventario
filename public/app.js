@@ -2463,29 +2463,101 @@ function filterLibroComprasLocal() {
 
 let entradasTiendaCache = [];
 let salidasTiendaCache = [];
+let entradasTiendaPendientesCache = [];
+let entradasTiendaPendientesFiltradas = [];
 
 function openModalNuevaCompra(modo = 'MERCANCIA') {
   document.getElementById('form-nueva-compra').reset();
   document.getElementById('m-comp-movimiento-id').value = '';
   const badge = document.getElementById('badge-entrada-vinculada');
   if (badge) badge.style.display = 'none';
-  const list = document.getElementById('lista-resultados-entrada-tienda');
-  if (list) list.style.display = 'none';
 
   const periodoActivo = document.getElementById('compras-periodo-select')?.value;
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-comp-periodo').value = targetPeriodo;
-  const targetFecha = targetPeriodo === '2026-10' ? '2026-10-15' : `${targetPeriodo}-01`;
+  
+  const today = new Date().toISOString().slice(0, 10);
+  const targetFecha = (targetPeriodo === '2026-10') ? '2026-10-15' : (targetPeriodo ? `${targetPeriodo}-15` : today);
+  
   document.getElementById('m-comp-fecha').value = targetFecha;
-  if (document.getElementById('m-comp-fecha-tasa')) document.getElementById('m-comp-fecha-tasa').value = targetFecha;
-
-  const rateObj = (state.tasasBcvPeriodo || []).find(t => t.periodo === targetPeriodo);
-  if (document.getElementById('m-comp-tasa-bcv')) {
-    document.getElementById('m-comp-tasa-bcv').value = rateObj ? Number(rateObj.tasa_bcv).toFixed(2) : '92.00';
+  if (document.getElementById('m-comp-fecha-recepcion')) {
+    document.getElementById('m-comp-fecha-recepcion').value = targetFecha;
   }
-  calcularIvaCompra('BS');
+  if (document.getElementById('m-comp-fecha-tasa')) {
+    document.getElementById('m-comp-fecha-tasa').value = targetFecha;
+  }
+
+  // Tasa BCV Oficial por defecto: usa la configurada o la oficial del período/fecha
+  const tasaVal = getTasaBcvPorFechaOPeriodo(targetFecha);
+  if (document.getElementById('m-comp-tasa-bcv')) {
+    document.getElementById('m-comp-tasa-bcv').value = Number(tasaVal).toFixed(4);
+  }
+
+  if (document.getElementById('m-comp-modo-moneda')) {
+    document.getElementById('m-comp-modo-moneda').value = 'BS';
+  }
+
   setModoModalCompra(modo);
+  calcularIvaCompra('BS');
+  cargarEntradasPendientesTienda();
   document.getElementById('modal-nueva-compra').style.display = 'flex';
+}
+
+function onCambioPeriodoModalCompra() {
+  const per = document.getElementById('m-comp-periodo')?.value;
+  if (!per) return;
+  const targetFecha = `${per}-15`;
+  const fFac = document.getElementById('m-comp-fecha');
+  const fRec = document.getElementById('m-comp-fecha-recepcion');
+  const fTasa = document.getElementById('m-comp-fecha-tasa');
+  const tasaInput = document.getElementById('m-comp-tasa-bcv');
+
+  if (fFac && !fFac.value.startsWith(per)) fFac.value = targetFecha;
+  if (fRec && !fRec.value.startsWith(per)) fRec.value = targetFecha;
+  if (fTasa) fTasa.value = fFac ? fFac.value : targetFecha;
+
+  const tasaVal = getTasaBcvPorFechaOPeriodo(fFac ? fFac.value : targetFecha);
+  if (tasaInput) tasaInput.value = Number(tasaVal).toFixed(4);
+
+  calcularIvaCompra();
+  cargarEntradasPendientesTienda();
+}
+
+function onCambioFechaFacturaCompra() {
+  const fFac = document.getElementById('m-comp-fecha')?.value;
+  if (!fFac) return;
+  const fTasa = document.getElementById('m-comp-fecha-tasa');
+  const tasaInput = document.getElementById('m-comp-tasa-bcv');
+  const fRec = document.getElementById('m-comp-fecha-recepcion');
+
+  if (fTasa) fTasa.value = fFac;
+  if (fRec && !fRec.value) fRec.value = fFac;
+
+  const tasaVal = getTasaBcvPorFechaOPeriodo(fFac);
+  if (tasaInput) tasaInput.value = Number(tasaVal).toFixed(4);
+
+  const per = fFac.slice(0, 7);
+  const selPer = document.getElementById('m-comp-periodo');
+  if (selPer && Array.from(selPer.options).some(o => o.value === per)) {
+    selPer.value = per;
+  }
+
+  calcularIvaCompra();
+}
+
+function onCambioFechaRecepcionCompra() {
+  calcularIvaCompra();
+}
+
+function onCambioModoMonedaCompra() {
+  const modo = document.getElementById('m-comp-modo-moneda')?.value || 'BS';
+  if (modo === 'DIVISA') {
+    document.getElementById('m-comp-base-divisa')?.focus();
+    calcularIvaCompra('USD');
+  } else {
+    document.getElementById('m-comp-base')?.focus();
+    calcularIvaCompra('BS');
+  }
 }
 
 function setModoModalCompra(modo) {
@@ -2498,64 +2570,229 @@ function setModoModalCompra(modo) {
   const selTipo = document.getElementById('m-comp-tipo');
 
   [btnMerc, btnGasto, btnActivo].forEach(b => {
-    if (b) { b.style.background = ''; b.style.color = ''; }
+    if (b) {
+      b.style.background = '#f8fafc';
+      b.style.borderColor = '#cbd5e1';
+      b.style.color = '#1e293b';
+      b.classList.remove('active');
+    }
   });
 
   if (modo === 'GASTO') {
     if (boxBuscador) boxBuscador.style.display = 'none';
-    if (btnGasto) { btnGasto.style.background = 'var(--ucg-navy)'; btnGasto.style.color = '#fff'; }
+    if (btnGasto) {
+      btnGasto.style.background = 'var(--ucg-navy)';
+      btnGasto.style.borderColor = 'var(--ucg-navy)';
+      btnGasto.style.color = '#ffffff';
+      btnGasto.classList.add('active');
+    }
     if (chkInv) chkInv.checked = false;
     if (chkIslr) chkIslr.checked = true;
     if (selTipo) selTipo.value = 'SERVICIOS_CONTABLES_Y_LEGALES';
-    document.getElementById('m-comp-movimiento-id').value = '';
+    desvincularEntradaTienda();
   } else if (modo === 'ACTIVO') {
     if (boxBuscador) boxBuscador.style.display = 'none';
-    if (btnActivo) { btnActivo.style.background = 'var(--ucg-navy)'; btnActivo.style.color = '#fff'; }
+    if (btnActivo) {
+      btnActivo.style.background = 'var(--ucg-navy)';
+      btnActivo.style.borderColor = 'var(--ucg-navy)';
+      btnActivo.style.color = '#ffffff';
+      btnActivo.classList.add('active');
+    }
     if (chkInv) chkInv.checked = false;
     if (chkIslr) chkIslr.checked = false;
     if (selTipo) selTipo.value = 'ACTIVO_FIJO_EQUIPOS';
-    document.getElementById('m-comp-movimiento-id').value = '';
+    desvincularEntradaTienda();
   } else {
     if (boxBuscador) boxBuscador.style.display = 'block';
-    if (btnMerc) { btnMerc.style.background = 'var(--ucg-navy)'; btnMerc.style.color = '#fff'; }
+    if (btnMerc) {
+      btnMerc.style.background = 'var(--ucg-navy)';
+      btnMerc.style.borderColor = 'var(--ucg-navy)';
+      btnMerc.style.color = '#ffffff';
+      btnMerc.classList.add('active');
+    }
     if (chkInv) chkInv.checked = true;
     if (chkIslr) chkIslr.checked = false;
     if (selTipo) selTipo.value = 'MERCANCIA_REPUESTOS';
   }
 }
 
-async function buscarEntradasTiendaParaCompra(query = '') {
-  const listEl = document.getElementById('lista-resultados-entrada-tienda');
-  if (!listEl) return;
+async function cargarEntradasPendientesTienda() {
+  const tbody = document.getElementById('tbody-entradas-pendientes-tienda');
+  const badgeContador = document.getElementById('badge-contador-pendientes');
+  const perFiltro = document.getElementById('m-comp-filtro-periodo')?.value || 'TODOS';
+
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 12px; color: #64748b;">Consultando entradas pendientes...</td></tr>`;
 
   try {
-    const res = await fetch(`/api/fiscal/entradas-tienda?q=${encodeURIComponent(query.trim())}`);
+    const url = `/api/fiscal/entradas-tienda?soloPendientes=true&periodo=${encodeURIComponent(perFiltro)}`;
+    const res = await fetch(url);
     const rows = await res.json();
-    entradasTiendaCache = rows;
+    entradasTiendaPendientesCache = rows || [];
+    entradasTiendaPendientesFiltradas = [...entradasTiendaPendientesCache];
 
-    if (!rows || rows.length === 0) {
-      listEl.style.display = 'block';
-      listEl.innerHTML = `<div style="padding: 8px 12px; font-size: 0.78rem; color: var(--text-muted);">No se encontraron entradas de tienda con ese criterio.</div>`;
-      return;
+    if (badgeContador) {
+      badgeContador.textContent = `${entradasTiendaPendientesCache.length} pendientes`;
     }
 
-    listEl.style.display = 'block';
-    listEl.innerHTML = rows.slice(0, 20).map((r, idx) => `
-      <div style="padding: 7px 10px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.78rem;"
-           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'"
-           onclick="seleccionarEntradaTiendaEnCompra(${idx})">
-        <div>
-          <strong style="color: var(--ucg-navy); font-family: monospace;">📄 ${r.nro_factura_tienda || r.numero_documento}</strong>
-          <span style="margin-left: 6px; font-weight: 700;">${r.razon_social}</span>
-          <span style="color: var(--text-muted);">(${r.rif})</span>
-          <div style="font-size: 0.72rem; color: #475569;">Fecha Tienda: ${r.fecha} • ${r.total_items} ítems (${r.total_unidades} unds): ${(r.resumen_productos || '').slice(0, 60)}</div>
-        </div>
-        <span class="badge" style="background: #dcfce7; color: #166534; font-size: 10px;">Seleccionar ➔</span>
-      </div>
-    `).join('');
+    renderTablaEntradasPendientesModal();
   } catch (err) {
-    console.error('Error buscando entradas de tienda:', err);
+    console.error('Error al cargar entradas pendientes:', err);
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 12px; color: #dc2626;">Error al cargar lista de entradas de almacén</td></tr>`;
   }
+}
+
+function filtrarEntradasPendientesTienda(query = '') {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    entradasTiendaPendientesFiltradas = [...entradasTiendaPendientesCache];
+  } else {
+    entradasTiendaPendientesFiltradas = entradasTiendaPendientesCache.filter(r => {
+      const matchDoc = (r.nro_factura_tienda || r.numero_documento || '').toLowerCase().includes(q);
+      const matchRif = (r.rif || '').toLowerCase().includes(q);
+      const matchProv = (r.razon_social || '').toLowerCase().includes(q);
+      const matchProds = (r.resumen_productos || '').toLowerCase().includes(q);
+      return matchDoc || matchRif || matchProv || matchProds;
+    });
+  }
+  renderTablaEntradasPendientesModal();
+}
+
+function renderTablaEntradasPendientesModal() {
+  const tbody = document.getElementById('tbody-entradas-pendientes-tienda');
+  if (!tbody) return;
+
+  if (entradasTiendaPendientesFiltradas.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 14px; color: #64748b;">No hay entradas pendientes en este período o filtro.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = entradasTiendaPendientesFiltradas.map((r, idx) => {
+    const baseBs = Number(r.base_imponible_bs || (r.base_imponible_divisa * r.tasa_bcv) || 0);
+    const baseUsd = Number(r.base_imponible_divisa || r.total_usd || 0);
+    const tasa = Number(r.tasa_bcv_factura || r.tasa_bcv || 0);
+
+    return `
+      <tr style="cursor: pointer; border-bottom: 1px solid #e2e8f0;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='#ffffff'">
+        <td class="font-mono" style="padding: 6px 10px; font-weight: 600;">${r.fecha_recepcion || r.fecha}</td>
+        <td class="font-mono font-bold" style="padding: 6px 10px; color: #0B2447;">${r.nro_factura_tienda || r.numero_documento}</td>
+        <td style="padding: 6px 10px;">
+          <strong style="color: #1e293b;">${r.razon_social}</strong>
+          <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">${r.rif}</div>
+        </td>
+        <td class="text-center" style="padding: 6px 10px;">
+          <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700;">${r.total_unidades} unds</span>
+          <div style="font-size: 0.68rem; color: #64748b; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.resumen_productos || ''}">${r.resumen_productos || ''}</div>
+        </td>
+        <td style="padding: 6px 10px; text-align: right;">
+          <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(baseBs)}</div>
+          <div style="font-size: 0.7rem; color: #166534; font-family: monospace;">$${baseUsd.toFixed(2)} USD (BCV: ${tasa.toFixed(2)})</div>
+        </td>
+        <td class="text-center" style="padding: 6px 10px;">
+          <button type="button" class="btn btn-sm btn-emerald" onclick="seleccionarEntradaPendienteTienda(${idx})" style="padding: 4px 10px; font-size: 11px; font-weight: 700; white-space: nowrap;">
+            📥 Incorporar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function seleccionarEntradaPendienteTienda(idx) {
+  const item = entradasTiendaPendientesFiltradas[idx];
+  if (!item) return;
+
+  document.getElementById('m-comp-movimiento-id').value = item.movimiento_id || '';
+  if (item.periodo) {
+    const selPer = document.getElementById('m-comp-periodo');
+    if (selPer && Array.from(selPer.options).some(o => o.value === item.periodo)) {
+      selPer.value = item.periodo;
+    }
+  }
+
+  const fFac = item.fecha_factura || item.fecha;
+  const fRec = item.fecha_recepcion || item.fecha;
+  document.getElementById('m-comp-fecha').value = fFac;
+  if (document.getElementById('m-comp-fecha-recepcion')) {
+    document.getElementById('m-comp-fecha-recepcion').value = fRec;
+  }
+  if (document.getElementById('m-comp-fecha-tasa')) {
+    document.getElementById('m-comp-fecha-tasa').value = item.fecha_tasa_bcv || fFac;
+  }
+
+  if (item.rif && item.rif !== 'S/RIF') document.getElementById('m-comp-rif').value = item.rif;
+  if (item.razon_social) document.getElementById('m-comp-razon').value = item.razon_social;
+
+  const numFac = (item.nro_factura_tienda || item.numero_documento || '').replace(/^FACT\s*/i, '').trim();
+  document.getElementById('m-comp-factura').value = numFac;
+  if (document.getElementById('m-comp-control')) {
+    document.getElementById('m-comp-control').value = item.nro_control || '00-';
+  }
+
+  // Tasa BCV Oficial
+  const tasaAplicar = Number(item.tasa_bcv_factura || item.tasa_bcv || getTasaBcvPorFechaOPeriodo(fFac));
+  if (document.getElementById('m-comp-tasa-bcv')) {
+    document.getElementById('m-comp-tasa-bcv').value = tasaAplicar.toFixed(4);
+  }
+
+  // Base Imponible
+  const baseBs = Number(item.base_imponible_bs || (item.base_imponible_divisa * tasaAplicar) || 0);
+  const baseUsd = Number(item.base_imponible_divisa || (tasaAplicar > 0 ? baseBs / tasaAplicar : 0));
+
+  if (document.getElementById('m-comp-base')) {
+    document.getElementById('m-comp-base').value = baseBs > 0 ? baseBs.toFixed(2) : '';
+  }
+  if (document.getElementById('m-comp-base-divisa')) {
+    document.getElementById('m-comp-base-divisa').value = baseUsd > 0 ? baseUsd.toFixed(2) : '';
+  }
+
+  document.getElementById('m-comp-tipo').value = item.tipo_servicio || 'MERCANCIA_REPUESTOS';
+  document.getElementById('m-comp-aplica-inv').checked = true;
+  document.getElementById('m-comp-obs').value = `Cruzado con Entrada de Almacén #${item.movimiento_id} (${item.total_unidades} repuestos ingresados en tienda)`;
+
+  calcularIvaCompra('BS');
+
+  // Mostrar Banner de vinculación
+  const badge = document.getElementById('badge-entrada-vinculada');
+  const texto = document.getElementById('texto-entrada-vinculada');
+  if (badge && texto) {
+    texto.innerHTML = `<strong>✅ Entrada #${item.movimiento_id} vinculada:</strong> Doc. <strong>${item.nro_factura_tienda || item.numero_documento}</strong> • Proveedor: <strong>${item.razon_social}</strong> (${item.total_unidades} repuestos). Base: Bs. ${fmtBs(baseBs)} ($${baseUsd.toFixed(2)} USD).`;
+    badge.style.display = 'flex';
+  }
+
+  // Minimizar lista de pendientes para que el usuario vea el formulario listo
+  const wrapper = document.getElementById('wrapper-lista-entradas-pendientes');
+  if (wrapper) wrapper.style.display = 'none';
+  const btnToggle = document.getElementById('btn-toggle-pendientes');
+  if (btnToggle) btnToggle.textContent = '👁️ Mostrar Lista de Pendientes';
+
+  document.getElementById('m-comp-base')?.focus();
+}
+
+function desvincularEntradaTienda() {
+  document.getElementById('m-comp-movimiento-id').value = '';
+  const badge = document.getElementById('badge-entrada-vinculada');
+  if (badge) badge.style.display = 'none';
+
+  const wrapper = document.getElementById('wrapper-lista-entradas-pendientes');
+  if (wrapper) wrapper.style.display = 'block';
+  const btnToggle = document.getElementById('btn-toggle-pendientes');
+  if (btnToggle) btnToggle.textContent = '👁️ Ocultar Lista';
+}
+
+function toggleVistaEntradasPendientes() {
+  const wrapper = document.getElementById('wrapper-lista-entradas-pendientes');
+  const btnToggle = document.getElementById('btn-toggle-pendientes');
+  if (!wrapper) return;
+  const isHidden = wrapper.style.display === 'none';
+  wrapper.style.display = isHidden ? 'block' : 'none';
+  if (btnToggle) {
+    btnToggle.textContent = isHidden ? '👁️ Ocultar Lista' : '👁️ Mostrar Lista';
+  }
+}
+
+async function buscarEntradasTiendaParaCompra(query = '') {
+  filtrarEntradasPendientesTienda(query);
 }
 
 function seleccionarEntradaTiendaEnCompra(idx, fromFullModal = false) {
@@ -2574,37 +2811,59 @@ function seleccionarEntradaTiendaEnCompra(idx, fromFullModal = false) {
       selPer.value = item.periodo;
     }
   }
-  if (item.fecha) document.getElementById('m-comp-fecha').value = item.fecha;
+
+  const fFac = item.fecha_factura || item.fecha;
+  const fRec = item.fecha_recepcion || item.fecha;
+  document.getElementById('m-comp-fecha').value = fFac;
+  if (document.getElementById('m-comp-fecha-recepcion')) {
+    document.getElementById('m-comp-fecha-recepcion').value = fRec;
+  }
+  if (document.getElementById('m-comp-fecha-tasa')) {
+    document.getElementById('m-comp-fecha-tasa').value = item.fecha_tasa_bcv || fFac;
+  }
+
   if (item.rif && item.rif !== 'S/RIF') document.getElementById('m-comp-rif').value = item.rif;
   if (item.razon_social) document.getElementById('m-comp-razon').value = item.razon_social;
 
   const numFac = (item.nro_factura_tienda || item.numero_documento || '').replace(/^FACT\s*/i, '').trim();
   document.getElementById('m-comp-factura').value = numFac;
+  if (document.getElementById('m-comp-control')) {
+    document.getElementById('m-comp-control').value = item.nro_control || '00-';
+  }
+
+  const tasaAplicar = Number(item.tasa_bcv_factura || item.tasa_bcv || getTasaBcvPorFechaOPeriodo(fFac));
+  if (document.getElementById('m-comp-tasa-bcv')) {
+    document.getElementById('m-comp-tasa-bcv').value = tasaAplicar.toFixed(4);
+  }
+
+  const baseBs = Number(item.base_imponible_bs || (item.base_imponible_divisa * tasaAplicar) || 0);
+  const baseUsd = Number(item.base_imponible_divisa || (tasaAplicar > 0 ? baseBs / tasaAplicar : 0));
+
+  if (document.getElementById('m-comp-base')) {
+    document.getElementById('m-comp-base').value = baseBs > 0 ? baseBs.toFixed(2) : '';
+  }
+  if (document.getElementById('m-comp-base-divisa')) {
+    document.getElementById('m-comp-base-divisa').value = baseUsd > 0 ? baseUsd.toFixed(2) : '';
+  }
+
   document.getElementById('m-comp-tipo').value = item.tipo_servicio || 'MERCANCIA_REPUESTOS';
   document.getElementById('m-comp-aplica-inv').checked = true;
   document.getElementById('m-comp-obs').value = `Cruzado con Entrada de Tienda #${item.movimiento_id} (${item.total_unidades} unds ingresadas por asistente)`;
 
-  const listEl = document.getElementById('lista-resultados-entrada-tienda');
-  if (listEl) listEl.style.display = 'none';
+  calcularIvaCompra('BS');
 
   const badge = document.getElementById('badge-entrada-vinculada');
-  if (badge) {
-    badge.style.display = 'block';
-    badge.innerHTML = `✅ Vinculada con Entrada de Almacén #${item.movimiento_id}: <strong>${item.razon_social} (${item.rif})</strong> — Doc: <strong>${item.nro_factura_tienda}</strong> (${item.total_unidades} repuestos ingresados). Ingresa la Base Imponible en Bs. para calcular el IVA.`;
+  const texto = document.getElementById('texto-entrada-vinculada');
+  if (badge && texto) {
+    texto.innerHTML = `<strong>✅ Entrada #${item.movimiento_id} vinculada:</strong> Doc. <strong>${item.nro_factura_tienda || item.numero_documento}</strong> • Proveedor: <strong>${item.razon_social}</strong> (${item.total_unidades} repuestos). Base: Bs. ${fmtBs(baseBs)} ($${baseUsd.toFixed(2)} USD).`;
+    badge.style.display = 'flex';
   }
 
   document.getElementById('m-comp-base')?.focus();
 }
 
 async function openModalImportarEntradaTienda() {
-  const periodoActivo = document.getElementById('compras-periodo-select')?.value || 'TODOS';
-  const selPeriodo = document.getElementById('filtro-tienda-ent-periodo');
-  if (selPeriodo) {
-    selPeriodo.value = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : 'TODOS';
-  }
-  document.getElementById('filtro-tienda-ent-q').value = '';
-  document.getElementById('modal-cruce-entradas-tienda').style.display = 'flex';
-  await cargarTablaEntradasTiendaModal();
+  openModalNuevaCompra('MERCANCIA');
 }
 
 async function cargarTablaEntradasTiendaModal() {
@@ -2619,7 +2878,6 @@ async function cargarTablaEntradasTiendaModal() {
     const res = await fetch(url);
     let rows = await res.json();
 
-    // Si en el periodo actual (ej. 2026-10) aún no hay entradas del asistente, mostramos todas para que pueda probar/cruzar
     if ((!rows || rows.length === 0) && periodo !== 'TODOS' && !q) {
       const resAll = await fetch(`/api/fiscal/entradas-tienda?periodo=TODOS`);
       rows = await resAll.json();
@@ -2640,7 +2898,7 @@ async function cargarTablaEntradasTiendaModal() {
 
       return `
         <tr>
-          <td class="font-mono">${r.fecha}</td>
+          <td class="font-mono">${r.fecha_recepcion || r.fecha}</td>
           <td class="font-mono font-bold" style="color: var(--ucg-navy);">${r.nro_factura_tienda || r.numero_documento}</td>
           <td>
             <strong>${r.razon_social}</strong>
@@ -2665,8 +2923,9 @@ async function cargarTablaEntradasTiendaModal() {
 }
 
 function calcularIvaCompra(editedField = 'BS') {
-  const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || 92.00;
-  const fechaTasa = document.getElementById('m-comp-fecha-tasa')?.value || document.getElementById('m-comp-fecha')?.value || '';
+  const fFac = document.getElementById('m-comp-fecha')?.value || '';
+  const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || getTasaBcvPorFechaOPeriodo(fFac);
+  const fechaTasa = document.getElementById('m-comp-fecha-tasa')?.value || fFac;
   const ali = parseFloat(document.getElementById('m-comp-alicuota')?.value) || 0.16;
   const retPct = parseFloat(document.getElementById('m-comp-ret-pct')?.value) || 0.75;
 
@@ -2678,11 +2937,11 @@ function calcularIvaCompra(editedField = 'BS') {
 
   if (editedField === 'USD') {
     baseBs = Number((baseDiv * tasa).toFixed(2));
-    if (baseBsInput) baseBsInput.value = baseBs.toFixed(2);
+    if (baseBsInput) baseBsInput.value = baseBs > 0 ? baseBs.toFixed(2) : '';
   } else {
     baseDiv = tasa > 0 ? Number((baseBs / tasa).toFixed(2)) : 0;
     if (baseDivInput && document.activeElement !== baseDivInput) {
-      baseDivInput.value = baseDiv.toFixed(2);
+      baseDivInput.value = baseDiv > 0 ? baseDiv.toFixed(2) : '';
     }
   }
 
@@ -2690,15 +2949,26 @@ function calcularIvaCompra(editedField = 'BS') {
   const total = Number((baseBs + iva).toFixed(2));
   const ret = Number((iva * retPct).toFixed(2));
 
-  document.getElementById('m-comp-iva').value = iva.toFixed(2);
-  document.getElementById('m-comp-total').value = total.toFixed(2);
-  document.getElementById('m-comp-ret').value = ret.toFixed(2);
+  if (document.getElementById('m-comp-iva')) document.getElementById('m-comp-iva').value = iva.toFixed(2);
+  if (document.getElementById('m-comp-total')) document.getElementById('m-comp-total').value = total.toFixed(2);
+  if (document.getElementById('m-comp-ret')) document.getElementById('m-comp-ret').value = ret.toFixed(2);
+
+  const ivaDiv = tasa > 0 ? (iva / tasa) : 0;
+  const totDiv = tasa > 0 ? (total / tasa) : 0;
+  const retDiv = tasa > 0 ? (ret / tasa) : 0;
+
+  const lblIvaDiv = document.getElementById('m-comp-iva-divisa-lbl');
+  if (lblIvaDiv) lblIvaDiv.textContent = `Ref: $${ivaDiv.toFixed(2)} USD`;
+
+  const lblTotDiv = document.getElementById('m-comp-total-divisa-lbl');
+  if (lblTotDiv) lblTotDiv.textContent = `Equivalente: $${totDiv.toFixed(2)} USD`;
+
+  const lblRetDiv = document.getElementById('m-comp-ret-divisa-lbl');
+  if (lblRetDiv) lblRetDiv.textContent = `Ref. Retenido: $${retDiv.toFixed(2)} USD`;
 
   const legend = document.getElementById('m-comp-bcv-legend');
   if (legend) {
-    const ivaDiv = tasa > 0 ? (iva / tasa) : 0;
-    const totDiv = tasa > 0 ? (total / tasa) : 0;
-    legend.textContent = `Tasa Oficial BCV Aplicable: Bs. ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })} por USD (Fecha: ${fechaTasa || 'Del Día'}) • Equiv: Base $${baseDiv.toFixed(2)} + IVA $${ivaDiv.toFixed(2)} = Total $${totDiv.toFixed(2)}`;
+    legend.textContent = `🏛️ Tasa BCV Factura: Bs. ${fmtBs(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'}) • Equiv: Base $${baseDiv.toFixed(2)} + IVA $${ivaDiv.toFixed(2)} = Total $${totDiv.toFixed(2)}`;
   }
 }
 
@@ -2719,7 +2989,9 @@ async function guardarNuevaCompra(e) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || 92.00;
+  const fFac = document.getElementById('m-comp-fecha').value;
+  const fRec = document.getElementById('m-comp-fecha-recepcion')?.value || fFac;
+  const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || getTasaBcvPorFechaOPeriodo(fFac);
   const baseBs = parseFloat(document.getElementById('m-comp-base').value) || 0;
   const baseDiv = parseFloat(document.getElementById('m-comp-base-divisa')?.value) || (tasa > 0 ? Number((baseBs / tasa).toFixed(2)) : 0);
   const ivaBs = parseFloat(document.getElementById('m-comp-iva').value) || 0;
@@ -2728,14 +3000,15 @@ async function guardarNuevaCompra(e) {
 
   const data = {
     periodo: document.getElementById('m-comp-periodo').value,
-    fecha: document.getElementById('m-comp-fecha').value,
+    fecha: fFac,
+    fecha_recepcion: fRec,
     rif: document.getElementById('m-comp-rif').value.trim().toUpperCase(),
     razon_social: document.getElementById('m-comp-razon').value.trim(),
     nro_factura: document.getElementById('m-comp-factura').value.trim(),
-    nro_control: document.getElementById('m-comp-control').value.trim() || null,
+    nro_control: document.getElementById('m-comp-control')?.value.trim() || null,
     tipo_transaccion: '01-reg',
     tasa_bcv: tasa,
-    fecha_tasa_bcv: document.getElementById('m-comp-fecha-tasa')?.value || document.getElementById('m-comp-fecha').value,
+    fecha_tasa_bcv: document.getElementById('m-comp-fecha-tasa')?.value || fFac,
     moneda_operacion: 'USD',
     base_imponible_bs: baseBs,
     base_imponible_divisa: baseDiv,
