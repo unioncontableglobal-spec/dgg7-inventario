@@ -58,6 +58,10 @@ const localDb = createClient({
 // Inicializar optimizaciones en memoria de SQLite (64MB Cache RAM + Temp Store en Memoria)
 localDb.execute("PRAGMA cache_size = -64000;").catch(() => {});
 localDb.execute("PRAGMA temp_store = MEMORY;").catch(() => {});
+localDb.execute("ALTER TABLE movimientos ADD COLUMN fecha_factura TEXT;").catch(() => {});
+localDb.execute("ALTER TABLE movimientos ADD COLUMN tasa_bcv_factura REAL;").catch(() => {});
+localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN tasa_bcv_activa_dia REAL;").catch(() => {});
+localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN fecha_bcv_activa_dia TEXT;").catch(() => {});
 localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => {});
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
@@ -1188,10 +1192,13 @@ app.post('/api/movimientos', async (req, res) => {
       }
     }
 
+    const fechaFacturaNorm = req.body.fecha_factura || fecha;
+    const tasaFacturaNorm = Number(req.body.tasa_bcv_factura || tasaNum);
+
     // Build header insert with full traceability + BCV rate date & valuation method
     const headerResult = await db.execute({
-      sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones, fecha_factura, tasa_bcv_factura)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         tipo,
         subtipoNorm,
@@ -1205,7 +1212,9 @@ app.post('/api/movimientos', async (req, res) => {
         req.body.moneda_operacion || 'USD',
         metodoVal,
         proveedor_id ? parseInt(proveedor_id, 10) : null,
-        observaciones || ''
+        observaciones || '',
+        fechaFacturaNorm,
+        tasaFacturaNorm
       ]
     });
     const movimientoId = Number(headerResult.lastInsertRowid);
@@ -1289,6 +1298,8 @@ app.get('/api/movimientos', async (req, res) => {
         m.tipo,
         COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) as subtipo,
         m.fecha,
+        COALESCE(m.fecha_factura, m.fecha) as fecha_factura,
+        COALESCE(m.tasa_bcv_factura, m.tasa_bcv) as tasa_bcv_factura,
         m.numero_documento,
         COALESCE(m.nro_control, '-') as nro_control,
         COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
@@ -2945,20 +2956,33 @@ app.get('/api/tasas-bcv', async (req, res) => {
   try {
     const [tasasRes, cfgRes] = await Promise.all([
       db.execute("SELECT * FROM tasas_bcv_periodo ORDER BY periodo ASC"),
-      db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+      db.execute("SELECT metodo_valoracion_kardex, tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
     ]);
     const tasas = tasasRes.rows;
+    const cfg = cfgRes.rows[0] || {};
     const latestTasa = tasas.length > 0 ? tasas[tasas.length - 1] : null;
 
+    // Priorizar la tasa diaria activa si está configurada; de lo contrario, la última de cierre
+    const tasaActiva = (cfg.tasa_bcv_activa_dia && Number(cfg.tasa_bcv_activa_dia) > 0)
+      ? {
+          tasa_bcv: Number(cfg.tasa_bcv_activa_dia),
+          fecha: cfg.fecha_bcv_activa_dia || new Date().toISOString().split('T')[0],
+          periodo: (cfg.fecha_bcv_activa_dia || new Date().toISOString()).slice(0, 7),
+          moneda: 'USD',
+          origen: 'DIARIA_ACTIVA'
+        }
+      : (latestTasa ? {
+          tasa_bcv: latestTasa.tasa_bcv,
+          fecha: latestTasa.fecha_cierre,
+          periodo: latestTasa.periodo,
+          moneda: latestTasa.moneda || 'USD',
+          origen: 'CIERRE_MES'
+        } : { tasa_bcv: 889.58, fecha: '2026-10-30', periodo: '2026-10', moneda: 'USD', origen: 'DEFAULT' });
+
     res.json({
-      metodo_valoracion_kardex: cfgRes.rows[0]?.metodo_valoracion_kardex || 'CPP',
+      metodo_valoracion_kardex: cfg.metodo_valoracion_kardex || 'CPP',
       tasas,
-      tasa_activa: latestTasa ? {
-        tasa_bcv: latestTasa.tasa_bcv,
-        fecha: latestTasa.fecha_cierre,
-        periodo: latestTasa.periodo,
-        moneda: latestTasa.moneda || 'USD'
-      } : null
+      tasa_activa: tasaActiva
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2976,14 +3000,10 @@ app.post('/api/tasas-bcv/diaria', async (req, res) => {
     const fechaTasa = fecha || new Date().toISOString().split('T')[0];
     const periodo = fechaTasa.slice(0, 7);
 
+    // Guardar en config_fiscal_islr para no alterar las tasas de cierre mensual del 30
     await db.execute({
-      sql: `INSERT INTO tasas_bcv_periodo (periodo, tasa_bcv, fecha_cierre, moneda, fuente)
-            VALUES (?, ?, ?, ?, 'BCV Oficial del Día')
-            ON CONFLICT(periodo) DO UPDATE SET
-              tasa_bcv = excluded.tasa_bcv,
-              fecha_cierre = excluded.fecha_cierre,
-              fuente = 'BCV Oficial del Día'`,
-      args: [periodo, numTasa, fechaTasa, moneda]
+      sql: `UPDATE config_fiscal_islr SET tasa_bcv_activa_dia = ?, fecha_bcv_activa_dia = ? WHERE id = 1`,
+      args: [numTasa, fechaTasa]
     });
 
     res.json({

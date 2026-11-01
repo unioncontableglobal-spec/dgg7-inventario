@@ -193,10 +193,14 @@ async function initApp() {
   
   // Set default dates to today
   const today = new Date().toISOString().split('T')[0];
-  ['ent-fecha', 'sal-fecha', 'ent-fecha-tasa', 'sal-fecha-tasa'].forEach(id => {
+  ['ent-fecha', 'ent-fecha-factura', 'sal-fecha', 'ent-fecha-tasa', 'sal-fecha-tasa'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = today;
   });
+
+  // Predefinir modo de carga en Bolívares con referencia en Dólares por normativa
+  if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
+  if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
 
   // Initial Data Loads
   await Promise.all([
@@ -229,9 +233,10 @@ async function loadTasasBcvPeriodo() {
       if (tabMet) tabMet.value = data.metodo_valoracion_kardex;
     }
 
-    // Actualizar Widget Ejecutivo del Dashboard con la tasa activa
+    // Actualizar Widget Ejecutivo del Dashboard y formularios con la tasa activa
     const tasaActiva = data.tasa_activa || (state.tasasBcv && state.tasasBcv[state.tasasBcv.length - 1]);
     if (tasaActiva) {
+      state.tasaActiva = tasaActiva;
       const displayRate = document.getElementById('dashboard-tasa-bcv-display');
       const displayFecha = document.getElementById('dashboard-tasa-bcv-fecha');
       const inputRate = document.getElementById('daily-bcv-input');
@@ -242,6 +247,14 @@ async function loadTasasBcvPeriodo() {
       if (displayFecha) displayFecha.textContent = `Vigencia Oficial: ${tasaActiva.fecha || tasaActiva.fecha_cierre || 'Al día'}`;
       if (inputRate && !inputRate.value) inputRate.value = rateNum.toFixed(4);
       if (inputFecha && !inputFecha.value) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || new Date().toISOString().split('T')[0];
+
+      // Asignar tasa BCV por defecto en Entrada (Factura) y Salida (Venta)
+      const entTasa = document.getElementById('ent-tasa');
+      const salTasa = document.getElementById('sal-tasa');
+      if (entTasa && !entTasa.value) entTasa.value = rateNum.toFixed(4);
+      if (salTasa && !salTasa.value) salTasa.value = rateNum.toFixed(4);
+      calculateEntryTotals();
+      calculateExitTotals();
     }
   } catch (err) {
     console.error('Error cargando tasas BCV:', err);
@@ -252,10 +265,30 @@ function getTasaBcvPorFechaOPeriodo(fechaOPeriodo) {
   const per = String(fechaOPeriodo || '').slice(0, 7);
   const found = (state.tasasBcv || []).find(t => t.periodo === per);
   if (found) return Number(found.tasa_bcv);
+  if (state.tasaActiva && Number(state.tasaActiva.tasa_bcv) > 0) {
+    return Number(state.tasaActiva.tasa_bcv);
+  }
   if (state.tasasBcv && state.tasasBcv.length > 0) {
     return Number(state.tasasBcv[state.tasasBcv.length - 1].tasa_bcv);
   }
   return 889.58;
+}
+
+function onCambioFechaFacturaEntrada() {
+  const fFacturaEl = document.getElementById('ent-fecha-factura');
+  const fTasaEl = document.getElementById('ent-fecha-tasa');
+  const tasaEl = document.getElementById('ent-tasa');
+  if (!fFacturaEl) return;
+  const valFecha = fFacturaEl.value;
+  if (fTasaEl) fTasaEl.value = valFecha;
+  if (tasaEl && valFecha) {
+    tasaEl.value = getTasaBcvPorFechaOPeriodo(valFecha).toFixed(4);
+  }
+  calculateEntryTotals();
+}
+
+function onCambioFechaAlmacenEntrada() {
+  calculateEntryTotals();
 }
 
 function onCambioFechaMovimiento(prefijo) {
@@ -684,16 +717,18 @@ function onEntryCostInput(rowId, editedCurrency) {
 }
 
 function calculateEntryTotals(skipInputSync = false) {
-  const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
-  const fechaTasa = document.getElementById('ent-fecha-tasa')?.value || document.getElementById('ent-fecha')?.value || '';
-  const modoMoneda = document.getElementById('ent-modo-moneda')?.value || 'DIVISA';
+  const tasaFactura = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
+  const fechaFactura = document.getElementById('ent-fecha-factura')?.value || '';
+  const fechaAlmacen = document.getElementById('ent-fecha')?.value || '';
+  const tasaAlmacen = getTasaBcvPorFechaOPeriodo(fechaAlmacen);
+  const modoMoneda = document.getElementById('ent-modo-moneda')?.value || 'BS';
   const fmtBsLocal = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const legendText = `🏛️ Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
+  const legendText = `🏛️ Factura Fiscal: Bs. ${fmtBsLocal(tasaFactura)} (${fechaFactura || 'Hoy'}) | 📦 Entrada Almacén: Bs. ${fmtBsLocal(tasaAlmacen)} (${fechaAlmacen || 'Hoy'})`;
   const banner = document.getElementById('ent-bcv-legend-banner');
   if (banner) banner.textContent = legendText;
   const footLegend = document.getElementById('ent-footer-legend');
-  if (footLegend) footLegend.textContent = `${legendText}:`;
+  if (footLegend) footLegend.textContent = `🏛️ Tasa BCV Factura Fiscal: Bs. ${fmtBsLocal(tasaFactura)} por USD:`;
 
   let totBaseUsd = 0, totBaseBs = 0, totIvaUsd = 0, totIvaBs = 0, totTotalUsd = 0, totTotalBs = 0;
   const rows = document.querySelectorAll('#tbody-items-entrada tr');
@@ -708,10 +743,10 @@ function calculateEntryTotals(skipInputSync = false) {
 
     if (!skipInputSync) {
       if (modoMoneda === 'BS' && unitBs > 0) {
-        unitUsd = Number((unitBs / tasa).toFixed(2));
+        unitUsd = Number((tasaFactura > 0 ? unitBs / tasaFactura : 0).toFixed(2));
         if (costUsdInput) costUsdInput.value = unitUsd.toFixed(2);
-      } else {
-        unitBs = Number((unitUsd * tasa).toFixed(2));
+      } else if (unitUsd > 0) {
+        unitBs = Number((unitUsd * tasaFactura).toFixed(2));
         if (costBsInput) costBsInput.value = unitBs.toFixed(2);
       }
     }
@@ -796,7 +831,7 @@ function onExitProductChange(rowId) {
   const stockElem = tr.querySelector('.sal-stock-disp');
   const priceUsdInput = tr.querySelector('.sal-price-usd-input');
   const priceBsInput = tr.querySelector('.sal-price-bs-input');
-  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '88.50') || 88.50;
+  const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
 
   if (selectedOpt && selectedOpt.dataset.stock !== undefined) {
     const stock = parseFloat(selectedOpt.dataset.stock);
@@ -857,7 +892,7 @@ function validateExitRow(rowId) {
 function calculateExitTotals(skipInputSync = false) {
   const tasa = parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const fechaTasa = document.getElementById('sal-fecha-tasa')?.value || document.getElementById('sal-fecha')?.value || '';
-  const modoMoneda = document.getElementById('sal-modo-moneda')?.value || 'DIVISA';
+  const modoMoneda = document.getElementById('sal-modo-moneda')?.value || 'BS';
   const fmtBsLocal = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const legendText = `🏛️ Tasa Oficial BCV Aplicable: Bs. ${fmtBsLocal(tasa)} por USD (Fecha: ${fechaTasa || 'Hoy'})`;
@@ -879,9 +914,9 @@ function calculateExitTotals(skipInputSync = false) {
 
     if (!skipInputSync) {
       if (modoMoneda === 'BS' && unitBs > 0) {
-        unitUsd = Number((unitBs / tasa).toFixed(2));
+        unitUsd = Number((tasa > 0 ? unitBs / tasa : 0).toFixed(2));
         if (priceUsdInput) priceUsdInput.value = unitUsd.toFixed(2);
-      } else {
+      } else if (unitUsd > 0) {
         unitBs = Number((unitUsd * tasa).toFixed(2));
         if (priceBsInput) priceBsInput.value = unitBs.toFixed(2);
       }
@@ -921,12 +956,15 @@ async function handleMovementSubmit(event, tipo) {
   const isEntrada = tipo === 'ENTRADA_COMPRA';
 
   const fecha = document.getElementById(isEntrada ? 'ent-fecha' : 'sal-fecha').value;
+  const fechaFactura = isEntrada ? (document.getElementById('ent-fecha-factura')?.value || fecha) : fecha;
   const doc = document.getElementById(isEntrada ? 'ent-factura' : 'sal-factura').value.trim();
   const nroControl = document.getElementById(isEntrada ? 'ent-control' : 'sal-control')?.value.trim() || '';
   const usuarioResp = document.getElementById(isEntrada ? 'ent-usuario' : 'sal-usuario')?.value.trim() || 'ASISTENTE_TIENDA';
   const subtipo = document.getElementById(isEntrada ? 'ent-subtipo' : 'sal-subtipo')?.value || (isEntrada ? 'COMPRA_NACIONAL' : 'VENTA');
-  const tasaBcv = parseFloat(document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fecha);
-  const fechaTasaBcv = document.getElementById(isEntrada ? 'ent-fecha-tasa' : 'sal-fecha-tasa')?.value || fecha;
+  const tasaFactura = parseFloat(document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fechaFactura);
+  const tasaAlmacen = getTasaBcvPorFechaOPeriodo(fecha);
+  const tasaBcv = isEntrada ? tasaFactura : (parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fecha));
+  const fechaTasaBcv = document.getElementById(isEntrada ? 'ent-fecha-tasa' : 'sal-fecha-tasa')?.value || fechaFactura;
   const metodoVal = isEntrada ? (state.metodoValoracionKardex || 'CPP') : (document.getElementById('sal-metodo-val')?.value || 'CPP');
   const obs = document.getElementById(isEntrada ? 'ent-obs' : 'sal-obs').value.trim();
   const provId = isEntrada ? document.getElementById('ent-proveedor').value : null;
@@ -996,12 +1034,14 @@ async function handleMovementSubmit(event, tipo) {
     tipo: tipoFinal,
     subtipo,
     fecha,
+    fecha_factura: fechaFactura,
+    tasa_bcv: isEntrada ? tasaAlmacen : tasaBcv,
+    tasa_bcv_factura: tasaFactura,
+    fecha_tasa_bcv: fechaTasaBcv,
     numero_documento: doc,
     nro_control: nroControl,
     usuario_responsable: usuarioResp,
-    tasa_bcv: tasaBcv,
-    fecha_tasa_bcv: fechaTasaBcv,
-    moneda_operacion: 'USD',
+    moneda_operacion: (document.getElementById(isEntrada ? 'ent-modo-moneda' : 'sal-modo-moneda')?.value === 'BS' ? 'BS' : 'USD'),
     metodo_valoracion: metodoVal,
     proveedor_id: provId ? parseInt(provId, 10) : null,
     observaciones: obs,
@@ -1048,18 +1088,25 @@ function resetForm(formId) {
   const dateInput = form.querySelector('input[type="date"]');
   if (dateInput) dateInput.value = today;
 
+  const currentRateStr = (getTasaBcvPorFechaOPeriodo() || 889.58).toFixed(4);
+
   if (formId === 'form-entrada') {
     document.getElementById('tbody-items-entrada').innerHTML = '';
     if (document.getElementById('ent-control')) document.getElementById('ent-control').value = '00-';
-    if (document.getElementById('ent-tasa')) document.getElementById('ent-tasa').value = '92.00';
+    if (document.getElementById('ent-fecha-factura')) document.getElementById('ent-fecha-factura').value = today;
+    if (document.getElementById('ent-fecha')) document.getElementById('ent-fecha').value = today;
     if (document.getElementById('ent-fecha-tasa')) document.getElementById('ent-fecha-tasa').value = today;
+    if (document.getElementById('ent-tasa')) document.getElementById('ent-tasa').value = currentRateStr;
+    if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
     if (document.getElementById('ent-usuario')) document.getElementById('ent-usuario').value = 'ASISTENTE_ALMACEN_TIENDA';
     calculateEntryTotals();
   } else if (formId === 'form-salida') {
     document.getElementById('tbody-items-salida').innerHTML = '';
     if (document.getElementById('sal-control')) document.getElementById('sal-control').value = 'ZOA0000176';
-    if (document.getElementById('sal-tasa')) document.getElementById('sal-tasa').value = '92.00';
+    if (document.getElementById('sal-fecha')) document.getElementById('sal-fecha').value = today;
     if (document.getElementById('sal-fecha-tasa')) document.getElementById('sal-fecha-tasa').value = today;
+    if (document.getElementById('sal-tasa')) document.getElementById('sal-tasa').value = currentRateStr;
+    if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
     if (document.getElementById('sal-usuario')) document.getElementById('sal-usuario').value = 'CAJA_DESPACHO_TIENDA';
     calculateExitTotals();
   }

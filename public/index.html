@@ -680,8 +680,13 @@
               </div>
 
               <div class="form-field">
-                <label for="ent-fecha">Fecha del Ingreso / Compra *</label>
-                <input type="date" id="ent-fecha" required onchange="onCambioFechaMovimiento('ent')">
+                <label for="ent-fecha-factura">Fecha de la Factura Fiscal *</label>
+                <input type="date" id="ent-fecha-factura" required onchange="onCambioFechaFacturaEntrada()">
+              </div>
+
+              <div class="form-field">
+                <label for="ent-fecha">Fecha de Entrada a Almacén (Kardex) *</label>
+                <input type="date" id="ent-fecha" required onchange="onCambioFechaAlmacenEntrada()">
               </div>
 
               <div class="form-field">
@@ -704,18 +709,18 @@
               <div class="form-field">
                 <label for="ent-modo-moneda">Moneda de Carga (Conversión Bidireccional) *</label>
                 <select id="ent-modo-moneda" onchange="calculateEntryTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
+                  <option value="BS" selected>🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
                   <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
-                  <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
                 </select>
               </div>
 
               <div class="form-field">
-                <label for="ent-tasa">Tasa Oficial BCV (Bs./USD) *</label>
-                <input type="number" step="0.01" id="ent-tasa" value="88.50" required oninput="calculateEntryTotals()" title="Tasa oficial BCV del día de la operación">
+                <label for="ent-tasa">Tasa BCV de la Factura (Bs./USD) *</label>
+                <input type="number" step="any" min="0.0001" id="ent-tasa" required oninput="calculateEntryTotals()" title="Tasa oficial BCV de la Factura Fiscal">
               </div>
 
               <div class="form-field">
-                <label for="ent-fecha-tasa">Fecha de la Tasa BCV *</label>
+                <label for="ent-fecha-tasa">Fecha Tasa de Factura *</label>
                 <input type="date" id="ent-fecha-tasa" required oninput="calculateEntryTotals()">
               </div>
 
@@ -724,9 +729,9 @@
                 <input type="text" id="ent-usuario" value="ASISTENTE_ALMACEN_TIENDA" required>
               </div>
 
-              <div class="form-field" style="grid-column: span 3;">
-                <label for="ent-obs">Observaciones / Documento Afectado</label>
-                <input type="text" id="ent-obs" placeholder="Nota o acta de soporte">
+              <div class="form-field" style="grid-column: span 2;">
+                <label for="ent-obs">Observaciones / Trazabilidad Almacén</label>
+                <input type="text" id="ent-obs" placeholder="Nota o acta de soporte de recepción de mercancía">
               </div>
             </div>
           </div>
@@ -841,14 +846,14 @@
               <div class="form-field">
                 <label for="sal-modo-moneda">Moneda de Carga (Precio Unitario) *</label>
                 <select id="sal-modo-moneda" onchange="calculateExitTotals()" style="font-weight:700; color:#0B2447; background:#f0f9ff; border-color:#19A7CE;">
+                  <option value="BS" selected>🇻🇪 Precio en Bolívares (Bs.) ➔ Calcula USD</option>
                   <option value="DIVISA">💵 Precio en Divisas ($ USD) ➔ Calcula Bs.</option>
-                  <option value="BS">🇻🇪 Precio en Bolívares (Bs.) ➔ Calcula USD</option>
                 </select>
               </div>
 
               <div class="form-field">
                 <label for="sal-tasa">Tasa Oficial BCV (Bs./USD) *</label>
-                <input type="number" step="0.01" id="sal-tasa" value="88.50" required oninput="calculateExitTotals()">
+                <input type="number" step="any" min="0.0001" id="sal-tasa" required oninput="calculateExitTotals()">
               </div>
 
               <div class="form-field">
