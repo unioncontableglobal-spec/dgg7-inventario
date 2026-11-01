@@ -556,7 +556,7 @@
             <!-- 1. Valorización Total -->
             <div class="kpi-card-rich border-cyan">
               <div class="kpi-rich-top">
-                <span class="kpi-rich-label">VALOR TOTAL INVENTARIO</span>
+                <span class="kpi-rich-label">VALOR DE MERCANCÍA</span>
                 <div class="kpi-rich-icon" style="background:#e0f2fe; color:#0369a1;">💰</div>
               </div>
               <div class="kpi-rich-val font-mono" id="kpi-dash-valor-bs">Bs. --</div>
@@ -566,49 +566,49 @@
             <!-- 2. Unidades en Almacén -->
             <div class="kpi-card-rich border-indigo">
               <div class="kpi-rich-top">
-                <span class="kpi-rich-label">UNIDADES EN STOCK FÍSICO</span>
+                <span class="kpi-rich-label">PIEZAS EN STOCK FÍSICO</span>
                 <div class="kpi-rich-icon" style="background:#ede9fe; color:#6d28d9;">📦</div>
               </div>
               <div class="kpi-rich-val font-mono" id="kpi-dash-stock-unidades">--</div>
               <div class="kpi-rich-sub" id="kpi-dash-cat-count">731 productos en catálogo</div>
             </div>
 
-            <!-- 3. Rotación Anual (Turnover) -->
+            <!-- 3. Rotación Anual -->
             <div class="kpi-card-rich border-emerald">
               <div class="kpi-rich-top">
-                <span class="kpi-rich-label">ROTACIÓN ANUAL (TURNOVER)</span>
+                <span class="kpi-rich-label">ROTACIÓN DE MERCANCÍA</span>
                 <div class="kpi-rich-icon" style="background:#dcfce7; color:#15803d;">🔄</div>
               </div>
               <div class="kpi-rich-val font-mono" id="kpi-dash-rotacion">--</div>
               <div class="kpi-rich-sub" id="kpi-dash-dias-cobertura">Cobertura media: -- días</div>
             </div>
 
-            <!-- 4. Nivel de Servicio / Disponibilidad -->
+            <!-- 4. Disponibilidad -->
             <div class="kpi-card-rich border-purple">
               <div class="kpi-rich-top">
-                <span class="kpi-rich-label">DISPONIBILIDAD DE STOCK</span>
+                <span class="kpi-rich-label">DISPONIBILIDAD EN TIENDA</span>
                 <div class="kpi-rich-icon" style="background:#f3e8ff; color:#7e22ce;">🎯</div>
               </div>
               <div class="kpi-rich-val font-mono" id="kpi-dash-disponibilidad">--%</div>
               <div class="kpi-rich-sub" id="kpi-dash-stock-optimo">-- productos con stock óptimo</div>
             </div>
 
-            <!-- 5. Alertas Críticas & Quiebre -->
+            <!-- 5. Alertas de Reposición -->
             <div class="kpi-card-rich border-amber">
               <div class="kpi-rich-top">
-                <span class="kpi-rich-label">ALERTAS DE REPOSICIÓN</span>
+                <span class="kpi-rich-label">REPUESTOS POR REPONER</span>
                 <div class="kpi-rich-icon" style="background:#fef3c7; color:#b45309;">⚠️</div>
               </div>
               <div class="kpi-rich-val font-mono" id="kpi-dash-alertas" style="color:#b45309;">--</div>
               <div class="kpi-rich-sub" style="justify-content:space-between;">
                 <span id="kpi-dash-alertas-detalle">-- agotados</span>
                 <a href="javascript:void(0)" onclick="filtrarStockAlerta()"
-                  style="font-weight:800; color:#0369a1; text-decoration:underline;">Ver &rarr;</a>
+                  style="font-weight:800; color:#0369a1; text-decoration:underline;">Ver alertas &rarr;</a>
               </div>
             </div>
           </div>
 
-          <!-- Fila 3: Módulo de Detalle Mensual de Ventas, Compras y Movimientos de Inventario -->
+          <!-- Fila 3: Módulo de Resumen Mensual de Ventas y Compras -->
           <div class="panel-card"
             style="margin-bottom: 24px; border: 1.5px solid #cbd5e1; border-top: 4px solid #0B2447;">
             <div class="panel-header"
@@ -616,59 +616,61 @@
               <div>
                 <h3
                   style="margin: 0; color: #0B2447; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-                  <span>📊 Detalle Mensual de Ventas, Compras y Movimientos de Inventario (2025 – 2026)</span>
+                  <span>📊 Resumen Mensual de Compras y Ventas</span>
                 </h3>
-                <p style="margin: 3px 0 0 0; font-size: 0.78rem; color: #64748b;">
-                  Trazabilidad consolidada mes a mes con Tasa Oficial BCV de Cierre, desglose en Bolívares con referencia en Dólares ($ USD).
+                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #64748b;">
+                  Registro consolidado mes a mes expresado en Bolívares (Bs.) con referencia en Dólares ($ USD).
                 </p>
               </div>
               <div style="display: flex; gap: 8px; align-items: center;">
-                <span style="font-size: 0.76rem; font-weight: 700; color: #0B2447; background: #e0f2fe; padding: 4px 12px; border-radius: 6px; border: 1.5px solid #19A7CE; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <span style="font-size: 0.76rem; font-weight: 700; color: #0B2447; background: #e0f2fe; padding: 5px 12px; border-radius: 6px; border: 1.5px solid #19A7CE;">
                   🇻🇪 Expresión Oficial en Bolívares (Bs.) con Contravalor en Divisas ($ USD)
                 </span>
               </div>
             </div>
 
-            <!-- 3 Tarjetas de Resumen Anual -->
+            <!-- 3 Tarjetas Claras de Actividad Anual (Sin Balance Neto Confuso) -->
             <div
-              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
-              <div style="border-left: 3px solid #0284c7; padding-left: 12px;">
-                <div style="font-size: 0.72rem; font-weight: 800; color: #0284c7; text-transform: uppercase;">TOTAL COMPRAS REGISTRADAS</div>
+              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <!-- 1. Total Compras -->
+              <div style="border-left: 4px solid #0284c7; background: #ffffff; padding: 14px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                <div style="font-size: 0.73rem; font-weight: 800; color: #0284c7; text-transform: uppercase; letter-spacing: 0.03em;">🛒 COMPRAS REGISTRADAS (AÑO)</div>
                 <div class="font-mono font-bold" id="dash-tot-compras-monto"
-                  style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
-                <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;" id="dash-tot-compras-und">--</div>
+                  style="font-size: 1.25rem; color: #0B2447; margin: 4px 0;">--</div>
+                <div style="font-size: 0.75rem; color: #166534; font-family: monospace;" id="dash-tot-compras-und">--</div>
               </div>
-              <div style="border-left: 3px solid #059669; padding-left: 12px;">
-                <div style="font-size: 0.72rem; font-weight: 800; color: #059669; text-transform: uppercase;">TOTAL VENTAS FACTURADAS</div>
+              <!-- 2. Total Ventas -->
+              <div style="border-left: 4px solid #059669; background: #ffffff; padding: 14px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                <div style="font-size: 0.73rem; font-weight: 800; color: #059669; text-transform: uppercase; letter-spacing: 0.03em;">🏷️ VENTAS FACTURADAS (AÑO)</div>
                 <div class="font-mono font-bold" id="dash-tot-ventas-monto"
-                  style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
-                <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;" id="dash-tot-ventas-und">--</div>
+                  style="font-size: 1.25rem; color: #0B2447; margin: 4px 0;">--</div>
+                <div style="font-size: 0.75rem; color: #166534; font-family: monospace;" id="dash-tot-ventas-und">--</div>
               </div>
-              <div style="border-left: 3px solid #4f46e5; padding-left: 12px;">
-                <div style="font-size: 0.72rem; font-weight: 800; color: #4f46e5; text-transform: uppercase;">BALANCE NETO DE EXISTENCIA</div>
-                <div class="font-mono font-bold" id="dash-tot-balance-monto"
-                  style="font-size: 1.15rem; color: #0B2447; margin: 3px 0;">--</div>
-                <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;" id="dash-tot-balance-und">--</div>
+              <!-- 3. Promedio Mensual de Ventas -->
+              <div style="border-left: 4px solid #7c3aed; background: #ffffff; padding: 14px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                <div style="font-size: 0.73rem; font-weight: 800; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.03em;">📈 PROMEDIO MENSUAL DE VENTA</div>
+                <div class="font-mono font-bold" id="dash-tot-prom-ventas-monto"
+                  style="font-size: 1.25rem; color: #0B2447; margin: 4px 0;">--</div>
+                <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;" id="dash-tot-prom-ventas-und">--</div>
               </div>
             </div>
 
-            <!-- Tabla Mensual Interactiva -->
+            <!-- Tabla Mensual Despejada y Fácil de Entender -->
             <div class="table-responsive"
               style="border: 1px solid #e2e8f0; border-radius: 8px; max-height: 420px; overflow-y: auto;">
-              <table class="data-table" id="table-dashboard-monthly" style="margin: 0; font-size: 0.81rem;">
+              <table class="data-table" id="table-dashboard-monthly" style="margin: 0; font-size: 0.82rem;">
                 <thead>
                   <tr style="background: #0B2447; color: #ffffff;">
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px;">PERÍODO FISCAL</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">TASA BCV CIERRE</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">COMPRAS (BS. / USD)</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">VENTAS (BS. / USD)</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; text-align: right;">BALANCE NETO (BS. / USD)</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 10px 12px; width: 140px;">PROPORCIÓN V/C</th>
+                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px;">MES / PERÍODO</th>
+                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">TASA BCV</th>
+                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">COMPRAS DEL MES</th>
+                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">VENTAS DEL MES</th>
+                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: center; width: 170px;">ESTADO OPERATIVO</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-dashboard-monthly">
                   <tr>
-                    <td colspan="6" class="text-center" style="padding: 18px;">Cargando flujo mensual de compras y ventas...</td>
+                    <td colspan="5" class="text-center" style="padding: 18px;">Cargando flujo mensual de compras y ventas...</td>
                   </tr>
                 </tbody>
               </table>

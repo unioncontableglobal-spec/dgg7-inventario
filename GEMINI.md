@@ -9,8 +9,9 @@
 * El Dashboard debe ser ejecutivo, simple y visualmente despejado:
   1. **Tasa Oficial BCV del Día:** Widget de actualización diaria visible y editable.
   2. **5 KPIs Ejecutivos:** Valor del Inventario (Bs. + USD), Unidades en Stock, Rotación Anual, Disponibilidad de Stock y Total de Alertas.
-  3. **Detalle Mensual de Ventas vs Compras:** Tabla bimonetaria donde cada mes muestra sus importes en Bs. y su referencia en USD en la misma celda o fila.
+  3. **Detalle Mensual de Ventas vs Compras:** Tabla bimonetaria limpia donde cada mes muestra sus compras y ventas en Bs. con su referencia en USD.
   4. **Top 10 Productos Más Vendidos:** Con ranking visual, unidades y monto facturado (Bs. + USD).
-* **Exclusiones del Inicio:**
+* **Exclusiones y Claridad del Inicio:**
+  * **Sin Balance Neto Confuso:** No incluir conceptos contables complejos o abstractos en el Dashboard como *"Balance Neto (Bs. / USD)"* ni fórmulas/deltas de compras menos ventas que confundan a la tienda. Utilizar conceptos comerciales directos, claros y positivos: Total Compras, Total Ventas, Promedio Mensual de Facturación y Unidades en Almacén.
   * No incluir tablas operativas densas de alertas de stock como *"⚠️ Radar de Repuestos en Punto de Reorden (Quiebre)"* en el Dashboard inicial. Las alertas operativas detalladas pertenecen al módulo de *"Inventario al Día"*.
 
