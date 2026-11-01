@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import compression from 'compression';
 import { createClient } from '@libsql/client';
 import xlsxPkg from 'xlsx';
 const XLSX = xlsxPkg.utils ? xlsxPkg : (xlsxPkg.default || xlsxPkg);
@@ -30,16 +31,34 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
+
+// Compresión Gzip/Brotli de alto rendimiento para acelerar carga y descarga
+app.use(compression({
+  threshold: 1024, // Comprimir respuestas mayores a 1 KB (reduce peso en 70-85%)
+  level: 6
+}));
+
 // Limitar tamaño de payload a 10MB para prevenir ataques DoS de memoria
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Servir estáticos con caché inteligente en el borde (Cloudflare CDN / Navegador)
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d', // 24 horas en caché para CSS, JS e imágenes
+  etag: true,
+  lastModified: true
+}));
 
 // Connect to local SQLite (`file:inventario_dg67.db`) as primary fast/reliable engine,
 // with optional Turso Cloud dual-connection fallback so it works both offline/sandboxed and online
 const localDb = createClient({
   url: 'file:inventario_dg67.db'
 });
+
+// Inicializar optimizaciones en memoria de SQLite (64MB Cache RAM + Temp Store en Memoria)
+localDb.execute("PRAGMA cache_size = -64000;").catch(() => {});
+localDb.execute("PRAGMA temp_store = MEMORY;").catch(() => {});
+localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => {});
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -861,7 +880,7 @@ app.get('/api/export/libro-art177', async (req, res) => {
       return res.send('\uFEFF' + csv);
     }
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
     res.setHeader('Content-Disposition', `attachment; filename="LIBRO_INVENTARIO_ART177_${data.fechaFin}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
@@ -1645,7 +1664,7 @@ app.get('/api/export/excel', async (req, res) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
     const fileName = fecha_corte ? `INVENTARIO_DG67_CORTE_${fecha_corte}.xlsx` : `INVENTARIO_DG67_ACTUAL.xlsx`;
 
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -2311,7 +2330,7 @@ app.get('/api/export/libro-compras', async (req, res) => {
     const sheetName = periodo ? `COMPRAS_${periodo}` : 'LIBRO_COMPRAS';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
     const fileName = `LIBRO_COMPRAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
 
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -2353,7 +2372,7 @@ app.get('/api/export/libro-ventas', async (req, res) => {
     const sheetName = periodo ? `VENTAS_${periodo}` : 'LIBRO_VENTAS';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
     const fileName = `LIBRO_VENTAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
 
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -2909,7 +2928,7 @@ app.get('/api/islr/export-excel', async (req, res) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `RET_ISLR_${periodo || '2026'}`);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
     res.setHeader('Content-Disposition', `attachment; filename="RETENCIONES_ISLR_SNAT202600093_${periodo || 'HISTORICO'}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
