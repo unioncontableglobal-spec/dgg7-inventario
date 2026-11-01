@@ -13,3 +13,4 @@
   4. **Top 10 Productos Más Vendidos:** Con ranking visual, unidades y monto facturado (Bs. + USD).
 * **Exclusiones del Inicio:**
   * No incluir tablas operativas densas de alertas de stock como *"⚠️ Radar de Repuestos en Punto de Reorden (Quiebre)"* en el Dashboard inicial. Las alertas operativas detalladas pertenecen al módulo de *"Inventario al Día"*.
+
