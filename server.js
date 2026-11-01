@@ -16,8 +16,23 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// MEDIDAS DE CIBERSEGURIDAD Y PROTECCIÓN DE DATOS (OWASP & CLOUDFLARE)
+app.disable('x-powered-by'); // Ocultar tecnología de backend
+
+// Cabeceras de seguridad HTTP
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
 app.use(cors());
-app.use(express.json());
+// Limitar tamaño de payload a 10MB para prevenir ataques DoS de memoria
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Connect to local SQLite (`file:inventario_dg67.db`) as primary fast/reliable engine,
@@ -61,8 +76,53 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password + AUTH_SALT).digest('hex');
 }
 
+// Control Anti-Fuerza Bruta para Proteger contra Ataques de Hackeo / Diccionario
+const loginAttempts = new Map();
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_PERIOD_MS = 15 * 60 * 1000; // 15 minutos
+
+function checkLoginRateLimit(ip) {
+  const record = loginAttempts.get(ip);
+  if (!record) return { allowed: true };
+  const now = Date.now();
+  if (record.lockUntil && now < record.lockUntil) {
+    const remainingMin = Math.ceil((record.lockUntil - now) / 60000);
+    return {
+      allowed: false,
+      message: `Acceso temporalmente restringido por exceso de intentos fallidos. Por seguridad, intente de nuevo en ${remainingMin} minuto(s).`
+    };
+  }
+  if (record.lockUntil && now >= record.lockUntil) {
+    loginAttempts.delete(ip);
+  }
+  return { allowed: true };
+}
+
+function recordFailedLogin(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip) || { count: 0 };
+  record.count += 1;
+  record.lastAttempt = now;
+  if (record.count >= MAX_FAILED_ATTEMPTS) {
+    record.lockUntil = now + LOCKOUT_PERIOD_MS;
+  }
+  loginAttempts.set(ip, record);
+}
+
+function clearFailedLogin(ip) {
+  loginAttempts.delete(ip);
+}
+
 // 0. Módulo de Autenticación y Control de Acceso Corporativo (Unión Contable Global)
 app.post('/api/auth/login', async (req, res) => {
+  const clientIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+
+  // Verificar si la IP está bloqueada por intentos fallidos
+  const rateLimit = checkLoginRateLimit(clientIp);
+  if (!rateLimit.allowed) {
+    return res.status(429).json({ error: rateLimit.message });
+  }
+
   try {
     const { usuario, password } = req.body || {};
     if (!usuario || !password) {
@@ -76,6 +136,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     if (result.rows.length === 0) {
+      recordFailedLogin(clientIp);
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos. Verifique sus credenciales.' });
     }
 
@@ -83,6 +144,9 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user.activo) {
       return res.status(403).json({ error: 'Cuenta de usuario inactiva. Comuníquese con Unión Contable Global.' });
     }
+
+    // Éxito: limpiar registro de fallos
+    clearFailedLogin(clientIp);
 
     await db.execute({
       sql: "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = ?",
@@ -106,6 +170,17 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Error en autenticación:', error);
     res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
+  }
+});
+
+// Endpoint para Respaldo Manual de Emergencia de la Base de Datos
+app.post('/api/backup', async (req, res) => {
+  try {
+    const { createBackup } = await import('./scripts/backup_database.js');
+    const metadata = await createBackup();
+    res.json({ ok: true, metadata, mensaje: 'Respaldo generado con éxito' });
+  } catch (err) {
+    res.status(500).json({ error: 'Error generando respaldo: ' + err.message });
   }
 });
 
