@@ -2947,12 +2947,54 @@ app.get('/api/tasas-bcv', async (req, res) => {
       db.execute("SELECT * FROM tasas_bcv_periodo ORDER BY periodo ASC"),
       db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
     ]);
+    const tasas = tasasRes.rows;
+    const latestTasa = tasas.length > 0 ? tasas[tasas.length - 1] : null;
+
     res.json({
       metodo_valoracion_kardex: cfgRes.rows[0]?.metodo_valoracion_kardex || 'CPP',
-      tasas: tasasRes.rows
+      tasas,
+      tasa_activa: latestTasa ? {
+        tasa_bcv: latestTasa.tasa_bcv,
+        fecha: latestTasa.fecha_cierre,
+        periodo: latestTasa.periodo,
+        moneda: latestTasa.moneda || 'USD'
+      } : null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para Actualización Rápida Diaria de Tasa Oficial BCV
+app.post('/api/tasas-bcv/diaria', async (req, res) => {
+  try {
+    const { tasa_bcv, fecha, moneda = 'USD' } = req.body || {};
+    const numTasa = parseFloat(tasa_bcv);
+    if (!numTasa || numTasa <= 0) {
+      return res.status(400).json({ error: 'Monto de tasa BCV inválido. Ingrese un valor mayor a cero.' });
+    }
+    const fechaTasa = fecha || new Date().toISOString().split('T')[0];
+    const periodo = fechaTasa.slice(0, 7);
+
+    await db.execute({
+      sql: `INSERT INTO tasas_bcv_periodo (periodo, tasa_bcv, fecha_cierre, moneda, fuente)
+            VALUES (?, ?, ?, ?, 'BCV Oficial del Día')
+            ON CONFLICT(periodo) DO UPDATE SET
+              tasa_bcv = excluded.tasa_bcv,
+              fecha_cierre = excluded.fecha_cierre,
+              fuente = 'BCV Oficial del Día'`,
+      args: [periodo, numTasa, fechaTasa, moneda]
+    });
+
+    res.json({
+      ok: true,
+      mensaje: `Tasa BCV del día actualizada con éxito: Bs. ${numTasa.toFixed(4)} por ${moneda} (${fechaTasa})`,
+      tasa_bcv: numTasa,
+      fecha: fechaTasa,
+      periodo
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error guardando tasa diaria: ' + err.message });
   }
 });
 

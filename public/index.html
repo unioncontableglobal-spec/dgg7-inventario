@@ -284,6 +284,13 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span>Auditoría Movimientos</span>
         </button>
+
+        <div class="nav-section-title">ADMINISTRACIÓN & CONFIGURACIÓN</div>
+
+        <button class="nav-tab" data-tab="tab-configuracion" id="btn-tab-configuracion">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Configuración & Tasas BCV</span>
+        </button>
       </nav>
 
       <!-- 4. Pie de la Barra Lateral: Estado en la Nube & Perfil de Usuario -->
@@ -334,10 +341,6 @@
         </div>
 
         <div class="topbar-right">
-          <button type="button" class="btn btn-sm" style="background: #0B2447; color: #FFFFFF; border: 1.5px solid #19A7CE; font-weight: 800; padding: 6px 11px; font-size: 0.76rem;" onclick="openModalTasasCierreBCV()" title="Configurar Tasa Oficial BCV de Cierre de Mes y Revalorizar Meses Declarados (USD ↔ Bs.)">
-            💱 Tasas BCV Cierre Mensual
-          </button>
-
           <span class="topbar-period-pill">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
             <span>Ejercicio: <strong>2026 (Octubre Activo)</strong></span>
@@ -374,6 +377,36 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
             Nueva Salida (Venta)
           </button>
+        </div>
+      </div>
+
+      <!-- WIDGET EJECUTIVO: TASA OFICIAL BCV DEL DÍA -->
+      <div class="daily-bcv-widget">
+        <div class="daily-bcv-left">
+          <div class="daily-bcv-badge">
+            <span class="bcv-pulse-dot"></span>
+            <span class="bcv-badge-text">BCV EN TIEMPO REAL • TASA OFICIAL</span>
+          </div>
+          <div class="daily-bcv-title">Tasa de Cambio Oficial para Operaciones del Día (USD ↔ Bs.)</div>
+          <div class="daily-bcv-rate" id="dashboard-tasa-bcv-display">Bs. 889.5800</div>
+          <div class="daily-bcv-date" id="dashboard-tasa-bcv-fecha">Vigente: 30/10/2026</div>
+        </div>
+
+        <div class="daily-bcv-right">
+          <div class="daily-bcv-desc">
+            Actualice diariamente la tasa publicada por el Banco Central de Venezuela. Aplica automáticamente a nuevas compras, ventas, facturación y doble expresión contable.
+          </div>
+          <form class="daily-bcv-form" id="form-daily-bcv" onsubmit="guardarTasaBcvDiaria(event)">
+            <div class="daily-input-group">
+              <span class="daily-input-prefix">Bs.</span>
+              <input type="number" step="any" min="0.0001" class="daily-bcv-input" id="daily-bcv-input" placeholder="Ej. 889.58" required title="Tasa oficial BCV en Bolívares por Dólar">
+              <input type="date" class="daily-bcv-date-input" id="daily-bcv-fecha-input" required title="Fecha de vigencia de la tasa oficial">
+            </div>
+            <button type="submit" class="btn-daily-bcv" id="btn-save-daily-bcv">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              <span>Actualizar Tasa Hoy</span>
+            </button>
+          </form>
         </div>
       </div>
 
@@ -470,8 +503,8 @@
           <p class="subtitle">Catálogo unificado y balance de existencias sincronizado en Turso Cloud.</p>
         </div>
         <div class="header-buttons">
-          <button type="button" class="btn btn-secondary" onclick="openModalTasasCierreBCV()" title="Ajustar Tasa Oficial BCV del 31/12/2025 y de cada mes declarado">
-            💱 Tasas BCV Cierre (31/12/2025 – Oct)
+          <button type="button" class="btn btn-secondary" onclick="switchTab('tab-configuracion')" title="Ir a Configuración de Tasas Oficiales BCV">
+            ⚙️ Configurar Tasas BCV
           </button>
           <a href="/api/export/excel" class="btn btn-emerald" id="btn-tab-export-excel">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -562,8 +595,8 @@
           <p class="subtitle">Registra el ingreso de repuestos con conversión automática Bolívares ↔ Divisas (Tasa Oficial BCV) y desglose de Precio Unitario, Base Imponible, IVA 16% y Total Línea.</p>
         </div>
         <div class="header-buttons">
-          <button type="button" class="btn btn-secondary" onclick="openModalTasasCierreBCV()">
-            💱 Tasas BCV de Cierre Mensual
+          <button type="button" class="btn btn-secondary" onclick="switchTab('tab-configuracion')">
+            ⚙️ Configurar Tasas BCV
           </button>
         </div>
       </div>
@@ -837,8 +870,8 @@
           <p class="subtitle">Trazabilidad por línea con Costo Unitario en Divisa ($), Tasa BCV de Operación, Costo Unitario en Bs. y valoración por Costo Promedio Ponderado (CPP) o PEPS/FIFO.</p>
         </div>
         <div class="header-buttons">
-          <button class="btn btn-secondary" onclick="openModalTasasCierreBCV()">
-            💱 Tasas BCV de Cierre Mensual
+          <button class="btn btn-secondary" onclick="switchTab('tab-configuracion')">
+            ⚙️ Configurar Tasas BCV
           </button>
           <button class="btn btn-navy" onclick="imprimirKardexProducto()" title="Imprimir Ficha Oficial de Kardex SENIAT en PDF">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
@@ -927,8 +960,8 @@
           <p class="subtitle">Evolución mensual auditada en Unidades, Divisas ($ USD) y Bolívares (Bs.) a la Tasa Oficial BCV de Cierre de cada Mes.</p>
         </div>
         <div class="header-buttons">
-          <button class="btn" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; font-weight:800;" onclick="openModalTasasCierreBCV()">
-            💱 Configurar Tasas BCV de Cierre (Meses Declarados)
+          <button class="btn" style="background:#0B2447; color:#FFFFFF; border:1px solid #19A7CE; font-weight:800;" onclick="switchTab('tab-configuracion')">
+            ⚙️ Configurar Tasas Oficiales BCV
           </button>
           <button class="btn btn-secondary" onclick="imprimirCierreMensualInventario()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
@@ -1864,6 +1897,109 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 13. TAB: CONFIGURACIÓN DEL SISTEMA Y TASAS OFICIALES BCV               -->
+    <!-- ====================================================================== -->
+    <section id="tab-configuracion" class="tab-pane">
+      <div class="page-header">
+        <div>
+          <h1>Configuración del Sistema y Parámetros Contables</h1>
+          <p class="subtitle">Gestión centralizada de Tasas Oficiales de Cierre BCV, Métodos de Valoración de Inventario (Art. 177 RISLR) y Datos Fiscales Corporativos.</p>
+        </div>
+      </div>
+
+      <!-- Alerta Explicativa Normativa -->
+      <div class="panel-card" style="border-left: 5px solid #0B2447; background: #f0f9ff; margin-bottom: 20px;">
+        <div style="display: flex; gap: 14px; align-items: flex-start;">
+          <div style="font-size: 1.6rem; color: #0B2447; line-height: 1;">⚖️</div>
+          <div style="font-size: 0.85rem; color: #0B2447; line-height: 1.5;">
+            <strong>Cumplimiento de Doble Expresión Monetaria (PA SNAT/2026/00093 y Art. 177 RISLR):</strong><br>
+            Este módulo establece las <strong>Tasas Oficiales del Banco Central de Venezuela (BCV)</strong> utilizadas para revalorizar automáticamente los cierres de cada mes declarado:<br>
+            • <strong>Inventario y Kardex Físico:</strong> <code>Costo Unitario Bs. = Costo Unitario USD × Tasa BCV Cierre del Mes</code>.<br>
+            • <strong>Libro de Compras y Ventas IVA:</strong> <code>Monto Divisa ($ USD) = Monto en Bs. ÷ Tasa BCV Cierre del Mes</code>.
+          </div>
+        </div>
+      </div>
+
+      <!-- Tarjeta 1: Tabla de Tasas Oficiales BCV Cierre Mensual -->
+      <div class="panel-card" style="margin-bottom: 24px;">
+        <form id="form-configuracion-tasas" onsubmit="guardarTasasBcvConfig(event)">
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 14px 18px; border-radius: 10px; border: 1px solid #cbd5e1; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <div style="font-size: 0.72rem; color: #19A7CE; font-weight: 800; letter-spacing: 0.05em;">ESTÁNDAR DE VALORACIÓN FISCAL</div>
+              <span style="font-size: 0.9rem; font-weight: 800; color: #0B2447;">Método de Valoración de Inventario (Art. 177 RISLR):</span>
+            </div>
+            <select id="cfg-metodo-kardex-tab" class="form-control" style="max-width: 380px; font-weight: 800; color: #0B2447; border-color: #19A7CE;">
+              <option value="CPP">Costo Promedio Ponderado Móvil (CPP - Recomendado Fiscal)</option>
+              <option value="PEPS">PEPS / FIFO (Primero en Entrar, Primero en Salir)</option>
+            </select>
+          </div>
+
+          <div class="table-responsive" style="border: 1.5px solid #cbd5e1; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <table class="data-table" style="margin: 0; font-size: 0.83rem;">
+              <thead>
+                <tr style="background: #0B2447; color: #FFFFFF;">
+                  <th style="background:#0B2447; color:#FFFFFF; padding: 12px 14px;">PERÍODO FISCAL</th>
+                  <th style="background:#0B2447; color:#FFFFFF; padding: 12px 14px;">DESCRIPCIÓN / ESTADO</th>
+                  <th style="background:#0B2447; color:#FFFFFF; padding: 12px 14px; width: 170px;">FECHA CIERRE OFICIAL</th>
+                  <th style="background:#0B2447; color:#FFFFFF; padding: 12px 14px; text-align: right; width: 220px;">TASA OFICIAL BCV (BS./USD)</th>
+                  <th style="background:#0B2447; color:#FFFFFF; padding: 12px 14px;">IMPACTO Y EFECTO EN LIBROS</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-config-tasas-bcv">
+                <tr><td colspan="5" class="text-center" style="padding: 24px;">Cargando tasas oficiales BCV de cierre mensual...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+            <button type="submit" class="btn" id="btn-save-config-tasas" style="background: #0B2447; color: #FFFFFF; font-weight: 800; border: 1.5px solid #19A7CE; padding: 10px 22px; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(11, 36, 71, 0.25);">
+              💾 Guardar Tasas BCV y Revalorizar Inventario y Libros Fiscales (Bs. ↔ USD)
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tarjeta 2: Datos Fiscales Corporativos y Respaldo Turso Cloud -->
+      <div class="dashboard-split" style="margin-top: 20px;">
+        <!-- Ficha Fiscal DG 67 -->
+        <div class="panel-card" style="border-top: 4px solid #19A7CE;">
+          <h3 style="font-size: 1rem; color: #0B2447; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            Ficha Fiscal del Contribuyente Emisor
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; color: #334155;">
+            <div><strong>Razón Social:</strong> INVERSIONES DG 67, C.A.</div>
+            <div><strong>Número de RIF:</strong> <span class="font-mono font-bold" style="color: #0369a1;">J-50700865-7</span></div>
+            <div><strong>Condición Tributaria:</strong> Contribuyente Ordinario del IVA (Retención 75%)</div>
+            <div><strong>Sede Tributaria:</strong> Gerencia Regional de Tributos Internos Libertador - SENIAT</div>
+            <div><strong>Domicilio Fiscal:</strong> Av. Sur 11 Entre las Esquinas Bolívar y Miranda, Casa N° 112, San Agustín del Norte, Caracas, Zona Postal 1010.</div>
+            <div><strong>Desarrollo & Auditoría:</strong> UNIÓN CONTABLE GLOBAL. Asesores Contables & Auditoría Integral.</div>
+          </div>
+        </div>
+
+        <!-- Estado de Infraestructura y Nube -->
+        <div class="panel-card" style="border-top: 4px solid #10B981;">
+          <h3 style="font-size: 1rem; color: #0B2447; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            Seguridad, Encriptación y Respaldo Turso Cloud
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; color: #334155;">
+            <div><strong>Motor de Base de Datos:</strong> Turso libSQL Cloud con Encriptación SSL/TLS 256-bit</div>
+            <div><strong>Dominio Corporativo Seguro:</strong> <a href="https://dg67.unioncontableglobal.com" target="_blank" style="color: #0369a1; font-weight: 700;">dg67.unioncontableglobal.com</a></div>
+            <div><strong>Protección Perimetral:</strong> Cloudflare Enterprise WAF, Anti-DDoS y HSTS activado</div>
+            <div><strong>Integridad de Transacciones:</strong> ACID Compliant (Sin pérdida de datos en caídas eléctricas)</div>
+            <div style="margin-top: 10px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="checkHealth(); showToast('Base de datos Turso Cloud sincronizada y en línea.', 'success');">
+                🔄 Verificar Conexión y Respaldo Cloud
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
   </main>

@@ -26,8 +26,8 @@ export async function onRequest(context) {
   };
 
   if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
-    fetchOptions.body = context.request.body;
-    fetchOptions.duplex = 'half';
+    const bodyBuffer = await context.request.arrayBuffer();
+    fetchOptions.body = bodyBuffer;
   }
 
   try {

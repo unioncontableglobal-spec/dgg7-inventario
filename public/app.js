@@ -108,7 +108,13 @@ async function handleLoginSubmit(event) {
       body: JSON.stringify({ usuario, password })
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(text || `Error de comunicación con el servidor (${res.status})`);
+    }
 
     if (!res.ok || !data.ok) {
       throw new Error(data.error || 'Credenciales inválidas.');
@@ -217,8 +223,25 @@ async function loadTasasBcvPeriodo() {
       state.metodoValoracionKardex = data.metodo_valoracion_kardex;
       const salMet = document.getElementById('sal-metodo-val');
       const karMet = document.getElementById('kardex-metodo-select');
+      const tabMet = document.getElementById('cfg-metodo-kardex-tab');
       if (salMet) salMet.value = data.metodo_valoracion_kardex;
       if (karMet) karMet.value = data.metodo_valoracion_kardex;
+      if (tabMet) tabMet.value = data.metodo_valoracion_kardex;
+    }
+
+    // Actualizar Widget Ejecutivo del Dashboard con la tasa activa
+    const tasaActiva = data.tasa_activa || (state.tasasBcv && state.tasasBcv[state.tasasBcv.length - 1]);
+    if (tasaActiva) {
+      const displayRate = document.getElementById('dashboard-tasa-bcv-display');
+      const displayFecha = document.getElementById('dashboard-tasa-bcv-fecha');
+      const inputRate = document.getElementById('daily-bcv-input');
+      const inputFecha = document.getElementById('daily-bcv-fecha-input');
+
+      const rateNum = Number(tasaActiva.tasa_bcv || 0);
+      if (displayRate) displayRate.textContent = `Bs. ${rateNum.toFixed(4)}`;
+      if (displayFecha) displayFecha.textContent = `Vigencia Oficial: ${tasaActiva.fecha || tasaActiva.fecha_cierre || 'Al día'}`;
+      if (inputRate && !inputRate.value) inputRate.value = rateNum.toFixed(4);
+      if (inputFecha && !inputFecha.value) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || new Date().toISOString().split('T')[0];
     }
   } catch (err) {
     console.error('Error cargando tasas BCV:', err);
@@ -228,7 +251,11 @@ async function loadTasasBcvPeriodo() {
 function getTasaBcvPorFechaOPeriodo(fechaOPeriodo) {
   const per = String(fechaOPeriodo || '').slice(0, 7);
   const found = (state.tasasBcv || []).find(t => t.periodo === per);
-  return found ? Number(found.tasa_bcv || 88.50) : 88.50;
+  if (found) return Number(found.tasa_bcv);
+  if (state.tasasBcv && state.tasasBcv.length > 0) {
+    return Number(state.tasasBcv[state.tasasBcv.length - 1].tasa_bcv);
+  }
+  return 889.58;
 }
 
 function onCambioFechaMovimiento(prefijo) {
@@ -239,7 +266,7 @@ function onCambioFechaMovimiento(prefijo) {
   const valFecha = fechaEl.value;
   if (fechaTasaEl) fechaTasaEl.value = valFecha;
   if (tasaEl && valFecha) {
-    tasaEl.value = getTasaBcvPorFechaOPeriodo(valFecha).toFixed(2);
+    tasaEl.value = getTasaBcvPorFechaOPeriodo(valFecha).toFixed(4);
   }
   if (prefijo === 'ent') calculateEntryTotals();
   else calculateExitTotals();
@@ -304,7 +331,8 @@ function switchTab(tabId) {
     'tab-proveedores': 'Directorio y Panel de Proveedores',
     'tab-fiscal': 'Auditoría y Cruce Fiscal (IVA vs Almacén)',
     'tab-mensual': 'Cierre Físico Mes a Mes',
-    'tab-movimientos': 'Auditoría de Movimientos'
+    'tab-movimientos': 'Auditoría de Movimientos',
+    'tab-configuracion': 'Configuración del Sistema y Parámetros Contables'
   };
   const topbarTitleEl = document.getElementById('topbar-section-title');
   if (topbarTitleEl && tabTitles[tabId]) {
@@ -322,6 +350,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-declaraciones') loadDeclaracionDetalle();
   if (tabId === 'tab-retenciones-islr') loadModuloRetencionesISLR();
   if (tabId === 'tab-proveedores') loadProveedoresDirectorio();
+  if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
 
 // 2. Health & Cloud Status
@@ -4859,6 +4888,7 @@ async function openModalTasasCierreBCV() {
     tbody.innerHTML = tasas.map((t, idx) => {
       const label = NOMBRES_MESES_CIERRE[t.periodo] || t.periodo;
       const isOct = t.periodo === '2026-10';
+      const numTasa = Number(t.tasa_bcv || 0);
       return `
         <tr data-periodo="${t.periodo}" style="${isOct ? 'background:#eff6ff;' : ''}">
           <td class="font-mono font-bold" style="color:#0B2447;">${t.periodo}</td>
@@ -4867,7 +4897,7 @@ async function openModalTasasCierreBCV() {
             <input type="date" class="form-input tasa-cierre-fecha font-mono" value="${t.fecha_cierre || (t.periodo + '-28')}" style="padding:4px 8px; font-size:0.8rem;">
           </td>
           <td>
-            <input type="number" step="0.01" min="0.01" class="form-input tasa-cierre-valor font-mono font-bold text-right" value="${Number(t.tasa_bcv || 68.50).toFixed(2)}" style="padding:4px 8px; font-size:0.86rem; color:#0B2447; border-color:#19A7CE;" required>
+            <input type="number" step="any" min="0.0001" class="form-input tasa-cierre-valor font-mono font-bold text-right" value="${numTasa > 0 ? numTasa.toFixed(4) : ''}" style="padding:4px 8px; font-size:0.86rem; color:#0B2447; border-color:#19A7CE;" required placeholder="0.0000">
           </td>
           <td style="font-size:0.75rem; color:#047857; font-weight:700;">
             ✅ Multiplica USD×Tasa en Kardex y divide Bs÷Tasa en Libros IVA
@@ -4893,9 +4923,15 @@ async function guardarYRevalorizarTasasBCV(e) {
     const tasas = rows.map(tr => ({
       periodo: tr.dataset.periodo,
       fecha_cierre: tr.querySelector('.tasa-cierre-fecha')?.value || `${tr.dataset.periodo}-28`,
-      tasa_bcv: parseFloat(tr.querySelector('.tasa-cierre-valor')?.value) || 68.50,
+      tasa_bcv: parseFloat(tr.querySelector('.tasa-cierre-valor')?.value) || 0,
       moneda: 'USD'
     }));
+
+    for (const t of tasas) {
+      if (!t.tasa_bcv || t.tasa_bcv <= 0) {
+        throw new Error(`Por favor ingrese una tasa válida mayor a cero para el período ${t.periodo}`);
+      }
+    }
 
     const metodoVal = document.getElementById('cfg-metodo-kardex-global')?.value || 'CPP';
 
@@ -4934,6 +4970,188 @@ async function guardarYRevalorizarTasasBCV(e) {
     }
   }
 }
+
+// ============================================================================
+// 16. MÓDULO DE CONFIGURACIÓN & ACTUALIZACIÓN DIARIA DE TASA OFICIAL BCV
+// ============================================================================
+
+async function loadConfiguracionTab() {
+  const tbody = document.getElementById('tbody-config-tasas-bcv');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 24px;">Consultando tasas oficiales BCV de cierre mensual...</td></tr>`;
+
+  try {
+    const res = await fetch('/api/tasas-bcv');
+    const data = await res.json();
+    const tasas = Array.isArray(data.tasas) ? data.tasas : [];
+    state.tasasBcv = tasas;
+    state.metodoValoracionKardex = data.metodo_valoracion_kardex || 'CPP';
+
+    const selMetodo = document.getElementById('cfg-metodo-kardex-tab');
+    if (selMetodo) selMetodo.value = state.metodoValoracionKardex;
+
+    if (tasas.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 20px;">No hay tasas configuradas.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = tasas.map(t => {
+      const label = NOMBRES_MESES_CIERRE[t.periodo] || t.periodo;
+      const isOct = t.periodo === '2026-10';
+      const numTasa = Number(t.tasa_bcv || 0);
+      return `
+        <tr data-periodo="${t.periodo}" style="${isOct ? 'background: #eff6ff; font-weight: 600;' : ''}">
+          <td class="font-mono font-bold" style="color:#0B2447; padding: 10px 14px;">${t.periodo}</td>
+          <td style="padding: 10px 14px;">
+            <div style="font-weight: 700; color: #0B2447;">${label}</div>
+            <div style="font-size: 0.72rem; color: #64748b;">${t.fuente || 'BCV Oficial Cierre Mensual'}</div>
+          </td>
+          <td style="padding: 10px 14px;">
+            <input type="date" class="form-input config-tasa-fecha font-mono" value="${t.fecha_cierre || (t.periodo + '-28')}" style="padding: 5px 8px; font-size: 0.8rem; width: 100%;">
+          </td>
+          <td style="padding: 10px 14px;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+              <span style="font-size: 0.76rem; font-weight: 800; color: #64748b;">Bs.</span>
+              <input type="number" step="any" min="0.0001" class="form-input config-tasa-valor font-mono font-bold text-right" value="${numTasa > 0 ? numTasa.toFixed(4) : ''}" style="padding: 5px 8px; font-size: 0.88rem; color:#0B2447; border-color:#19A7CE; width: 135px;" required placeholder="0.0000">
+            </div>
+          </td>
+          <td style="padding: 10px 14px; font-size: 0.75rem; color: #047857; font-weight: 700;">
+            ✅ Kardex USD×Tasa | Libros IVA Bs÷Tasa
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: #dc2626; padding: 20px;">Error al cargar tasas de configuración: ${err.message}</td></tr>`;
+  }
+}
+
+async function guardarTasasBcvConfig(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const btn = document.getElementById('btn-save-config-tasas');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Revalorizando Kardex y Libros Fiscales...';
+  }
+
+  try {
+    const rows = Array.from(document.querySelectorAll('#tbody-config-tasas-bcv tr[data-periodo]'));
+    const tasas = rows.map(tr => ({
+      periodo: tr.dataset.periodo,
+      fecha_cierre: tr.querySelector('.config-tasa-fecha')?.value || `${tr.dataset.periodo}-28`,
+      tasa_bcv: parseFloat(tr.querySelector('.config-tasa-valor')?.value) || 0,
+      moneda: 'USD'
+    }));
+
+    for (const t of tasas) {
+      if (!t.tasa_bcv || t.tasa_bcv <= 0) {
+        throw new Error(`Por favor ingrese una tasa válida mayor a 0 para el período ${t.periodo}`);
+      }
+    }
+
+    const metodoVal = document.getElementById('cfg-metodo-kardex-tab')?.value || 'CPP';
+
+    const res = await fetch('/api/tasas-bcv/revalorizar-cierre', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasas,
+        metodo_valoracion_kardex: metodoVal
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al revalorizar cierres mensuales');
+
+    showToast(data.message || 'Tasas BCV guardadas y cierres mensuales revalorizados con éxito!', 'success');
+
+    await loadTasasBcvPeriodo();
+    await Promise.all([
+      loadDashboard(),
+      loadProducts(),
+      loadMonthlyReport(),
+      loadLibroCompras(),
+      loadLibroVentas()
+    ]);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Guardar Tasas BCV y Revalorizar Inventario y Libros Fiscales (Bs. ↔ USD)';
+    }
+  }
+}
+
+async function guardarTasaBcvDiaria(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const inputTasa = document.getElementById('daily-bcv-input');
+  const inputFecha = document.getElementById('daily-bcv-fecha-input');
+  const btn = document.getElementById('btn-save-daily-bcv');
+
+  const tasaVal = parseFloat(inputTasa?.value);
+  if (!tasaVal || tasaVal <= 0) {
+    showToast('Por favor ingrese un monto válido para la Tasa Oficial BCV.', 'error');
+    return;
+  }
+
+  const fechaVal = inputFecha?.value || new Date().toISOString().split('T')[0];
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>Guardando...</span>`;
+  }
+
+  try {
+    const res = await fetch('/api/tasas-bcv/diaria', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasa_bcv: tasaVal,
+        fecha: fechaVal,
+        moneda: 'USD'
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar la tasa BCV diaria');
+
+    showToast(data.mensaje || `Tasa BCV del día guardada: Bs. ${tasaVal.toFixed(4)}`, 'success');
+
+    // Actualizar datos de tasa en el sistema
+    await loadTasasBcvPeriodo();
+
+    // Sincronizar campos de entrada o salida si coinciden con la fecha
+    const entFecha = document.getElementById('ent-fecha')?.value;
+    const salFecha = document.getElementById('sal-fecha')?.value;
+    if (entFecha === fechaVal) {
+      const entTasa = document.getElementById('ent-tasa');
+      if (entTasa) {
+        entTasa.value = tasaVal.toFixed(4);
+        calculateEntryTotals();
+      }
+    }
+    if (salFecha === fechaVal) {
+      const salTasa = document.getElementById('sal-tasa');
+      if (salTasa) {
+        salTasa.value = tasaVal.toFixed(4);
+        calculateExitTotals();
+      }
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        <span>Actualizar Tasa Hoy</span>
+      `;
+    }
+  }
+}
+
 
 
 

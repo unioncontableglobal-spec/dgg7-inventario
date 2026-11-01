@@ -2820,3 +2820,184 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ==========================================================================
+   WIDGET EJECUTIVO: TASA OFICIAL BCV DEL DÍA (INICIO / DASHBOARD)
+   ========================================================================== */
+.daily-bcv-widget {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #0B2447 0%, #19376D 100%);
+  color: #FFFFFF;
+  border-radius: 14px;
+  padding: 18px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 25px -5px rgba(11, 36, 71, 0.35), 0 0 0 1.5px rgba(25, 167, 206, 0.35);
+  flex-wrap: wrap;
+}
+
+.daily-bcv-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-bcv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(25, 167, 206, 0.2);
+  border: 1px solid rgba(25, 167, 206, 0.4);
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.bcv-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 8px #10B981;
+}
+
+.bcv-badge-text {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #7dd3fc;
+  letter-spacing: 0.08em;
+}
+
+.daily-bcv-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.daily-bcv-rate {
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.daily-bcv-date {
+  font-size: 0.76rem;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.daily-bcv-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.daily-bcv-desc {
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  max-width: 380px;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.daily-bcv-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.daily-input-group {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 8px;
+  border: 1.5px solid #19A7CE;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.daily-input-prefix {
+  padding: 6px 10px;
+  background: #f1f5f9;
+  color: #0B2447;
+  font-weight: 800;
+  font-size: 0.8rem;
+  border-right: 1px solid #cbd5e1;
+}
+
+.daily-bcv-input {
+  width: 120px;
+  height: 38px;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.95rem;
+  color: #0B2447;
+  outline: none;
+}
+
+.daily-bcv-date-input {
+  height: 38px;
+  border: none;
+  border-left: 1px solid #cbd5e1;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  color: #0B2447;
+  outline: none;
+}
+
+.btn-daily-bcv {
+  height: 38px;
+  padding: 0 14px;
+  background: #19A7CE;
+  color: #0B2447;
+  font-weight: 800;
+  font-size: 0.82rem;
+  border: none;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-daily-bcv:hover {
+  background: #38bdf8;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .daily-bcv-widget {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+  .daily-bcv-right {
+    align-items: stretch;
+  }
+  .daily-bcv-desc {
+    text-align: left;
+    max-width: 100%;
+  }
+  .daily-bcv-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .daily-input-group {
+    width: 100%;
+  }
+  .daily-bcv-input {
+    flex: 1;
+    width: auto;
+  }
+  .btn-daily-bcv {
+    width: 100%;
+    justify-content: center;
+  }
+}
