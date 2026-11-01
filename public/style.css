@@ -1881,3 +1881,589 @@ select:focus, input:focus {
   }
 }
 
+
+
+/* ==========================================================================
+   MÓDULO DE LOGIN & ACCESO CORPORATIVO (UNIÓN CONTABLE GLOBAL)
+   ========================================================================== */
+.login-screen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 20% 30%, #071529 0%, #0B2447 50%, #19376D 100%);
+  padding: 24px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.login-container {
+  display: grid;
+  grid-template-columns: 1.18fr 1fr;
+  max-width: 1060px;
+  width: 100%;
+  min-height: 620px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(25, 167, 206, 0.35);
+  overflow: hidden;
+  animation: loginFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: scale(0.97) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Panel Izquierdo: Branding & Datos Fiscales */
+.login-brand-panel {
+  background: linear-gradient(145deg, #071529 0%, #0B2447 60%, #102C57 100%);
+  color: #FFFFFF;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: 1px solid rgba(25, 167, 206, 0.25);
+  position: relative;
+}
+
+.login-brand-panel::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(25, 167, 206, 0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.login-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.login-logo-wrapper {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 6px;
+  border: 2px solid #19A7CE;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.login-logo-img {
+  height: 52px;
+  width: auto;
+  display: block;
+}
+
+.login-firm-badge {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: #19A7CE;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.login-firm-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.login-firm-slogan {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #93c5fd;
+  margin: 2px 0 0 0;
+}
+
+/* Box del Sistema */
+.login-system-box {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(25, 167, 206, 0.3);
+  border-left: 4px solid #19A7CE;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.login-system-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #19A7CE;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-system-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  margin: 4px 0 2px 0;
+}
+
+.login-system-subtitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 6px;
+}
+
+.login-system-desc {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Ficha Fiscal */
+.login-fiscal-card {
+  background: rgba(11, 36, 71, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+}
+
+.login-fiscal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fiscal-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 8px #10B981;
+}
+
+.fiscal-header-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #19A7CE;
+  letter-spacing: 0.06em;
+}
+
+.login-fiscal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fiscal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 0.76rem;
+  gap: 10px;
+}
+
+.fiscal-label {
+  color: #94a3b8;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.fiscal-value {
+  color: #f1f5f9;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.fiscal-value.highlight {
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.fiscal-value.highlight-rif {
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 0.04em;
+}
+
+.login-brand-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.security-pills {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.sec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  background: rgba(25, 167, 206, 0.15);
+  border: 1px solid rgba(25, 167, 206, 0.35);
+  color: #7dd3fc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.developer-credit {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.developer-credit strong {
+  color: #19A7CE;
+}
+
+/* Panel Derecho: Formulario */
+.login-form-panel {
+  padding: 44px 38px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #FFFFFF;
+}
+
+.login-form-content {
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.form-title-group {
+  margin-bottom: 24px;
+}
+
+.lock-icon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #e0f2fe;
+  border: 1.5px solid #19A7CE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.form-main-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0B2447;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.form-sub-title {
+  font-size: 0.84rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* Alert Error */
+.login-alert-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1.5px solid #ef4444;
+  color: #b91c1c;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Form Fields */
+.login-field-group {
+  margin-bottom: 18px;
+}
+
+.login-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.login-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-wrapper .input-icon {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.login-input {
+  width: 100%;
+  height: 46px;
+  padding: 10px 14px 10px 40px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  color: #0f172a;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: #0B2447;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(11, 36, 71, 0.12);
+}
+
+.btn-toggle-pwd {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-toggle-pwd:hover {
+  color: #0B2447;
+}
+
+.login-options-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 0.8rem;
+}
+
+.checkbox-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-remember input {
+  accent-color: #0B2447;
+  width: 16px;
+  height: 16px;
+}
+
+.btn-login-submit {
+  width: 100%;
+  height: 48px;
+  background: linear-gradient(135deg, #0B2447 0%, #19376D 100%);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.96rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(11, 36, 71, 0.35);
+}
+
+.btn-login-submit:hover {
+  background: linear-gradient(135deg, #081d3a 0%, #102C57 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(11, 36, 71, 0.45);
+}
+
+.btn-login-submit:active {
+  transform: translateY(0);
+}
+
+/* Quick Access Chips */
+.login-quick-access {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.quick-title {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.quick-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.quick-chip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-chip:hover {
+  background: #e0f2fe;
+  border-color: #19A7CE;
+}
+
+.chip-role {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #0369a1;
+  letter-spacing: 0.04em;
+}
+
+.chip-user {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.login-card-subfooter {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+/* Sidebar User Bar */
+.user-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin-top: 8px;
+}
+
+.user-session-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #19A7CE;
+  color: #0B2447;
+  font-weight: 800;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #19A7CE;
+  letter-spacing: 0.04em;
+}
+
+.btn-logout {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-logout:hover {
+  background: #ef4444;
+  color: #FFFFFF;
+  border-color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .login-container {
+    grid-template-columns: 1fr;
+    max-width: 500px;
+  }
+  .login-brand-panel {
+    padding: 28px 24px;
+  }
+  .login-form-panel {
+    padding: 32px 24px;
+  }
+}

@@ -16,9 +16,171 @@
 <body>
 
   <!-- ==========================================================================
+       MÓDULO DE ACCESO SEGURO Y AUTENTICACIÓN (UNIÓN CONTABLE GLOBAL)
+       ========================================================================== -->
+  <div id="login-screen" class="login-screen-overlay">
+    <div class="login-container">
+      
+      <!-- PANEL IZQUIERDO: BRANDING, DATOS FISCALES DG 67 & FIRMA CONTABLE -->
+      <div class="login-brand-panel">
+        
+        <!-- Logo y Firma Asesora -->
+        <div class="login-brand-header">
+          <div class="login-logo-wrapper">
+            <img src="LOGOUCG.png" alt="Unión Contable Global" class="login-logo-img">
+          </div>
+          <div class="login-firm-text">
+            <span class="login-firm-badge">ASESORES CONTABLES & AUDITORÍA INTEGRAL</span>
+            <h1 class="login-firm-title">UNIÓN CONTABLE GLOBAL</h1>
+            <p class="login-firm-slogan">"Unimos números, contamos éxitos"</p>
+          </div>
+        </div>
+
+        <!-- Identidad Oficial del Sistema -->
+        <div class="login-system-box">
+          <div class="login-system-tag">SISTEMA INTEGRAL DE CONTROL TRIBUTARIO</div>
+          <h2 class="login-system-title">📦 SISCON-ES DG67</h2>
+          <div class="login-system-subtitle">Sistema de Control de Inventario, Entradas, Salidas y Kardex Fiscal</div>
+          <p class="login-system-desc">Conforme a las normativas de la <strong>Providencia Administrativa SENIAT SNAT/2026/00093</strong> y el Decreto 1.808.</p>
+        </div>
+
+        <!-- Ficha Fiscal Oficial del Contribuyente DG 67 -->
+        <div class="login-fiscal-card">
+          <div class="login-fiscal-header">
+            <span class="fiscal-pulse-dot"></span>
+            <span class="fiscal-header-title">DATOS FISCALES DEL CONTRIBUYENTE EMISOR</span>
+          </div>
+          <div class="login-fiscal-body">
+            <div class="fiscal-row">
+              <span class="fiscal-label">Razón Social:</span>
+              <span class="fiscal-value highlight">INVERSIONES DG 67, C.A.</span>
+            </div>
+            <div class="fiscal-row">
+              <span class="fiscal-label">N° de RIF:</span>
+              <span class="fiscal-value font-mono highlight-rif">J-50700865-7</span>
+            </div>
+            <div class="fiscal-row">
+              <span class="fiscal-label">Condición IVA:</span>
+              <span class="fiscal-value">Contribuyente Ordinario (Retención 75%)</span>
+            </div>
+            <div class="fiscal-row">
+              <span class="fiscal-label">Domicilio Fiscal:</span>
+              <span class="fiscal-value">Av. Sur 11 entre Bolívar y Miranda, Casa 112, San Agustín del Norte, Caracas</span>
+            </div>
+            <div class="fiscal-row">
+              <span class="fiscal-label">Sede Tributaria:</span>
+              <span class="fiscal-value">Gerencia Regional Libertador - SENIAT</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pie del Panel Corporativo -->
+        <div class="login-brand-footer">
+          <div class="security-pills">
+            <span class="sec-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Cloudflare SSL 256-bit</span>
+            <span class="sec-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Turso Cloud DB</span>
+          </div>
+          <div class="developer-credit">
+            Desarrollado por <strong>UNIÓN CONTABLE GLOBAL</strong>. Asesores Contables
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PANEL DERECHO: FORMULARIO DE ACCESO SEGURO -->
+      <div class="login-form-panel">
+        <div class="login-form-content">
+          
+          <div class="form-title-group">
+            <div class="lock-icon-badge">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2447" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <h2 class="form-main-title">Iniciar Sesión</h2>
+            <p class="form-sub-title">Ingrese sus credenciales corporativas para acceder a la plataforma.</p>
+          </div>
+
+          <!-- Mensaje de Alerta de Error -->
+          <div id="login-error-alert" class="login-alert-error" style="display: none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span id="login-error-text">Usuario o contraseña incorrectos</span>
+          </div>
+
+          <!-- Formulario -->
+          <form id="form-login" onsubmit="handleLoginSubmit(event)">
+            
+            <div class="login-field-group">
+              <label for="login-username" class="login-label">Usuario Autorizado</label>
+              <div class="login-input-wrapper">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </span>
+                <input type="text" id="login-username" class="login-input" placeholder="Ej: admin o unioncontable" required autocomplete="username" autofocus>
+              </div>
+            </div>
+
+            <div class="login-field-group">
+              <div class="label-row">
+                <label for="login-password" class="login-label">Contraseña de Seguridad</label>
+              </div>
+              <div class="login-input-wrapper">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </span>
+                <input type="password" id="login-password" class="login-input" placeholder="••••••••••••" required autocomplete="current-password">
+                <button type="button" class="btn-toggle-pwd" id="btn-toggle-pwd" onclick="togglePasswordVisibility()" title="Mostrar/Ocultar Contraseña">
+                  <svg id="eye-icon-show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <svg id="eye-icon-hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="login-options-row">
+              <label class="checkbox-remember">
+                <input type="checkbox" id="login-remember" checked>
+                <span>Mantener sesión activa</span>
+              </label>
+            </div>
+
+            <button type="submit" class="btn-login-submit" id="btn-login-submit">
+              <span id="login-btn-text">Ingresar al Sistema</span>
+              <svg id="login-btn-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+
+          </form>
+
+          <!-- Acceso Rápido de Perfiles Autorizados -->
+          <div class="login-quick-access">
+            <span class="quick-title">Perfiles Disponibles en el Sistema:</span>
+            <div class="quick-chips">
+              <button type="button" class="quick-chip" onclick="fillQuickLogin('admin', 'DG67*2026')">
+                <span class="chip-role">ADMIN</span>
+                <span class="chip-user">admin</span>
+              </button>
+              <button type="button" class="quick-chip" onclick="fillQuickLogin('unioncontable', 'Contabilidad333*')">
+                <span class="chip-role">ASESOR</span>
+                <span class="chip-user">unioncontable</span>
+              </button>
+              <button type="button" class="quick-chip" onclick="fillQuickLogin('operador', 'Operador*2026')">
+                <span class="chip-role">OPERADOR</span>
+                <span class="chip-user">operador</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="login-card-subfooter">
+            <span>© 2026 <strong>Unión Contable Global</strong> • Caracas, Venezuela</span>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==========================================================================
        ARQUITECTURA DE APLICACIÓN CON SIDEBAR LATERAL IZQUIERDA
        ========================================================================== -->
-  <div class="app-layout">
+  <div class="app-layout" id="app-layout" style="display: none;">
 
     <!-- BARRA LATERAL IZQUIERDA (SIDEBAR PROFESIONAL Y ESTÉTICA) -->
     <aside class="app-sidebar" id="app-sidebar">
@@ -120,7 +282,7 @@
         </button>
       </nav>
 
-      <!-- 4. Pie de la Barra Lateral: Estado en la Nube -->
+      <!-- 4. Pie de la Barra Lateral: Estado en la Nube & Perfil de Usuario -->
       <div class="sidebar-footer">
         <div class="cloud-badge-sidebar" id="cloud-badge" title="Turso Cloud libSQL Encriptado">
           <span class="status-pulse"></span>
@@ -128,6 +290,21 @@
             <span class="cloud-title">Turso Cloud Activo</span>
             <span class="cloud-sub">Base de datos sincronizada</span>
           </div>
+        </div>
+
+        <!-- Perfil del Usuario Autenticado y Salida Segura -->
+        <div class="user-session-bar" id="user-session-bar">
+          <div class="user-session-info">
+            <div class="user-avatar" id="user-avatar">AD</div>
+            <div class="user-meta">
+              <span class="user-name" id="user-name-display">Administrador</span>
+              <span class="user-role" id="user-role-display">ADMINISTRADOR</span>
+            </div>
+          </div>
+          <button class="btn-logout" id="btn-logout" title="Cerrar Sesión Segura" onclick="logoutSession()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>Salir</span>
+          </button>
         </div>
       </div>
 

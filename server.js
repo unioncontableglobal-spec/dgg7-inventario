@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { createClient } from '@libsql/client';
 import xlsxPkg from 'xlsx';
 const XLSX = xlsxPkg.utils ? xlsxPkg : (xlsxPkg.default || xlsxPkg);
@@ -54,6 +55,63 @@ const db = {
     return res;
   }
 };
+
+const AUTH_SALT = 'DG67_UCG_SALT_2026';
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password + AUTH_SALT).digest('hex');
+}
+
+// 0. Módulo de Autenticación y Control de Acceso Corporativo (Unión Contable Global)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { usuario, password } = req.body || {};
+    if (!usuario || !password) {
+      return res.status(400).json({ error: 'Por favor ingrese su usuario y contraseña.' });
+    }
+
+    const hashed = hashPassword(password);
+    const result = await db.execute({
+      sql: 'SELECT id, usuario, nombre_completo, email, rol, activo FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND password_hash = ?',
+      args: [usuario.trim(), hashed]
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos. Verifique sus credenciales.' });
+    }
+
+    const user = result.rows[0];
+    if (!user.activo) {
+      return res.status(403).json({ error: 'Cuenta de usuario inactiva. Comuníquese con Unión Contable Global.' });
+    }
+
+    await db.execute({
+      sql: "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = ?",
+      args: [user.id]
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+
+    res.json({
+      ok: true,
+      mensaje: 'Acceso autorizado al Sistema de Entradas, Salidas y Kardex DG 67',
+      token,
+      usuario: {
+        id: user.id,
+        usuario: user.usuario,
+        nombre: user.nombre_completo,
+        email: user.email,
+        rol: user.rol
+      }
+    });
+  } catch (error) {
+    console.error('Error en autenticación:', error);
+    res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
+  }
+});
+
+app.get('/api/auth/verify', async (req, res) => {
+  res.json({ ok: true, active: true });
+});
 
 // 1. Health check & Config Info
 app.get('/api/health', async (req, res) => {

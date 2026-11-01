@@ -13,12 +13,175 @@ const state = {
   activeTab: 'tab-dashboard'
 };
 
-// DOM Content Loaded
+// --------------------------------------------------------------------------
+// CONTROL DE ACCESO CORPORATIVO Y AUTENTICACIÓN (UNIÓN CONTABLE GLOBAL)
+// --------------------------------------------------------------------------
+const AUTH_STORAGE_KEY = 'dg67_auth_session';
+
 document.addEventListener('DOMContentLoaded', () => {
-  initApp();
+  checkAuthSession();
 });
 
+function checkAuthSession() {
+  const sessionData = localStorage.getItem(AUTH_STORAGE_KEY) || sessionStorage.getItem(AUTH_STORAGE_KEY);
+  if (sessionData) {
+    try {
+      const session = JSON.parse(sessionData);
+      if (session && session.usuario) {
+        showApp(session.usuario);
+        initApp();
+        return;
+      }
+    } catch (e) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+  }
+  showLogin();
+}
+
+function showLogin() {
+  const loginScreen = document.getElementById('login-screen');
+  const appLayout = document.getElementById('app-layout');
+  if (loginScreen) loginScreen.style.display = 'flex';
+  if (appLayout) appLayout.style.display = 'none';
+  const userInput = document.getElementById('login-username');
+  if (userInput) userInput.focus();
+}
+
+function showApp(user) {
+  const loginScreen = document.getElementById('login-screen');
+  const appLayout = document.getElementById('app-layout');
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (appLayout) appLayout.style.display = 'flex';
+
+  // Actualizar Ficha de Usuario en la Barra Lateral
+  if (user) {
+    const nameEl = document.getElementById('user-name-display');
+    const roleEl = document.getElementById('user-role-display');
+    const avatarEl = document.getElementById('user-avatar');
+    
+    if (nameEl) nameEl.textContent = user.nombre || user.usuario;
+    if (roleEl) roleEl.textContent = (user.rol || 'USUARIO').toUpperCase();
+    if (avatarEl) {
+      const initials = (user.nombre || user.usuario || 'DG')
+        .split(' ')
+        .map(w => w[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+      avatarEl.textContent = initials || 'DG';
+    }
+  }
+}
+
+async function handleLoginSubmit(event) {
+  if (event) event.preventDefault();
+  
+  const userEl = document.getElementById('login-username');
+  const pwdEl = document.getElementById('login-password');
+  const alertEl = document.getElementById('login-error-alert');
+  const alertText = document.getElementById('login-error-text');
+  const btnSubmit = document.getElementById('btn-login-submit');
+  const btnText = document.getElementById('login-btn-text');
+
+  const usuario = (userEl?.value || '').trim();
+  const password = pwdEl?.value || '';
+
+  if (!usuario || !password) {
+    if (alertEl && alertText) {
+      alertText.textContent = 'Por favor ingrese su usuario y contraseña.';
+      alertEl.style.display = 'flex';
+    }
+    return;
+  }
+
+  // Ocultar error previo y poner estado de carga
+  if (alertEl) alertEl.style.display = 'none';
+  if (btnSubmit) btnSubmit.disabled = true;
+  if (btnText) btnText.textContent = 'Verificando credenciales...';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Credenciales inválidas.');
+    }
+
+    // Guardar sesión si el checkbox está activo
+    const remember = document.getElementById('login-remember')?.checked !== false;
+    if (remember) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+    } else {
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+    }
+
+    showToast(`Bienvenido, ${data.usuario.nombre || data.usuario.usuario}`, 'success');
+    showApp(data.usuario);
+    initApp();
+
+  } catch (error) {
+    if (alertEl && alertText) {
+      alertText.textContent = error.message;
+      alertEl.style.display = 'flex';
+    }
+    if (pwdEl) {
+      pwdEl.value = '';
+      pwdEl.focus();
+    }
+  } finally {
+    if (btnSubmit) btnSubmit.disabled = false;
+    if (btnText) btnText.textContent = 'Ingresar al Sistema';
+  }
+}
+
+function logoutSession() {
+  if (!confirm('¿Desea cerrar la sesión de trabajo segura?')) return;
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  const pwdEl = document.getElementById('login-password');
+  if (pwdEl) pwdEl.value = '';
+  showLogin();
+  showToast('Sesión finalizada correctamente', 'info');
+}
+
+function togglePasswordVisibility() {
+  const pwdInput = document.getElementById('login-password');
+  const eyeShow = document.getElementById('eye-icon-show');
+  const eyeHide = document.getElementById('eye-icon-hide');
+  if (!pwdInput) return;
+
+  if (pwdInput.type === 'password') {
+    pwdInput.type = 'text';
+    if (eyeShow) eyeShow.style.display = 'none';
+    if (eyeHide) eyeHide.style.display = 'inline';
+  } else {
+    pwdInput.type = 'password';
+    if (eyeShow) eyeShow.style.display = 'inline';
+    if (eyeHide) eyeHide.style.display = 'none';
+  }
+}
+
+function fillQuickLogin(user, pwd) {
+  const userEl = document.getElementById('login-username');
+  const pwdEl = document.getElementById('login-password');
+  const alertEl = document.getElementById('login-error-alert');
+  if (userEl) userEl.value = user;
+  if (pwdEl) pwdEl.value = pwd;
+  if (alertEl) alertEl.style.display = 'none';
+  handleLoginSubmit();
+}
+
+let appInitialized = false;
 async function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
   setupNavigation();
   setupEventListeners();
   
