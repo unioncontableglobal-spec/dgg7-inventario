@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Informe de Auditoría y Cruce Fiscal vs Almacén - Inversiones DG 67, C.A.</title>
+  <link rel="icon" type="image/png" href="LOGOUCG.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #000080;
+      --blue: #0A5CF5;
+      --dark: #0f172a;
+      --slate: #334155;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --success: #16a34a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: var(--dark);
+      line-height: 1.5;
+      padding: 24px;
+      font-size: 13px;
+    }
+    .container { max-width: 1280px; margin: 0 auto; }
+    .action-bar {
+      position: sticky;
+      top: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      z-index: 1000;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-primary:hover { background: #0848c4; }
+    .btn-secondary { background: #f1f5f9; color: var(--slate); border-color: #cbd5e1; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-navy { background: var(--navy); color: white; }
+    .btn-navy:hover { background: #000066; }
+    .report-paper {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+      margin-bottom: 40px;
+    }
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+    .brand-title { font-size: 20px; font-weight: 800; color: var(--navy); letter-spacing: -0.5px; }
+    .brand-subtitle { font-size: 14px; font-weight: 600; color: var(--slate); margin-top: 4px; }
+    .meta-box { text-align: right; font-size: 11px; color: var(--muted); line-height: 1.6; }
+    .meta-box strong { color: var(--dark); }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .kpi-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .kpi-val { font-size: 18px; font-weight: 800; color: var(--dark); font-family: 'JetBrains Mono', monospace; }
+    .kpi-sub { font-size: 11px; color: var(--blue); font-weight: 700; margin-top: 4px; }
+    .section-title {
+      font-size: 16px; font-weight: 800; color: var(--navy); border-left: 4px solid var(--blue);
+      padding-left: 12px; margin: 32px 0 16px 0;
+    }
+    .alert-box { border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 12px; line-height: 1.5; }
+    .alert-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .alert-danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .table-container { overflow-x: auto; margin: 16px 0 24px; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left; }
+    th { background: #f1f5f9; color: var(--slate); font-weight: 700; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; color: var(--slate); }
+    tr:nth-child(even) { background-color: #fafbfc; }
+    tr:hover { background-color: #f1f5f9; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .font-bold { font-weight: 700; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-success { background: #dcfce7; color: #166534; }
+    .badge-info { background: #e0e7ff; color: #3730a3; }
+    .sub-usd { font-size: 10px; color: #0284c7; font-weight: 600; display: block; }
+    .decision-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 20px 0; }
+    .decision-card { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 18px; }
+    .decision-num { font-size: 11px; font-weight: 800; color: var(--blue); text-transform: uppercase; margin-bottom: 4px; }
+    .decision-title { font-size: 13px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
+    .decision-body { font-size: 11.5px; color: var(--slate); line-height: 1.5; }
+    .decision-result { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 11px; font-weight: 700; color: var(--success); }
+    @media print {
+      body { background: white; padding: 0; font-size: 10px; }
+      .action-bar { display: none !important; }
+      .report-paper { border: none; box-shadow: none; padding: 0; margin: 0; }
+      @page { size: letter landscape; margin: 10mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="action-bar">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-weight: 800; color: var(--navy); font-size: 14px;">SISCON-ES DG67</span>
+        <span style="background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">Auditoría Oficial 2026</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <button onclick="window.print()" class="btn btn-primary">🖨️ Imprimir / Guardar en PDF</button>
+        <a href="/INFORME_AUDITORIA_CRUCE_FISCAL_DG67.md" download="INFORME_AUDITORIA_CRUCE_FISCAL_DG67.md" class="btn btn-navy">📥 Descargar Markdown (.md)</a>
+        <a href="/" class="btn btn-secondary">🔙 Volver al Sistema</a>
+      </div>
+    </div>
+
+    <div class="report-paper">
+      <div class="report-header">
+        <div>
+          <div class="brand-title">INFORME EJECUTIVO DE AUDITORÍA Y CRUCE INTEGRAL</div>
+          <div class="brand-subtitle">INVENTARIO FÍSICO (KARDEX) VS. LIBROS FISCALES SENIAT Y RETENCIONES ISLR</div>
+          <div style="margin-top: 8px; font-size: 12px; color: var(--slate);">
+            <strong>Empresa Auditada:</strong> INVERSIONES DG 67, C.A. | <strong>RIF:</strong> J-50700865-7<br>
+            <strong>Asesoría y Fiscalidad:</strong> UNIÓN GLOBAL 333, C.A. | <strong>RIF:</strong> J-50714716-9
+          </div>
+        </div>
+        <div class="meta-box">
+          <div><strong>Fecha Emisión:</strong> Noviembre 2026</div>
+          <div><strong>Período Auditado:</strong> Ene - Sep 2026</div>
+          <div><strong>Normativa:</strong> Prov. PA SNAT/2026/00093 & Art. 177 RISLR</div>
+          <div><strong>Estado:</strong> <span class="badge badge-warning">DESFASE OPERATIVO AUDITADO</span></div>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">Compras Declaradas SENIAT</div>
+          <div class="kpi-val">Bs. 5.664.026,56</div>
+          <div class="kpi-sub">$8.117,23 USD • 40 facturas</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Mercancía (Repuestos)</div>
+          <div class="kpi-val">Bs. 4.645.588,68</div>
+          <div class="kpi-sub">$6.572,48 USD • 32 facturas</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Facturas sin Entrada en Tienda</div>
+          <div class="kpi-val" style="color: var(--danger);">18 Facturas</div>
+          <div class="kpi-sub" style="color: var(--danger);">Bs. 2.474.098,88 ($3.784,82 USD)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Retenciones ISLR Unión Global</div>
+          <div class="kpi-val" style="color: var(--success);">Bs. 18.991,22</div>
+          <div class="kpi-sub" style="color: var(--success);">100% Auditadas (6 Comprobantes)</div>
+        </div>
+      </div>
+
+      <div class="section-title">1. Resumen Ejecutivo para la Gerencia y el Contador</div>
+      <p style="margin-bottom: 12px; font-size: 12.5px; color: var(--slate);">
+        El presente informe consolida los resultados del cruce integral entre las <strong>Declaraciones Mensuales de IVA y Libros Fiscales presentados al SENIAT</strong>, las <strong>Entradas y Salidas físicas del Almacén (Kardex)</strong> y los <strong>Comprobantes Oficiales de Retención de ISLR (2%)</strong> emitidos en el Ejercicio Fiscal 2026.
+      </p>
+
+      <div class="alert-box alert-warning">
+        <strong>Diagnóstico de la Discrepancia del Dashboard:</strong><br>
+        La discrepancia no se originó en un error contable de los libros, sino en un <strong>desfase operativo de tiempos entre el depósito y la administración</strong>:
+        <ul style="margin: 6px 0 0 18px;">
+          <li>En <strong>Febrero 2026</strong>, la tienda ingresó físicamente <strong>53 recepciones de repuestos (Bs. 2.305.076,04 / $5.523,02 USD)</strong> con notas provisionales ("CONTROL DE INVETRIO"), mientras que las facturas fiscales fueron declaradas formalmente meses después (Mayo 2026).</li>
+          <li>En los meses posteriores (Junio, Agosto y Septiembre 2026), el Contador declaró <strong>18 facturas legales de repuestos (Bs. 2.474.098,88 / $3.784,82 USD)</strong> a las cuales <strong>el personal del almacén no les registró la entrada física en el sistema</strong>.</li>
+        </ul>
+      </div>
+
+      <div class="section-title">2. Cuadro Consolidado Mes a Mes: Fiscal vs. Almacén</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Período</th>
+              <th class="text-right">Compras Mercancía (Libro SENIAT)</th>
+              <th class="text-right">Servicios / Honorarios (SENIAT)</th>
+              <th class="text-right">Total Compras (SENIAT)</th>
+              <th class="text-right">Entradas Almacén (Kardex)</th>
+              <th class="text-right">Ventas Declaradas (Libro Ventas)</th>
+              <th class="text-center">Estatus de Coincidencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-bold">2025-12</td>
+              <td class="text-right" style="color: var(--muted);"><em>Inventario Inicial</em></td>
+              <td class="text-right">—</td>
+              <td class="text-right">—</td>
+              <td class="text-right font-mono font-bold">Bs. 12.213.261,98<span class="sub-usd">$40.964,43 USD (4.451 und)</span></td>
+              <td class="text-right">—</td>
+              <td class="text-center"><span class="badge badge-info">Base de Arranque</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-01</td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD</span></td>
+              <td class="text-right font-mono">Bs. 51.093,80<span class="sub-usd">$139,10 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 51.093,80<span class="sub-usd">$139,10 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 949.880,58<span class="sub-usd">$2.585,85 USD (184 und)</span></td>
+              <td class="text-center"><span class="badge badge-success">✅ Conciliado (Salidas de Stock)</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-02</td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD</span></td>
+              <td class="text-right font-mono">Bs. 104.593,09<span class="sub-usd">$250,61 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 104.593,09<span class="sub-usd">$250,61 USD</span></td>
+              <td class="text-right font-mono font-bold" style="color: var(--warning);">Bs. 2.305.076,04<span class="sub-usd">$5.523,02 USD (878 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 632.326,68<span class="sub-usd">$1.514,94 USD (85 und)</span></td>
+              <td class="text-center"><span class="badge badge-warning">⚠️ Entradas físicas sin factura en mes</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-03</td>
+              <td class="text-right font-mono">Bs. 201.863,86<span class="sub-usd">$425,99 USD (2 fac)</span></td>
+              <td class="text-right font-mono">Bs. 107.915,24<span class="sub-usd">$227,73 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 309.779,10<span class="sub-usd">$653,72 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.011.666,54<span class="sub-usd">$2.134,90 USD (138 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">❌ Factura Angelinev sin entrada</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-04</td>
+              <td class="text-right font-mono">Bs. 326.016,60<span class="sub-usd">$669,28 USD (4 fac)</span></td>
+              <td class="text-right font-mono">Bs. 116.030,79<span class="sub-usd">$238,20 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 442.047,39<span class="sub-usd">$907,48 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.019.261,90<span class="sub-usd">$2.092,43 USD (139 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">❌ Factura SamyMotors sin entrada</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-05</td>
+              <td class="text-right font-mono font-bold">Bs. 1.800.610,83<span class="sub-usd">$3.277,56 USD (14 fac)</span></td>
+              <td class="text-right font-mono">Bs. 190.584,31<span class="sub-usd">$346,91 USD (2 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.991.195,14<span class="sub-usd">$3.624,47 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 2.016.940,84<span class="sub-usd">$3.671,36 USD (258 und)</span></td>
+              <td class="text-center"><span class="badge badge-warning">⚠️ Declaración Tools Light (Entró en Feb)</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-06</td>
+              <td class="text-right font-mono">Bs. 67.510,28<span class="sub-usd">$108,36 USD (1 fac)</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD</span></td>
+              <td class="text-right font-mono font-bold">Bs. 67.510,28<span class="sub-usd">$108,36 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.761.354,65<span class="sub-usd">$2.827,11 USD (162 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">❌ Factura SamyMotors sin entrada</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-07</td>
+              <td class="text-right font-mono" style="color: var(--danger);">Bs. 67.510,28<span class="sub-usd">$90,42 USD (1 fac)</span></td>
+              <td class="text-right font-mono">Bs. 202.855,64<span class="sub-usd">$271,70 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 270.365,92<span class="sub-usd">$362,12 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.705.514,56<span class="sub-usd">$2.284,28 USD (166 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">🚨 Factura SamyMotors Duplicada</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-08</td>
+              <td class="text-right font-mono font-bold">Bs. 452.568,69<span class="sub-usd">$569,27 USD (5 fac)</span></td>
+              <td class="text-right font-mono">Bs. 214.966,70<span class="sub-usd">$270,40 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 667.535,39<span class="sub-usd">$839,67 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.838.257,11<span class="sub-usd">$2.312,30 USD (188 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">❌ 5 Facturas sin entrada en tienda</span></td>
+            </tr>
+            <tr>
+              <td class="font-bold">2026-09</td>
+              <td class="text-right font-mono font-bold">Bs. 1.797.018,42<span class="sub-usd">$2.091,84 USD (6 fac)</span></td>
+              <td class="text-right font-mono">Bs. 230.330,41<span class="sub-usd">$268,12 USD (1 fac)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 2.027.348,83<span class="sub-usd">$2.359,96 USD</span></td>
+              <td class="text-right font-mono">Bs. 0,00<span class="sub-usd">$0,00 USD (0 und)</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.879.167,40<span class="sub-usd">$2.187,46 USD (173 und)</span></td>
+              <td class="text-center"><span class="badge badge-danger">❌ 6 Facturas mayores sin entrada</span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr style="background: #e2e8f0; font-weight: 800;">
+              <td>TOTALES</td>
+              <td class="text-right font-mono font-bold">Bs. 4.645.588,68<span class="sub-usd">$6.572,48 USD</span></td>
+              <td class="text-right font-mono font-bold">Bs. 1.018.437,88<span class="sub-usd">$1.544,75 USD</span></td>
+              <td class="text-right font-mono font-bold">Bs. 5.664.026,56<span class="sub-usd">$8.117,23 USD</span></td>
+              <td class="text-right font-mono font-bold">Bs. 2.305.076,04<span class="sub-usd">$5.523,02 USD</span></td>
+              <td class="text-right font-mono font-bold">Bs. 11.814.449,68<span class="sub-usd">$19.610,28 USD</span></td>
+              <td class="text-center font-bold" style="color: var(--danger);">Desfase Neto: Bs. 2.340.512,64</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="section-title">3. Las 18 Facturas de Mercancía declaradas sin entrada a Almacén</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Período</th>
+              <th>Fecha</th>
+              <th>Proveedor</th>
+              <th>RIF</th>
+              <th>N° Factura</th>
+              <th>N° Control</th>
+              <th class="text-right">Total Factura (Bs.)</th>
+              <th class="text-right">Ref. USD</th>
+              <th class="text-right">Tasa BCV</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>2026-03</td><td>24/03/2026</td><td>Inversiones Angelinev, C.A.</td><td class="font-mono">J-30865927-4</td><td class="font-mono font-bold">004526</td><td class="font-mono">004326</td><td class="text-right font-mono font-bold">Bs. 111.522,40</td><td class="text-right font-mono">$235,34</td><td class="text-right font-mono">473,87</td></tr>
+            <tr><td>2</td><td>2026-04</td><td>17/04/2026</td><td>SamyMotors, C.A.</td><td class="font-mono">J-31550747-1</td><td class="font-mono font-bold">00076198</td><td class="font-mono">00-100641</td><td class="text-right font-mono font-bold">Bs. 117.058,19</td><td class="text-right font-mono">$240,31</td><td class="text-right font-mono">487,12</td></tr>
+            <tr><td>3</td><td>2026-05</td><td>03/05/2026</td><td>Comercializadora Clock Work C.A.</td><td class="font-mono">J-31012003-0</td><td class="font-mono font-bold">00003062</td><td class="font-mono">00003062</td><td class="text-right font-mono font-bold">Bs. 98.717,76</td><td class="text-right font-mono">$179,69</td><td class="text-right font-mono">549,37</td></tr>
+            <tr><td>4</td><td>2026-05</td><td>14/05/2026</td><td>Distribuidora Minimo 5 C.A.</td><td class="font-mono">J-50602568-0</td><td class="font-mono font-bold">00082373</td><td class="font-mono">00082373</td><td class="text-right font-mono font-bold">Bs. 26.765,25</td><td class="text-right font-mono">$48,72</td><td class="text-right font-mono">549,37</td></tr>
+            <tr><td>5</td><td>2026-05</td><td>21/05/2026</td><td>Distribuidora Global 2014, C.A.</td><td class="font-mono">J-31726604-8</td><td class="font-mono font-bold">14506</td><td class="font-mono">00-015495</td><td class="text-right font-mono font-bold">Bs. 11.997,51</td><td class="text-right font-mono">$21,84</td><td class="text-right font-mono">549,37</td></tr>
+            <tr><td>6</td><td>2026-06</td><td>12/06/2026</td><td>SamyMotors, C.A.</td><td class="font-mono">J-31550747-1</td><td class="font-mono font-bold">00076710</td><td class="font-mono">00-101158</td><td class="text-right font-mono font-bold">Bs. 67.510,28</td><td class="text-right font-mono">$108,36</td><td class="text-right font-mono">623,02</td></tr>
+            <tr style="background: #fee2e2;"><td>7</td><td>2026-07</td><td>12/06/2026</td><td>SamyMotors, C.A. (DUPLICADA)</td><td class="font-mono">J-31550747-1</td><td class="font-mono font-bold" style="color: var(--danger);">00076710</td><td class="font-mono">00-101158</td><td class="text-right font-mono font-bold">Bs. 67.510,28</td><td class="text-right font-mono">$90,42</td><td class="text-right font-mono">746,63</td></tr>
+            <tr><td>8</td><td>2026-08</td><td>09/07/2026</td><td>Disbattery Lubricantes, S.A.</td><td class="font-mono">J-41310543-8</td><td class="font-mono font-bold">F0029250</td><td class="font-mono">F0029250</td><td class="text-right font-mono font-bold">Bs. 145.614,02</td><td class="text-right font-mono">$183,16</td><td class="text-right font-mono">794,99</td></tr>
+            <tr><td>9</td><td>2026-08</td><td>09/07/2026</td><td>Grupo Federal Century, C.A.</td><td class="font-mono">J-50248947-9</td><td class="font-mono font-bold">324373</td><td class="font-mono">324373</td><td class="text-right font-mono font-bold">Bs. 102.393,61</td><td class="text-right font-mono">$128,80</td><td class="text-right font-mono">794,99</td></tr>
+            <tr><td>10</td><td>2026-08</td><td>27/08/2026</td><td>Disbattery Lubricantes, S.A.</td><td class="font-mono">J-41310543-8</td><td class="font-mono font-bold">F0030790</td><td class="font-mono">00-279559</td><td class="text-right font-mono font-bold">Bs. 17.826,33</td><td class="text-right font-mono">$22,42</td><td class="text-right font-mono">794,99</td></tr>
+            <tr><td>11</td><td>2026-08</td><td>27/08/2026</td><td>Disbattery Lubricantes, S.A.</td><td class="font-mono">J-41310543-8</td><td class="font-mono font-bold">F0030791</td><td class="font-mono">00-279560</td><td class="text-right font-mono font-bold">Bs. 58.240,98</td><td class="text-right font-mono">$73,26</td><td class="text-right font-mono">794,99</td></tr>
+            <tr><td>12</td><td>2026-08</td><td>28/08/2026</td><td>Distribuidora Global 2014, C.A.</td><td class="font-mono">J-31726604-8</td><td class="font-mono font-bold">15994</td><td class="font-mono">15994</td><td class="text-right font-mono font-bold">Bs. 128.493,75</td><td class="text-right font-mono">$161,63</td><td class="text-right font-mono">794,99</td></tr>
+            <tr><td>13</td><td>2026-09</td><td>08/09/2026</td><td>Grupo Federal Century, C.A.</td><td class="font-mono">J-50248947-9</td><td class="font-mono font-bold">344022</td><td class="font-mono">00-00457746</td><td class="text-right font-mono font-bold">Bs. 405.091,95</td><td class="text-right font-mono">$471,55</td><td class="text-right font-mono">859,06</td></tr>
+            <tr><td>14</td><td>2026-09</td><td>10/09/2026</td><td>SamyMotors, C.A.</td><td class="font-mono">J-31550747-1</td><td class="font-mono font-bold">00077434</td><td class="font-mono">00-101887</td><td class="text-right font-mono font-bold">Bs. 303.802,32</td><td class="text-right font-mono">$353,64</td><td class="text-right font-mono">859,06</td></tr>
+            <tr><td>15</td><td>2026-09</td><td>17/09/2026</td><td>Disbattery Lubricantes, S.A.</td><td class="font-mono">J-41310543-8</td><td class="font-mono font-bold">F0031444</td><td class="font-mono">00-280250</td><td class="text-right font-mono font-bold">Bs. 58.347,37</td><td class="text-right font-mono">$67,92</td><td class="text-right font-mono">859,06</td></tr>
+            <tr><td>16</td><td>2026-09</td><td>17/09/2026</td><td>Disbattery Lubricantes, S.A.</td><td class="font-mono">J-41310543-8</td><td class="font-mono font-bold">F0031445</td><td class="font-mono">00-280251</td><td class="text-right font-mono font-bold">Bs. 120.190,81</td><td class="text-right font-mono">$139,91</td><td class="text-right font-mono">859,06</td></tr>
+            <tr><td>17</td><td>2026-09</td><td>25/09/2026</td><td>Mayor de Repuestos Asiaticos, C.A.</td><td class="font-mono">J-31337156-4</td><td class="font-mono font-bold">090411</td><td class="font-mono">00-0098025</td><td class="text-right font-mono font-bold">Bs. 326.286,06</td><td class="text-right font-mono">$379,82</td><td class="text-right font-mono">859,06</td></tr>
+            <tr><td>18</td><td>2026-09</td><td>26/09/2026</td><td>Alexander Mariño Vargas</td><td class="font-mono">V-14518599-4</td><td class="font-mono font-bold">00002260</td><td class="font-mono">00-00002260</td><td class="text-right font-mono font-bold">Bs. 583.299,91</td><td class="text-right font-mono">$679,00</td><td class="text-right font-mono">859,06</td></tr>
+          </tbody>
+          <tfoot>
+            <tr style="background: #e2e8f0; font-weight: 800;">
+              <td colspan="7">TOTAL 18 FACTURAS PENDIENTES</td>
+              <td class="text-right font-mono font-bold" style="color: var(--danger);">Bs. 2.869.954,82</td>
+              <td class="text-right font-mono font-bold" style="color: var(--danger);">$3.784,82</td>
+              <td>—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="section-title">4. Propuesta de 4 Decisiones Clave (Reunión Contador – Cliente)</div>
+      <div class="decision-grid">
+        <div class="decision-card">
+          <div class="decision-num">Decisión 1</div>
+          <div class="decision-title">Regularización de las 18 Facturas en Kardex</div>
+          <div class="decision-body">Vincular cada una de las 18 facturas legales al inventario físico para registrar formalmente los repuestos en las cantidades y costos indicados.</div>
+          <div class="decision-result">✔ Protege la deducibilidad del Costo de Ventas (Art. 177 RISLR).</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-num">Decisión 2</div>
+          <div class="decision-title">Saneamiento de la Factura SamyMotors</div>
+          <div class="decision-body">Acordar si se presenta Declaración Sustitutiva de IVA (Forma 30) del mes de Julio 2026 para retirar la factura repetida o compensar los Bs. 9.311,76.</div>
+          <div class="decision-result">✔ Cero riesgo de reparos fiscales o multas por crédito duplicado.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-num">Decisión 3</div>
+          <div class="decision-title">Enlace de Entradas de Febrero con Facturas de Mayo</div>
+          <div class="decision-body">Autorizar la vinculación en base de datos entre los 53 movimientos provisionales de Febrero (Tools Light, Mariño, Angelinev) y las facturas fiscales de Mayo.</div>
+          <div class="decision-result">✔ Desaparece la discrepancia histórica en el comparativo del inicio.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-num">Decisión 4</div>
+          <div class="decision-title">Protocolo Estándar "Recepción ↔ Factura"</div>
+          <div class="decision-body">Imponer que la tienda genere siempre su nota de entrada en SISCON-ES DG67 antes de enviar la factura al Contador para su declaración al SENIAT.</div>
+          <div class="decision-result">✔ Sincronización continua y sin futuros desfases.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

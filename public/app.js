@@ -330,14 +330,23 @@ function setupNavigation() {
       sidebar.classList.remove('sidebar-open');
       backdrop.classList.remove('active');
     });
+
+    const closeBtn = document.getElementById('btn-close-sidebar');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        sidebar.classList.remove('sidebar-open');
+        backdrop.classList.remove('active');
+      });
+    }
   }
 }
 
 function switchTab(tabId) {
   state.activeTab = tabId;
   
-  // Close mobile sidebar if open
+  // Close mobile sidebar and backdrop if open
   document.getElementById('app-sidebar')?.classList.remove('sidebar-open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('active');
   document.getElementById('sidebar-backdrop')?.classList.remove('active');
 
   // Update buttons
@@ -556,17 +565,17 @@ function renderDashboardTopProducts(data) {
           <span class="rank-badge ${rankClass}">${idx + 1}</span>
         </td>
         <td style="padding: 8px 10px;">
-          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">${p.codigo}</div>
-          <div style="font-size: 0.72rem; color: #475569; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.descripcion}">${p.descripcion}</div>
+          <div class="font-bold" style="color: #0B2447; font-size: 0.84rem; white-space: nowrap;">${p.codigo}</div>
+          <div class="top-prod-desc" style="font-size: 0.72rem; color: #475569; max-width: 260px; line-height: 1.25;" title="${p.descripcion}">${p.descripcion}</div>
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #059669;">
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #059669; white-space: nowrap;">
           ${p.unidades_vendidas} und
         </td>
-        <td class="text-right font-mono" style="padding: 8px 10px;">
-          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">Bs. ${fmtBs(p.total_ventas_bs)}</div>
-          <div style="font-size: 0.7rem; color: #166534; font-family: monospace;">$${fmtUsd(p.total_ventas_usd)} USD</div>
+        <td class="text-right font-mono" style="padding: 8px 10px; white-space: nowrap;">
+          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem; white-space: nowrap;">Bs. ${fmtBs(p.total_ventas_bs)}</div>
+          <div style="font-size: 0.7rem; color: #166534; font-family: monospace; white-space: nowrap;">$${fmtUsd(p.total_ventas_usd)} USD</div>
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${stockColor};">
+        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${stockColor}; white-space: nowrap;">
           ${p.stock_actual}
         </td>
         <td class="text-center" style="padding: 8px 6px;">
