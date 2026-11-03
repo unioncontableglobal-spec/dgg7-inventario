@@ -1059,7 +1059,7 @@ app.get('/api/export/libro-art177', async (req, res) => {
   }
 });
 
-// 3.3.1 Sub-módulo Auditoría y Sinceración de Inventario (Punto Cero - Fase 1: Matriz de Productos)
+// 3.3.1 Sub-módulo Toma Física y Ajuste de Inventario (Punto Cero - Fase 1: Matriz de Productos)
 app.get('/api/auditoria/matriz', async (req, res) => {
   try {
     const matriz = await getMatrizAuditoriaProductos(db);
@@ -1086,7 +1086,7 @@ app.get('/api/auditoria/exportar-matriz', async (req, res) => {
   }
 });
 
-// 3.3.3 Sub-módulo Auditoría y Sinceración de Inventario (Punto Cero - Fase 2: Procesamiento Masivo)
+// 3.3.3 Sub-módulo Toma Física y Ajuste de Inventario (Punto Cero - Fase 2: Procesamiento Masivo)
 app.post('/api/auditoria/procesar-matriz', async (req, res) => {
   try {
     const { items, opciones } = req.body;

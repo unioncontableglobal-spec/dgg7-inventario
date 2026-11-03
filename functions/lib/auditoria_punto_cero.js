@@ -1,6 +1,6 @@
 /**
  * functions/lib/auditoria_punto_cero.js
- * Sub-módulo de Auditoría y Sinceración de Inventario (Punto Cero) en Tiempo Real
+ * Sub-módulo de Toma Física y Ajuste de Inventario (Punto Cero) en Tiempo Real
  * Compatible con Cloudflare Pages Functions (@libsql/client / Turso Cloud)
  * Cumple con Providencia Administrativa SENIAT PA SNAT/2026/00093 y Art. 177 RISLR
  * Doble Expresión Monetaria: Bolívares (Bs.) prominente y Dólares ($ USD) de referencia
@@ -165,8 +165,8 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   if (tieneFisico && diff !== 0) {
     const isSobrante = diff > 0;
     const tipo = 'AJUSTE';
-    const subtipo = isSobrante ? 'AJUSTE_POSITIVO_SINCERACION' : 'AJUSTE_NEGATIVO_AUDITORIA';
-    const docPrefix = isSobrante ? 'SINCERACION-ENTRADA' : 'AUDITORIA-SALIDA';
+    const subtipo = isSobrante ? 'AJUSTE_POSITIVO_STOCK' : 'AJUSTE_NEGATIVO_STOCK';
+    const docPrefix = isSobrante ? 'AJUSTE-ENTRADA' : 'AJUSTE-SALIDA';
     const nroDoc = `${docPrefix}-${p.codigo}-${timestamp}`;
     const diffAbs = Math.abs(diff);
 

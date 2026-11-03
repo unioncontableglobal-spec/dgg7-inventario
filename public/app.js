@@ -362,21 +362,21 @@ function switchTab(tabId) {
 
   // Update dynamic topbar breadcrumb title
   const tabTitles = {
-    'tab-dashboard': 'Panel de Control de Inventario',
-    'tab-inventario': 'Inventario al Día',
-    'tab-entrada': 'Registrar Entrada',
-    'tab-salida': 'Registrar Salida',
-    'tab-kardex': 'Kardex por Repuesto',
-    'tab-libro-compras': 'Libro de Compras Fiscal SENIAT',
-    'tab-libro-ventas': 'Libro de Ventas Fiscal SENIAT',
-    'tab-declaraciones': 'Declaración Mensual IVA (Forma 30)',
-    'tab-retenciones-islr': 'Comprobantes de Retención ISLR (PA SNAT/2026/00093)',
-    'tab-proveedores': 'Directorio y Panel de Proveedores',
-    'tab-fiscal': 'Auditoría y Cruce Fiscal (IVA vs Almacén)',
-    'tab-punto-cero': 'Auditoría y Sinceración de Inventario (Punto Cero)',
-    'tab-mensual': 'Cierre Físico Mes a Mes',
+    'tab-dashboard': 'Panel Ejecutivo de Inventario',
+    'tab-inventario': 'Gestión de Inventario',
+    'tab-entrada': 'Entradas de Mercancía',
+    'tab-salida': 'Salidas de Mercancía',
+    'tab-kardex': 'Kardex de Artículos',
+    'tab-libro-compras': 'Libro de Compras',
+    'tab-libro-ventas': 'Libro de Ventas',
+    'tab-declaraciones': 'Declaración de IVA (Forma 30)',
+    'tab-retenciones-islr': 'Comprobantes de Retención ISLR',
+    'tab-proveedores': 'Gestión de Proveedores',
+    'tab-fiscal': 'Conciliación Fiscal',
+    'tab-punto-cero': 'Toma Física y Ajuste de Inventario',
+    'tab-mensual': 'Cierres Mensuales de Inventario',
     'tab-movimientos': 'Auditoría de Movimientos',
-    'tab-configuracion': 'Configuración del Sistema y Parámetros Contables'
+    'tab-configuracion': 'Configuración del Sistema'
   };
   const topbarTitleEl = document.getElementById('topbar-section-title');
   if (topbarTitleEl && tabTitles[tabId]) {
@@ -6488,7 +6488,7 @@ function abrirDrawerAuditoria(index) {
     }
   }
 
-  // 2. Bloque A: Sinceración de Inventario (Cantidades & Estatus)
+  // 2. Bloque A: Ajuste de Existencias Físicas (Cantidades & Estatus)
   const elStockTeorico = document.getElementById('drawer-stock-teorico');
   const elCantFisica = document.getElementById('drawer-cant-fisica');
   const elToggleInactivo = document.getElementById('drawer-toggle-inactivo');
@@ -6572,14 +6572,14 @@ function calcularDiferenciaDrawer() {
 
   if (diff > 0) {
     if (elDiff) elDiff.innerHTML = `<span style="color:#15803d; font-weight:800;">+${diff.toFixed(2)} und (Sobrante Físico)</span>`;
-    if (elInfo) elInfo.innerHTML = `<span style="color:#15803d;">Genera Asiento: <strong>Entrada por Sinceración</strong> (Kardex Octubre)</span>`;
+    if (elInfo) elInfo.innerHTML = `<span style="color:#15803d;">Genera Asiento: <strong>Entrada por Ajuste de Inventario</strong> (Kardex Octubre)</span>`;
     if (banner) {
       banner.style.background = '#f0fdf4';
       banner.style.borderColor = '#bbf7d0';
     }
   } else if (diff < 0) {
     if (elDiff) elDiff.innerHTML = `<span style="color:#b91c1c; font-weight:800;">${diff.toFixed(2)} und (Faltante / Merma)</span>`;
-    if (elInfo) elInfo.innerHTML = `<span style="color:#b91c1c;">Genera Asiento: <strong>Salida por Ajuste</strong> (Kardex Octubre)</span>`;
+    if (elInfo) elInfo.innerHTML = `<span style="color:#b91c1c;">Genera Asiento: <strong>Salida por Ajuste de Inventario</strong> (Kardex Octubre)</span>`;
     if (banner) {
       banner.style.background = '#fef2f2';
       banner.style.borderColor = '#fecaca';

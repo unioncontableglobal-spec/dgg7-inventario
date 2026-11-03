@@ -15,3 +15,21 @@
   * **Sin Balance Neto Confuso:** No incluir conceptos contables complejos o abstractos en el Dashboard como *"Balance Neto (Bs. / USD)"* ni fórmulas/deltas de compras menos ventas que confundan a la tienda. Utilizar conceptos comerciales directos, claros y positivos: Total Compras, Total Ventas, Promedio Mensual de Facturación y Unidades en Almacén.
   * No incluir tablas operativas densas de alertas de stock como *"⚠️ Radar de Repuestos en Punto de Reorden (Quiebre)"* en el Dashboard inicial. Las alertas operativas detalladas pertenecen al módulo de *"Inventario al Día"*.
 
+## 3. Estándar de Nomenclatura y Vocabulario Corporativo (Estándar ERP / SAP / Oracle)
+* **Prohibición de Términos Informales o Coloquiales:**
+  - Queda estrictamente prohibido el uso del vocablo *"Sinceración"* o derivados en cualquier parte del sistema (código visual, títulos, botones, alertas, reportes o base de datos visual).
+  - En su lugar, emplear exclusivamente terminología contable y de ERP formal:
+    - *"Toma Física de Inventario"* (para el conteo o auditoría física en almacén).
+    - *"Ajuste de Inventario"* o *"Ajuste de Stock"* (para movimientos de sobrantes/faltantes en Kardex).
+    - *"Conciliación de Stock"* (para el contraste entre stock teórico y físico).
+* **Estandarización de Términos Técnicos Universales:**
+  - *"Maestro de Artículos"* o *"Maestro de Productos"*.
+  - *"Gestión de Inventario"*.
+  - *"Entradas de Mercancía"* y *"Salidas de Mercancía"*.
+  - *"Conciliación Fiscal"*.
+  - *"Datos Maestros"* y *"Estructura de Costos / Precios"*.
+* **Redacción Ejecutiva y Puntual:**
+  - Los títulos, subtítulos, etiquetas y mensajes del sistema deben ser concisos, directos y auto-descriptivos.
+  - Eliminar textos explicativos redundantes, informales o de tono tutorial en la interfaz de usuario.
+
+

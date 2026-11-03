@@ -548,7 +548,7 @@ export async function onRequest(context) {
     }
 
     // ----------------------------------------------------
-    // SUB-MÓDULO DE AUDITORÍA Y SINCERACIÓN (PUNTO CERO)
+    // SUB-MÓDULO DE TOMA FÍSICA Y AJUSTE DE INVENTARIO (PUNTO CERO)
     // ----------------------------------------------------
     if (path === '/api/auditoria/matriz' && method === 'GET') {
       const matriz = await getMatrizAuditoriaProductos(db);
