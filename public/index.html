@@ -1124,6 +1124,23 @@
             </div>
           </div>
 
+          <!-- Banner Interactivo de Facturas Faltantes por Detallar (Cruce de Doble Vía con UCG) -->
+          <div id="banner-salida-pendientes" style="display:none; margin-bottom:16px; background:#fffdfa; border:2px solid #ea580c; border-radius:10px; padding:14px 18px; box-shadow:0 3px 10px rgba(234,88,12,0.15);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <strong style="color:#9a3412; font-size:0.92rem; display:flex; align-items:center; gap:6px;">
+                  🚨 Facturas Pendientes por Detallar (Reportes Z cargados por UCG):
+                </strong>
+                <p style="margin:4px 0 0; font-size:0.78rem; color:#b45309;">
+                  UCG ya registró los Reportes Z de la máquina fiscal. Haz clic en cualquiera de las siguientes facturas para autocompletar el formulario y cargar sus repuestos:
+                </p>
+              </div>
+              <div id="pills-facturas-pendientes-salida" style="display:flex; flex-wrap:wrap; gap:8px;">
+                <!-- Botones rápidos inyectados por JS -->
+              </div>
+            </div>
+          </div>
+
           <div class="form-container">
             <form id="form-salida" class="movement-form">
               <!-- Document Header -->
@@ -2102,67 +2119,237 @@
           </div>
         </section>
 
-        <!-- 11. TAB: AUDITORÍA Y CRUCE FISCAL (LIBROS IVA VS INVENTARIO) -->
+        <!-- 11. TAB: AUDITORÍA Y CRUCE FISCAL (LIBROS IVA VS INVENTARIO - DOBLE VÍA DG67 ↔ UCG) -->
         <section id="tab-fiscal" class="tab-pane">
           <div class="page-header">
             <div>
-              <h1>Auditoría y Cruce Fiscal (Libros IVA vs. Entradas y Salidas)</h1>
-              <p class="subtitle">Conciliación tributaria de facturas de compras, ventas fiscales e inventario con
-                clasificación de proveedores.</p>
+              <h1>Sistema de Cruce de Información y Conciliación de Doble Vía (DG67 ↔ UCG)</h1>
+              <p class="subtitle">Conciliación asíncrona entre salidas de tienda (ítem por ítem) vs. Reportes Z fiscales (UCG), y entradas físicas de almacén vs. Libro de Compras (SENIAT).</p>
             </div>
             <div class="header-buttons">
-              <button class="btn btn-navy" onclick="loadFiscalReconciliation()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                </svg>
-                Refrescar Cruce
+              <button class="btn btn-emerald" onclick="openModalNuevaVenta()" title="Cargar Reporte Z de la máquina fiscal para que DG67 complete los ítems">
+                + Cargar Reporte Z (UCG)
+              </button>
+              <button class="btn btn-navy" onclick="ejecutarCruceDobleVia()">
+                🔄 Ejecutar Conciliación
               </button>
             </div>
           </div>
 
-          <!-- KPI Summary Cards -->
-          <div class="kpi-grid">
-            <div class="kpi-card card-cyan">
-              <div class="kpi-label">TOTAL FACTURAS DECLARADAS</div>
-              <div class="kpi-value" id="kpi-fiscal-total-facturas">74</div>
-              <div class="kpi-sub">Libros de Compras (Ene - Sep 2026)</div>
-            </div>
-
-            <div class="kpi-card card-emerald">
-              <div class="kpi-label">COMPRAS CUADRADAS CON ALMACÉN</div>
-              <div class="kpi-value" id="kpi-fiscal-cuadradas">6</div>
-              <div class="kpi-sub" style="color: #166534; font-weight: 700;">✅ Conciliadas con inventario</div>
-            </div>
-
-            <div class="kpi-card card-rose">
-              <div class="kpi-label">FACTURAS MERCANCÍA PENDIENTES</div>
-              <div class="kpi-value" id="kpi-fiscal-pendientes">42</div>
-              <div class="kpi-sub" style="color: #be123c; font-weight: 700;">❌ Omitidas en inventario</div>
-            </div>
-
-            <div class="kpi-card card-amber">
-              <div class="kpi-label">GASTOS Y SERVICIOS (NO INVENTARIO)</div>
-              <div class="kpi-value" id="kpi-fiscal-gastos">26</div>
-              <div class="kpi-sub">📑 Servicios contables y consumos</div>
-            </div>
+          <!-- Barra Rápida de Meses del Cruce -->
+          <div class="month-pills-bar" id="pills-cruce-bar"
+            style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; background:#f8fafc; padding:10px 14px; border-radius:10px; border:1px solid #e2e8f0; align-items:center;">
+            <span
+              style="font-size:0.76rem; font-weight:800; color:var(--ucg-navy); margin-right:6px; text-transform:uppercase;">📅
+              Período de Cruce:</span>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-10" onclick="seleccionarMesCruce('2026-10')" style="background:var(--ucg-navy); color:#fff; font-weight:800; border:1.5px solid #0A5CF5;">✨ 10 Octubre (Activo)</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-09" onclick="seleccionarMesCruce('2026-09')">09 Sep</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-08" onclick="seleccionarMesCruce('2026-08')">08 Ago</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-07" onclick="seleccionarMesCruce('2026-07')">07 Jul</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-06" onclick="seleccionarMesCruce('2026-06')">06 Jun</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-05" onclick="seleccionarMesCruce('2026-05')">05 May</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-04" onclick="seleccionarMesCruce('2026-04')">04 Abr</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-03" onclick="seleccionarMesCruce('2026-03')">03 Mar</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-02" onclick="seleccionarMesCruce('2026-02')">02 Feb</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="2026-01" onclick="seleccionarMesCruce('2026-01')">01 Ene</button>
+            <button type="button" class="btn btn-sm month-pill-btn" data-periodo="TODOS" onclick="seleccionarMesCruce('TODOS')">📚 Todos</button>
           </div>
 
           <!-- Subtabs Bar -->
           <div class="fiscal-subtabs-bar">
-            <button class="fiscal-subtab active" id="btn-subtab-prov"
-              onclick="switchFiscalSubtab('subtab-proveedores')">
-              🏢 1. Clasificación Proveedores
+            <button class="fiscal-subtab active" id="btn-subtab-vent" onclick="switchFiscalSubtab('subtab-ventas')">
+              📤 1. Cruce Salidas & Ventas (Reportes Z ↔ Tienda - Doble Vía)
             </button>
             <button class="fiscal-subtab" id="btn-subtab-comp" onclick="switchFiscalSubtab('subtab-compras')">
-              📥 2. Cruce Compras vs Almacén
+              📥 2. Cruce Entradas & Compras (Libro Compras ↔ Almacén - Doble Vía)
             </button>
-            <button class="fiscal-subtab" id="btn-subtab-vent" onclick="switchFiscalSubtab('subtab-ventas')">
-              📤 3. Ventas Fiscales (ZOA0000176)
+            <button class="fiscal-subtab" id="btn-subtab-prov" onclick="switchFiscalSubtab('subtab-proveedores')">
+              🏢 3. Directorio de Proveedores & Deducción Fiscal
             </button>
           </div>
 
-          <!-- SUBTAB 1: Proveedores & Clasificación por Tipo de Servicio -->
-          <div id="subtab-proveedores" class="fiscal-subpane active">
+          <!-- SUBTAB 1: Cruce de Ventas (Reportes Z vs Salidas DG67) -->
+          <div id="subtab-ventas" class="fiscal-subpane active">
+            <!-- 4 KPIs Ejecutivos de Cruce de Ventas -->
+            <div class="kpi-grid">
+              <div class="kpi-card card-cyan">
+                <div class="kpi-label">REPORTES Z (MÁQUINA FISCAL UCG)</div>
+                <div class="kpi-value" id="kpi-cruce-z-total">0</div>
+                <div class="kpi-sub" id="kpi-cruce-z-sub">0 Conciliados (0%)</div>
+              </div>
+              <div class="kpi-card card-indigo">
+                <div class="kpi-label">FACTURAS DETALLADAS EN TIENDA</div>
+                <div class="kpi-value" id="kpi-cruce-fact-cargadas">0</div>
+                <div class="kpi-sub" id="kpi-cruce-fact-esperadas">De 0 esperadas en el rango</div>
+              </div>
+              <div class="kpi-card card-rose">
+                <div class="kpi-label">FACTURAS PENDIENTES POR DETALLAR</div>
+                <div class="kpi-value" id="kpi-cruce-fact-faltantes">0</div>
+                <div class="kpi-sub" style="color: #be123c; font-weight: 700;">DG67 debe cargar los ítems</div>
+              </div>
+              <div class="kpi-card card-emerald">
+                <div class="kpi-label">MONTO REPORTES Z VS SALIDAS</div>
+                <div class="kpi-value" id="kpi-cruce-monto-z">Bs. 0,00</div>
+                <div class="kpi-sub" id="kpi-cruce-diferencia-sub">Diferencia: Bs. 0,00</div>
+              </div>
+            </div>
+
+            <!-- Grid de Doble Vía: Panel UCG (Reportes Z) vs Panel DG67 (Pendientes) -->
+            <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; margin-top: 14px;">
+              <!-- Panel UCG: Reportes Z Diarios -->
+              <div class="panel-card" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+                  <div>
+                    <h3 style="margin: 0; color: var(--ucg-navy); font-size: 0.95rem; font-weight: 800;">🏛️ Rol UCG: Control Diario de Reportes Z</h3>
+                    <p style="margin: 2px 0 0; font-size: 0.74rem; color: var(--text-muted);">Reportes de máquina fiscal ZOA0000176 con rango correlativo y totales.</p>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-navy" onclick="openModalNuevaVenta()">+ Nuevo Z</button>
+                </div>
+
+                <div class="table-responsive table-scroll" style="max-height: 480px;">
+                  <table class="data-table" id="table-cruce-reportes-z">
+                    <thead>
+                      <tr>
+                        <th>FECHA</th>
+                        <th>N° Z / SERIAL</th>
+                        <th>RANGO FACTURAS</th>
+                        <th class="text-center">FACT.</th>
+                        <th class="text-right">TOTAL Z (BS / USD)</th>
+                        <th class="text-center">TIENDA</th>
+                        <th class="text-center">ESTATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-cruce-reportes-z">
+                      <tr><td colspan="7" class="text-center">Cargando Reportes Z...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Panel DG67: Monitor de Facturas Faltantes por Detallar (Trabajo Asíncrono) -->
+              <div class="panel-card" style="padding: 16px; background: #fffdfa; border: 1.5px solid #fed7aa;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #fed7aa; padding-bottom: 8px;">
+                  <div>
+                    <h3 style="margin: 0; color: #9a3412; font-size: 0.95rem; font-weight: 800;">🏪 Rol DG67: Facturas Pendientes por Detallar</h3>
+                    <p style="margin: 2px 0 0; font-size: 0.74rem; color: #b45309;">UCG ya cargó estos Reportes Z. Carga los ítems de cada factura para consolidar.</p>
+                  </div>
+                  <span class="badge" id="badge-total-pendientes-dg67" style="background: #ea580c; color: #fff; font-weight: 800; font-size: 0.75rem;">0 pendientes</span>
+                </div>
+
+                <div class="table-responsive table-scroll" style="max-height: 240px; margin-bottom: 16px;">
+                  <table class="data-table" id="table-cruce-facturas-pendientes">
+                    <thead>
+                      <tr>
+                        <th>N° FACTURA</th>
+                        <th>FECHA REPORTE</th>
+                        <th>REPORTE Z</th>
+                        <th class="text-center">ACCIÓN</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-cruce-facturas-pendientes">
+                      <tr><td colspan="4" class="text-center">No hay facturas pendientes.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Salidas Cargadas en Tienda esperando Reporte Z de UCG -->
+                <div style="border-top: 1px solid #fed7aa; padding-top: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 0.78rem; font-weight: 800; color: #1e3a8a;">Salidas de Tienda esperando Reporte Z (UCG):</span>
+                    <span class="badge" id="badge-total-salidas-huerfanas" style="background: #dbeafe; color: #1e40af; font-weight: 700; font-size: 0.72rem;">0 salidas</span>
+                  </div>
+                  <div class="table-responsive table-scroll" style="max-height: 200px;">
+                    <table class="data-table" id="table-cruce-salidas-huerfanas">
+                      <thead>
+                        <tr>
+                          <th>FECHA</th>
+                          <th>FACTURA</th>
+                          <th class="text-right">TOTAL BS.</th>
+                          <th class="text-right">REF. USD</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbody-cruce-salidas-huerfanas">
+                        <tr><td colspan="4" class="text-center">Cargando salidas...</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUBTAB 2: Cruce de Compras (Libro Compras vs Almacén - Doble Vía) -->
+          <div id="subtab-compras" class="fiscal-subpane" style="display: none;">
+            <div class="kpi-grid">
+              <div class="kpi-card card-cyan">
+                <div class="kpi-label">TOTAL FACTURAS COMPRAS SENIAT</div>
+                <div class="kpi-value" id="kpi-compras-total-declaradas">0</div>
+                <div class="kpi-sub">Libro de Compras Fiscal</div>
+              </div>
+              <div class="kpi-card card-emerald">
+                <div class="kpi-label">CONCILIADAS CON ALMACÉN</div>
+                <div class="kpi-value" id="kpi-compras-cuadradas">0</div>
+                <div class="kpi-sub" style="color: #166534; font-weight: 700;">✅ Recepción física verificada</div>
+              </div>
+              <div class="kpi-card card-rose">
+                <div class="kpi-label">FACTURAS PENDIENTES RECEPCIÓN</div>
+                <div class="kpi-value" id="kpi-compras-pendientes-almacen">0</div>
+                <div class="kpi-sub" style="color: #be123c; font-weight: 700;">❌ Sin entrada física en DG67</div>
+              </div>
+              <div class="kpi-card card-amber">
+                <div class="kpi-label">ENTRADAS ALMACÉN SIN FACTURA</div>
+                <div class="kpi-value" id="kpi-entradas-sin-factura">0</div>
+                <div class="kpi-sub">📑 Pendiente factura fiscal legal</div>
+              </div>
+            </div>
+
+            <div class="filters-card">
+              <div class="search-box">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="compras-fiscal-search" placeholder="Buscar por número de factura o proveedor..."
+                  oninput="filterComprasFiscalTable()">
+              </div>
+              <div class="select-group">
+                <select id="compras-filter-estatus" onchange="loadComprasFiscal()">
+                  <option value="TODOS">Todos los Estados de Cuadre</option>
+                  <option value="CONCILIADO">✅ Cuadradas con Almacén</option>
+                  <option value="NO_CONCILIADO">❌ Pendientes por Ingresar al Inventario</option>
+                  <option value="NO_APLICA_GASTO">📑 Gastos / Servicios (No Aplica Inventario)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="panel-card table-panel">
+              <div class="table-responsive">
+                <table class="data-table" id="table-compras-fiscal">
+                  <thead>
+                    <tr>
+                      <th>PERÍODO</th>
+                      <th>FECHA</th>
+                      <th>FACTURA FISCAL</th>
+                      <th>PROVEEDOR / RIF</th>
+                      <th>CLASIFICACIÓN</th>
+                      <th class="text-right">BASE IMP. (BS)</th>
+                      <th class="text-right">IVA (BS)</th>
+                      <th class="text-center">ESTADO DE CUADRE</th>
+                      <th>OBSERVACIONES DE CRUCE</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-compras-fiscal">
+                    <tr>
+                      <td colspan="9" class="text-center">Cargando libro de compras fiscal...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUBTAB 3: Directorio de Proveedores & Clasificación Fiscal -->
+          <div id="subtab-proveedores" class="fiscal-subpane" style="display: none;">
             <div class="info-callout-card">
               <div class="callout-icon">💡</div>
               <div class="callout-body">
@@ -2210,110 +2397,6 @@
                   <tbody id="tbody-proveedores-fiscal">
                     <tr>
                       <td colspan="4" class="text-center">Cargando directorio de proveedores...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- SUBTAB 2: Libro Compras vs Entradas -->
-          <div id="subtab-compras" class="fiscal-subpane" style="display: none;">
-            <div class="filters-card">
-              <div class="search-box">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input type="text" id="compras-fiscal-search" placeholder="Buscar por número de factura o proveedor..."
-                  oninput="filterComprasFiscalTable()">
-              </div>
-              <div class="select-group">
-                <select id="compras-filter-periodo" onchange="loadComprasFiscal()">
-                  <option value="TODOS">📅 Todos los Períodos (Ene - Sep 2026)</option>
-                  <option value="2026-01">Enero 2026</option>
-                  <option value="2026-02">Febrero 2026</option>
-                  <option value="2026-03">Marzo 2026</option>
-                  <option value="2026-04">Abril 2026</option>
-                  <option value="2026-05">Mayo 2026</option>
-                  <option value="2026-06">Junio 2026</option>
-                  <option value="2026-07">Julio 2026</option>
-                  <option value="2026-08">Agosto 2026</option>
-                  <option value="2026-09">Septiembre 2026</option>
-                </select>
-                <select id="compras-filter-estatus" onchange="loadComprasFiscal()">
-                  <option value="TODOS">Todos los Estados de Cuadre</option>
-                  <option value="CONCILIADO">✅ Cuadradas con Almacén</option>
-                  <option value="NO_CONCILIADO">❌ Pendientes por Ingresar al Inventario</option>
-                  <option value="NO_APLICA_GASTO">📑 Gastos / Servicios (No Aplica Inventario)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="panel-card table-panel">
-              <div class="table-responsive">
-                <table class="data-table" id="table-compras-fiscal">
-                  <thead>
-                    <tr>
-                      <th>PERÍODO</th>
-                      <th>FECHA</th>
-                      <th>FACTURA FISCAL</th>
-                      <th>PROVEEDOR / RIF</th>
-                      <th>CLASIFICACIÓN</th>
-                      <th class="text-right">BASE IMP. (BS)</th>
-                      <th class="text-right">IVA (BS)</th>
-                      <th class="text-center">ESTADO DE CUADRE</th>
-                      <th>OBSERVACIONES DE CRUCE</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-compras-fiscal">
-                    <tr>
-                      <td colspan="9" class="text-center">Cargando libro de compras fiscal...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- SUBTAB 3: Ventas Fiscales -->
-          <div id="subtab-ventas" class="fiscal-subpane" style="display: none;">
-            <div class="filters-card">
-              <div class="select-group">
-                <select id="ventas-filter-periodo" onchange="loadVentasFiscal()">
-                  <option value="TODOS">📅 Todos los Meses (Ene - Sep 2026)</option>
-                  <option value="2026-01">Enero 2026</option>
-                  <option value="2026-02">Febrero 2026</option>
-                  <option value="2026-03">Marzo 2026</option>
-                  <option value="2026-04">Abril 2026</option>
-                  <option value="2026-05">Mayo 2026</option>
-                  <option value="2026-06">Junio 2026</option>
-                  <option value="2026-07">Julio 2026</option>
-                  <option value="2026-08">Agosto 2026</option>
-                  <option value="2026-09">Septiembre 2026</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="panel-card table-panel">
-              <div class="table-responsive">
-                <table class="data-table" id="table-ventas-fiscal">
-                  <thead>
-                    <tr>
-                      <th>PERÍODO</th>
-                      <th>FECHA REPORTE</th>
-                      <th>RANGO REPORTE Z (LIBRO)</th>
-                      <th class="text-center">COMP. Z</th>
-                      <th class="text-center">SALIDAS ALMACÉN (TIENDA)</th>
-                      <th class="text-center">ESTADO CRUCE</th>
-                      <th class="text-right">BASE IMPONIBLE (BS)</th>
-                      <th class="text-right">DÉBITO FISCAL (16%)</th>
-                      <th class="text-right">TOTAL VENTAS (BS)</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-ventas-fiscal">
-                    <tr>
-                      <td colspan="8" class="text-center">Cargando libro de ventas fiscal...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -3083,18 +3166,40 @@
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f1f5f9; padding: 10px 14px; border-radius: 8px;">
+            <div class="form-group" style="margin: 0;">
+              <label style="font-weight: 700; color: #0B2447;">📄 N° Reporte Z (Fiscal):</label>
+              <input type="text" id="m-vent-numero-z" class="form-control font-mono font-bold" placeholder="ej: 0317">
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label style="font-weight: 700; color: #0B2447;">🖨️ Serial Máquina Fiscal:</label>
+              <input type="text" id="m-vent-serial" class="form-control font-mono" value="Z0A0000176" placeholder="ej: Z0A0000176">
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1.2fr 1.2fr 1fr; gap: 12px; margin-bottom: 12px;">
             <div class="form-group">
-              <label>Factura Desde:</label>
-              <input type="text" id="m-vent-desde" class="form-control" placeholder="ej: 00002340">
+              <label>Factura Desde (Inicial):</label>
+              <input type="text" id="m-vent-desde" class="form-control font-mono font-bold" placeholder="ej: 00002595" required>
             </div>
             <div class="form-group">
-              <label>Factura Hasta:</label>
-              <input type="text" id="m-vent-hasta" class="form-control" placeholder="ej: 00002352">
+              <label>Factura Hasta (Final):</label>
+              <input type="text" id="m-vent-hasta" class="form-control font-mono font-bold" placeholder="ej: 00002602" required>
             </div>
             <div class="form-group">
-              <label>Cant. Comprobantes:</label>
-              <input type="number" id="m-vent-cant" class="form-control" value="1" min="1">
+              <label># Facturas Emitidas:</label>
+              <input type="number" id="m-vent-cant" class="form-control font-bold" value="8" min="1" required>
+            </div>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label># Facturas Anuladas:</label>
+              <input type="number" id="m-vent-anuladas" class="form-control font-mono" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label>Monto Total Anulaciones (Bs.):</label>
+              <input type="number" step="0.01" id="m-vent-anulaciones-monto" class="form-control font-mono" value="0.00">
             </div>
           </div>
 

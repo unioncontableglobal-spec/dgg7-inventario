@@ -8,6 +8,7 @@ import compression from 'compression';
 import { createClient } from '@libsql/client';
 import xlsxPkg from 'xlsx';
 const XLSX = xlsxPkg.utils ? xlsxPkg : (xlsxPkg.default || xlsxPkg);
+import { conciliarReporteZ, conciliarTodosReportesZ, conciliarVentaIndividual, getResumenCruceDobleVia } from './lib/cruce_engine.js';
 
 dotenv.config();
 
@@ -1412,11 +1413,34 @@ app.post('/api/movimientos', async (req, res) => {
 
     await db.batch(detailStatements);
 
+    let resultadoCruce = null;
+    if (tipo === 'SALIDA_VENTA') {
+      resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+    } else if (tipo === 'ENTRADA_COMPRA') {
+      const matchNum = String(numero_documento).match(/(\d+)/);
+      if (matchNum) {
+        const numFacturaNum = parseInt(matchNum[1], 10);
+        const matchLC = await db.execute({
+          sql: `SELECT id FROM libro_compras WHERE (nro_factura LIKE ? OR REPLACE(nro_factura, '0', '') = ?) AND aplica_inventario = 1 LIMIT 1`,
+          args: [`%${numFacturaNum}%`, String(numFacturaNum)]
+        });
+        if (matchLC.rows.length > 0) {
+          const lcId = matchLC.rows[0].id;
+          await Promise.all([
+            db.execute({ sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [lcId, movimientoId] }),
+            db.execute({ sql: "UPDATE libro_compras SET movimiento_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [movimientoId, lcId] })
+          ]);
+          resultadoCruce = { estatus: 'CONCILIADO', libro_compras_id: lcId };
+        }
+      }
+    }
+
     res.json({
       success: true,
       message: `Movimiento (${subtipoNorm}) registrado con trazabilidad fiscal completa`,
       movimientoId,
-      itemsCount: items.length
+      itemsCount: items.length,
+      conciliacion: resultadoCruce
     });
   } catch (error) {
     console.error('Error creating movement:', error);
@@ -1948,6 +1972,28 @@ app.get('/api/fiscal/declaraciones-iva', async (req, res) => {
 });
 
 // 10.4 Resumen Ejecutivo de Cruce (Compras/Ventas Fiscales vs Entradas/Salidas Inventario)
+app.get('/api/cruce/doble-via', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const resumen = await getResumenCruceDobleVia(periodo, db);
+    res.json(resumen);
+  } catch (error) {
+    console.error('Error en cruce doble vía:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/cruce/ejecutar', async (req, res) => {
+  try {
+    const periodo = req.body?.periodo || '2026-10';
+    const resumen = await getResumenCruceDobleVia(periodo, db);
+    res.json({ success: true, resumen });
+  } catch (error) {
+    console.error('Error ejecutando cruce:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/fiscal/resumen-cruce', async (req, res) => {
   try {
     const [declaraciones, comprasStats, inventarioStats] = await Promise.all([
@@ -2377,27 +2423,38 @@ app.post('/api/fiscal/libro-ventas', async (req, res) => {
     const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
     const cant = Number(cantidad_comprobantes) || 1;
 
+    const numZ = String(req.body.numero_reporte_z || '').trim();
+    const serial = String(req.body.serial_impresora || 'Z0A0000176').trim();
+    const cantAnul = Number(req.body.cantidad_anuladas) || 0;
+    const totAnulBs = Number(req.body.total_anulaciones_bs) || 0.0;
+
     const insertResult = await db.execute({
       sql: `INSERT INTO libro_ventas 
-            (periodo, archivo_origen, fecha, factura_desde, factura_hasta, total_bs, exento_bs,
-             base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
+            (periodo, archivo_origen, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
+             total_bs, exento_bs, base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
+             cantidad_anuladas, total_anulaciones_bs,
              tasa_bcv, fecha_tasa_bcv, moneda_divisa, exento_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa,
              estatus_conciliacion)
-            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REGISTRADO_FISCAL')
+            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
             RETURNING id`,
       args: [
-        periodo, fecha, factura_desde || null, factura_hasta || null, totalCalc, exBs,
-        baseBs, ali, ivaCalc, cant,
+        periodo, fecha, numZ, serial, factura_desde || null, factura_hasta || null,
+        totalCalc, exBs, baseBs, ali, ivaCalc, cant,
+        cantAnul, totAnulBs,
         tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc
       ]
     });
+
+    const zId = Number(insertResult.rows?.[0]?.id || insertResult.lastInsertRowid);
+    const resultadoCruce = await conciliarReporteZ(zId, db);
 
     await recalculateDeclaracionIva(periodo);
 
     res.json({
       success: true,
-      id: insertResult.rows?.[0]?.id,
-      message: 'Venta registrada con éxito en el Libro de Ventas (Doble Expresión Bs./USD)'
+      id: zId,
+      message: 'Venta registrada con éxito en el Libro de Ventas (Conciliación Automática)',
+      conciliacion: resultadoCruce
     });
   } catch (error) {
     console.error('Error registrando venta en libro ventas:', error);

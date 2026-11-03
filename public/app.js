@@ -208,7 +208,8 @@ async function initApp() {
     loadTasasBcvPeriodo(),
     loadDashboard(),
     loadCatalogs(),
-    loadProducts()
+    loadProducts(),
+    loadCruceDobleVia('2026-10')
   ]);
 
   // Add initial rows in forms
@@ -1300,7 +1301,17 @@ async function handleMovementSubmit(event, tipo) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al guardar');
 
-    showToast(data.message || 'Movimiento registrado con trazabilidad SENIAT!', 'success');
+    if (data.conciliacion) {
+      if (data.conciliacion.estatus === 'CONCILIADO') {
+        showToast('✅ Factura de salida registrada y CONCILIADA con el Reporte Z de hoy', 'success');
+      } else if (data.conciliacion.faltantes_cant > 0) {
+        showToast(`Factura registrada. Faltan ${data.conciliacion.faltantes_cant} facturas por detallar para cerrar el Reporte Z (${data.conciliacion.faltantes_lista.join(', ')})`, 'info');
+      } else {
+        showToast(data.message || 'Movimiento registrado con éxito', 'success');
+      }
+    } else {
+      showToast(data.message || 'Movimiento registrado con trazabilidad SENIAT!', 'success');
+    }
 
     // Reset Form
     resetForm(isEntrada ? 'form-entrada' : 'form-salida');
@@ -1308,7 +1319,7 @@ async function handleMovementSubmit(event, tipo) {
     else addExitRow();
 
     // Refresh Live Data
-    await Promise.all([loadDashboard(), loadProducts()]);
+    await Promise.all([loadDashboard(), loadProducts(), loadCruceDobleVia(cruceActivoPeriodo)]);
     switchTab('tab-inventario');
   } catch (err) {
     showToast(err.message, 'error');
@@ -2007,10 +2018,9 @@ let fiscalState = {
 
 async function loadFiscalReconciliation() {
   await Promise.all([
-    loadFiscalKPIs(),
-    loadProveedoresFiscal(),
+    loadCruceDobleVia(cruceActivoPeriodo),
     loadComprasFiscal(),
-    loadVentasFiscal()
+    loadProveedoresFiscal()
   ]);
 }
 
@@ -2056,6 +2066,9 @@ function switchFiscalSubtab(subtabId) {
   document.querySelectorAll('.fiscal-subpane').forEach(p => {
     p.style.display = p.id === subtabId ? 'block' : 'none';
   });
+  if (subtabId === 'subtab-ventas') loadCruceDobleVia(cruceActivoPeriodo);
+  else if (subtabId === 'subtab-compras') loadComprasFiscal();
+  else if (subtabId === 'subtab-proveedores') loadProveedoresFiscal();
 }
 
 // SUBTAB 1: Proveedores & Clasificación
@@ -2229,63 +2242,255 @@ function filterComprasFiscalTable() {
   renderComprasFiscal(filtered);
 }
 
-// SUBTAB 3: Ventas Fiscales
-async function loadVentasFiscal() {
-  const tbody = document.getElementById('tbody-ventas-fiscal');
-  if (!tbody) return;
+// ==========================================================================
+// SUBTAB 1 (CRUCE VENTAS): SISTEMA DE CONCILIACIÓN DE DOBLE VÍA (DG67 ↔ UCG)
+// ==========================================================================
 
-  const periodo = document.getElementById('ventas-filter-periodo')?.value || 'TODOS';
+let cruceActivoPeriodo = '2026-10';
+
+async function loadCruceDobleVia(periodo = cruceActivoPeriodo) {
+  cruceActivoPeriodo = periodo;
+  syncMonthPills('pills-cruce-bar', periodo);
 
   try {
-    let url = `/api/fiscal/libro-ventas?`;
-    if (periodo !== 'TODOS') url += `periodo=${periodo}&`;
+    const res = await fetch(`/api/cruce/doble-via?periodo=${periodo}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cargar cruce de información');
 
-    const res = await fetch(url);
-    const ventas = await res.json();
-    if (!res.ok || !Array.isArray(ventas)) {
-      throw new Error(ventas?.error || 'Error al cargar libro de ventas');
-    }
-    fiscalState.ventas = ventas;
-    renderVentasFiscal(ventas);
+    renderCruceVentas(data.ventas, data.periodo);
+    renderCruceCompras(data.compras, data.periodo);
+    actualizarBannerSalidaPendientes(data.ventas?.facturas_pendientes_dg67 || []);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color: #dc2626;">Error al cargar libro de ventas: ${err.message}</td></tr>`;
+    console.error('Error en cruce doble vía:', err);
+    showToast(err.message, 'error');
   }
 }
 
-function renderVentasFiscal(ventas) {
-  const tbody = document.getElementById('tbody-ventas-fiscal');
-  if (!tbody) return;
+function renderCruceVentas(ventas, periodo) {
+  if (!ventas) return;
+  const kpis = ventas.kpis || {};
 
-  if (!Array.isArray(ventas) || ventas.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center">No se encontraron registros de ventas.</td></tr>`;
+  // 1. KPIs de Ventas
+  const elZTotal = document.getElementById('kpi-cruce-z-total');
+  if (elZTotal) elZTotal.textContent = kpis.total_reportes_z || 0;
+
+  const elZSub = document.getElementById('kpi-cruce-z-sub');
+  if (elZSub) elZSub.textContent = `${kpis.reportes_conciliados || 0} Conciliados (${kpis.porcentaje_conciliado || 0}%)`;
+
+  const elFactCarg = document.getElementById('kpi-cruce-fact-cargadas');
+  if (elFactCarg) elFactCarg.textContent = kpis.total_facturas_cargadas || 0;
+
+  const elFactEsp = document.getElementById('kpi-cruce-fact-esperadas');
+  if (elFactEsp) elFactEsp.textContent = `De ${kpis.total_facturas_esperadas || 0} esperadas en Reportes Z`;
+
+  const elFactFalt = document.getElementById('kpi-cruce-fact-faltantes');
+  if (elFactFalt) {
+    elFactFalt.textContent = kpis.total_facturas_faltantes || 0;
+    elFactFalt.style.color = (kpis.total_facturas_faltantes > 0) ? '#ea580c' : '#166534';
+  }
+
+  const elMontoZ = document.getElementById('kpi-cruce-monto-z');
+  if (elMontoZ) {
+    elMontoZ.innerHTML = `<div>Bs. ${(kpis.total_monto_z_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.75rem; color:#0369a1;">($${(kpis.total_monto_z_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} USD)</div>`;
+  }
+
+  const elDiffSub = document.getElementById('kpi-cruce-diferencia-sub');
+  if (elDiffSub) {
+    const diff = kpis.diferencia_total_bs || 0;
+    elDiffSub.innerHTML = `Detallado: Bs. ${(kpis.total_monto_detallado_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} • Dif: <strong style="color:${Math.abs(diff) > 2 ? '#dc2626' : '#166534'}">Bs. ${diff.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</strong>`;
+  }
+
+  // 2. Tabla de Reportes Z de UCG
+  const tbodyZ = document.getElementById('tbody-cruce-reportes-z');
+  if (tbodyZ) {
+    const zList = ventas.reportes_z || [];
+    if (zList.length === 0) {
+      tbodyZ.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:14px; color:var(--text-muted);">No hay Reportes Z registrados por UCG en este período. Haz clic en <strong>+ Cargar Reporte Z</strong> para comenzar.</td></tr>`;
+    } else {
+      tbodyZ.innerHTML = zList.map(z => {
+        let badgeHtml = '';
+        if (z.estatus_conciliacion === 'CONCILIADO') {
+          badgeHtml = '<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:800;">✅ Conciliado</span>';
+        } else if (z.estatus_conciliacion === 'DISCREPANCIA') {
+          badgeHtml = `<span class="badge" style="background:#fee2e2; color:#b91c1c; font-weight:800;" title="${z.observaciones_cruce || ''}">⚠️ Dif: Bs. ${Number(z.diferencia_bs || 0).toLocaleString('es-VE')}</span>`;
+        } else {
+          const faltCount = (Number(z.cantidad_comprobantes) || 0) - (Number(z.cantidad_facturas_cargadas) || 0);
+          badgeHtml = `<span class="badge" style="background:#fef3c7; color:#b45309; font-weight:800;" title="${z.facturas_faltantes || ''}">⏳ Faltan ${faltCount > 0 ? faltCount : 'ítems'}</span>`;
+        }
+
+        const totalBs = Number(z.total_bs) || 0;
+        const totalUsd = Number(z.total_divisa) || (z.tasa_bcv ? Number((totalBs / z.tasa_bcv).toFixed(2)) : 0);
+
+        return `
+          <tr>
+            <td class="font-bold">${z.fecha}</td>
+            <td>
+              <span class="font-mono font-bold" style="color:var(--ucg-navy);">${z.numero_reporte_z || 'Z-' + z.id}</span>
+              <div style="font-size:0.68rem; color:#64748b;">${z.serial_impresora || 'ZOA0000176'}</div>
+            </td>
+            <td>
+              <span class="font-mono font-bold">${z.factura_desde || '-'} ➔ ${z.factura_hasta || '-'}</span>
+            </td>
+            <td class="text-center font-bold">
+              ${z.cantidad_comprobantes}
+              ${z.cantidad_anuladas > 0 ? `<span style="font-size:0.68rem; color:#dc2626; display:block;">(${z.cantidad_anuladas} anul)</span>` : ''}
+            </td>
+            <td class="text-right font-mono font-bold">
+              <div>Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+              <div style="font-size:0.7rem; color:#0369a1;">($${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD)</div>
+            </td>
+            <td class="text-center font-bold" style="color:${z.cantidad_facturas_cargadas >= z.cantidad_comprobantes ? '#166534' : '#b45309'};">
+              ${z.cantidad_facturas_cargadas} / ${z.cantidad_comprobantes}
+            </td>
+            <td class="text-center">${badgeHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // 3. Tabla de Facturas Faltantes por Detallar (DG67)
+  const tbodyPend = document.getElementById('tbody-cruce-facturas-pendientes');
+  const badgePend = document.getElementById('badge-total-pendientes-dg67');
+  const factPendientes = ventas.facturas_pendientes_dg67 || [];
+
+  if (badgePend) badgePend.textContent = `${factPendientes.length} pendientes`;
+
+  if (tbodyPend) {
+    if (factPendientes.length === 0) {
+      tbodyPend.innerHTML = `<tr><td colspan="4" class="text-center" style="padding:14px; color:#166534; font-weight:700;">🎉 ¡Excelente! No hay facturas pendientes. Todos los Reportes Z de este período están detallados por DG67.</td></tr>`;
+    } else {
+      tbodyPend.innerHTML = factPendientes.map(fp => `
+        <tr>
+          <td class="font-mono font-bold" style="color:#b91c1c; font-size:0.86rem;">
+            📄 ${fp.factura_numero}
+          </td>
+          <td>${fp.fecha}</td>
+          <td>
+            <span class="font-mono" style="font-size:0.75rem;">Z: ${fp.numero_reporte_z}</span>
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn btn-sm btn-emerald" style="padding:3px 8px; font-size:0.72rem; font-weight:800;"
+              onclick="detallarFacturaPendiente('${fp.factura_numero}', '${fp.fecha}', '${fp.serial_impresora}', ${fp.tasa_bcv})">
+              ➕ Detallar Ítems
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // 4. Tabla de Salidas Cargadas en Tienda esperando Reporte Z (UCG)
+  const tbodyHuerf = document.getElementById('tbody-cruce-salidas-huerfanas');
+  const badgeHuerf = document.getElementById('badge-total-salidas-huerfanas');
+  const salidasHuerf = ventas.salidas_pendientes_ucg || [];
+
+  if (badgeHuerf) badgeHuerf.textContent = `${salidasHuerf.length} salidas`;
+
+  if (tbodyHuerf) {
+    if (salidasHuerf.length === 0) {
+      tbodyHuerf.innerHTML = `<tr><td colspan="4" class="text-center" style="padding:10px; color:#166534;">Todas las salidas cargadas en tienda ya tienen su Reporte Z conciliado.</td></tr>`;
+    } else {
+      tbodyHuerf.innerHTML = salidasHuerf.slice(0, 50).map(s => `
+        <tr>
+          <td>${s.fecha}</td>
+          <td class="font-mono font-bold">${s.numero_documento}</td>
+          <td class="text-right font-mono font-bold">Bs. ${Number(s.total_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+          <td class="text-right font-mono" style="color:#0369a1;">$${Number(s.total_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+        </tr>
+      `).join('');
+    }
+  }
+}
+
+function renderCruceCompras(compras, periodo) {
+  if (!compras) return;
+  const kpis = compras.kpis || {};
+
+  const elTotal = document.getElementById('kpi-compras-total-declaradas');
+  if (elTotal) elTotal.textContent = kpis.total_compras_fiscales || 0;
+
+  const elCuad = document.getElementById('kpi-compras-cuadradas');
+  if (elCuad) elCuad.textContent = kpis.compras_conciliadas || 0;
+
+  const elPend = document.getElementById('kpi-compras-pendientes-almacen');
+  if (elPend) elPend.textContent = kpis.compras_pendientes_almacen || 0;
+
+  const elSinFac = document.getElementById('kpi-entradas-sin-factura');
+  if (elSinFac) elSinFac.textContent = kpis.entradas_pendientes_fiscal || 0;
+}
+
+function seleccionarMesCruce(periodo) {
+  loadCruceDobleVia(periodo);
+}
+
+async function ejecutarCruceDobleVia() {
+  try {
+    showToast('Ejecutando motor de conciliación de doble vía...', 'info');
+    const res = await fetch('/api/cruce/ejecutar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodo: cruceActivoPeriodo })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al ejecutar conciliación');
+    showToast('Conciliación actualizada con éxito en tiempo real', 'success');
+    await loadCruceDobleVia(cruceActivoPeriodo);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function detallarFacturaPendiente(numFactura, fecha, serial, tasaBcv) {
+  switchTab('tab-salida');
+
+  const fechaEl = document.getElementById('sal-fecha');
+  if (fechaEl && fecha) {
+    fechaEl.value = fecha;
+    onCambioFechaMovimiento('sal');
+  }
+
+  const factEl = document.getElementById('sal-factura');
+  if (factEl && numFactura) factEl.value = numFactura;
+
+  const ctrlEl = document.getElementById('sal-control');
+  if (ctrlEl && serial) ctrlEl.value = serial;
+
+  const subEl = document.getElementById('sal-subtipo');
+  if (subEl) subEl.value = 'VENTA';
+
+  const tasaEl = document.getElementById('sal-tasa');
+  if (tasaEl && tasaBcv) {
+    tasaEl.value = Number(tasaBcv).toFixed(2);
+    calculateExitTotals();
+  }
+
+  const obsEl = document.getElementById('sal-obs');
+  if (obsEl && (!obsEl.value || obsEl.value.trim() === '')) {
+    obsEl.value = `Factura fiscal ${numFactura} emitida en fecha ${fecha}`;
+  }
+
+  showToast(`Formulario precargado para Factura #${numFactura}. Agrega los repuestos y valida la salida.`, 'info');
+}
+
+function actualizarBannerSalidaPendientes(facturasPendientes) {
+  const banner = document.getElementById('banner-salida-pendientes');
+  const container = document.getElementById('pills-facturas-pendientes-salida');
+  if (!banner || !container) return;
+
+  if (!facturasPendientes || facturasPendientes.length === 0) {
+    banner.style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = ventas.map(v => {
-    const undsAlmacen = Number(v.almacen_unidades || 0);
-    const docsAlmacen = Number(v.almacen_comprobantes || 0);
-    const tieneSalida = undsAlmacen > 0;
-    const statusBadge = tieneSalida
-      ? `<span class="badge-status in-stock">✅ Cruza con Tienda (${undsAlmacen} unds)</span>`
-      : `<span class="badge-status low-stock">⚠️ Sin Descarga en Almacén</span>`;
-    const rangoTienda = tieneSalida
-      ? `<span class="font-mono" style="font-size:0.75rem;">${v.almacen_desde || '-'} ➔ ${v.almacen_hasta || '-'} (${docsAlmacen} facs)</span>`
-      : `<span style="color:var(--text-muted); font-size:0.75rem;">0 salidas registradas</span>`;
-
-    return `
-      <tr>
-        <td class="font-bold">${v.periodo}</td>
-        <td>${v.fecha || '-'}</td>
-        <td class="font-mono font-bold" style="color: var(--ucg-navy);">${v.factura_desde || '0'} ➔ ${v.factura_hasta || '0'}</td>
-        <td class="text-center font-bold">${v.cantidad_comprobantes || 1}</td>
-        <td class="text-center">${rangoTienda}</td>
-        <td class="text-center">${statusBadge}</td>
-        <td class="text-right font-mono font-bold">Bs. ${Number(v.base_imponible_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono" style="color: #166534; font-weight: 700;">Bs. ${Number(v.iva_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono font-bold" style="color: var(--ucg-navy);">Bs. ${Number(v.total_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-      </tr>
-    `;
-  }).join('');
+  banner.style.display = 'block';
+  container.innerHTML = facturasPendientes.map(fp => `
+    <button type="button" class="btn btn-sm" 
+      style="background:#c2410c; color:#fff; font-family:monospace; font-weight:800; border-radius:6px; padding:4px 10px; font-size:0.75rem;"
+      onclick="detallarFacturaPendiente('${fp.factura_numero}', '${fp.fecha}', '${fp.serial_impresora}', ${fp.tasa_bcv})">
+      ⚡ Factura #${fp.factura_numero} (${fp.fecha})
+    </button>
+  `).join('');
 }
 
 // ==========================================================================
@@ -3631,9 +3836,13 @@ async function guardarNuevaVenta(e) {
   const data = {
     periodo: document.getElementById('m-vent-periodo').value,
     fecha: document.getElementById('m-vent-fecha').value,
+    numero_reporte_z: document.getElementById('m-vent-numero-z')?.value.trim() || null,
+    serial_impresora: document.getElementById('m-vent-serial')?.value.trim() || 'Z0A0000176',
     factura_desde: document.getElementById('m-vent-desde').value.trim() || null,
     factura_hasta: document.getElementById('m-vent-hasta').value.trim() || null,
     cantidad_comprobantes: parseInt(document.getElementById('m-vent-cant').value, 10) || 1,
+    cantidad_anuladas: parseInt(document.getElementById('m-vent-anuladas')?.value, 10) || 0,
+    total_anulaciones_bs: parseFloat(document.getElementById('m-vent-anulaciones-monto')?.value) || 0,
     tasa_bcv: tasa,
     fecha_tasa_bcv: document.getElementById('m-vent-fecha-tasa')?.value || document.getElementById('m-vent-fecha').value,
     moneda_operacion: 'USD',
@@ -3656,9 +3865,21 @@ async function guardarNuevaVenta(e) {
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Error al guardar venta');
 
-    showToast('Registro de venta agregado al Libro de Ventas', 'success');
     closeModal('modal-nueva-venta');
-    await loadLibroVentas();
+
+    if (result.conciliacion) {
+      if (result.conciliacion.estatus === 'CONCILIADO') {
+        showToast('✅ Reporte Z guardado y 100% CONCILIADO con las salidas de tienda', 'success');
+      } else if (result.conciliacion.faltantes_cant > 0) {
+        showToast(`⏳ Reporte Z guardado. Faltan ${result.conciliacion.faltantes_cant} facturas por detallar en DG67: ${result.conciliacion.faltantes_lista.join(', ')}`, 'warning');
+      } else {
+        showToast('Reporte Z guardado en Libro de Ventas', 'success');
+      }
+    } else {
+      showToast('Registro de venta agregado al Libro de Ventas', 'success');
+    }
+
+    await Promise.all([loadLibroVentas(), loadCruceDobleVia()]);
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
