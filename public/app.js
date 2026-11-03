@@ -373,6 +373,7 @@ function switchTab(tabId) {
     'tab-retenciones-islr': 'Comprobantes de Retención ISLR (PA SNAT/2026/00093)',
     'tab-proveedores': 'Directorio y Panel de Proveedores',
     'tab-fiscal': 'Auditoría y Cruce Fiscal (IVA vs Almacén)',
+    'tab-punto-cero': 'Auditoría y Sinceración de Inventario (Punto Cero)',
     'tab-mensual': 'Cierre Físico Mes a Mes',
     'tab-movimientos': 'Auditoría de Movimientos',
     'tab-configuracion': 'Configuración del Sistema y Parámetros Contables'
@@ -393,6 +394,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-declaraciones') loadDeclaracionDetalle();
   if (tabId === 'tab-retenciones-islr') loadModuloRetencionesISLR();
   if (tabId === 'tab-proveedores') loadProveedoresDirectorio();
+  if (tabId === 'tab-punto-cero') initPuntoCeroConfig();
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
 
@@ -1030,9 +1032,10 @@ function addExitRow() {
   const tr = document.createElement('tr');
   tr.id = rowId;
 
-  const productOptions = state.products.map(p => 
-    `<option value="${p.producto_id}" data-stock="${p.stock_actual}" data-cost="${p.costo_referencial_usd}" data-desc="${p.descripcion}">${p.codigo} - ${p.descripcion} (Stock: ${p.stock_actual})</option>`
-  ).join('');
+  const productOptions = state.products.map(p => {
+    const pVenta = Number(p.precio_venta_usd || (p.costo_referencial_usd ? p.costo_referencial_usd * 1.30 : 0));
+    return `<option value="${p.producto_id}" data-stock="${p.stock_actual}" data-cost="${p.costo_referencial_usd}" data-precio="${pVenta}" data-desc="${p.descripcion}">${p.codigo} - ${p.descripcion} (Stock: ${p.stock_actual})</option>`;
+  }).join('');
 
   tr.innerHTML = `
     <td>
@@ -1076,9 +1079,11 @@ function onExitProductChange(rowId) {
     const stock = parseFloat(selectedOpt.dataset.stock);
     stockElem.textContent = `${stock} und`;
     stockElem.style.color = stock <= 0 ? '#dc2626' : '#059669';
+    const refPrecio = parseFloat(selectedOpt.dataset.precio || 0);
     const refCost = parseFloat(selectedOpt.dataset.cost || 0);
-    if (priceUsdInput) priceUsdInput.value = refCost.toFixed(2);
-    if (priceBsInput) priceBsInput.value = (refCost * tasa).toFixed(2);
+    const precioFinal = refPrecio > 0 ? refPrecio : (refCost > 0 ? refCost * 1.30 : 0);
+    if (priceUsdInput) priceUsdInput.value = precioFinal.toFixed(2);
+    if (priceBsInput) priceBsInput.value = (precioFinal * tasa).toFixed(2);
   } else {
     stockElem.textContent = '--';
   }
@@ -2013,6 +2018,27 @@ function setupEventListeners() {
   document.getElementById('m-comp-rif')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
+
+  // Dropzone Matriz Auditada (Punto Cero)
+  const dropzoneMatriz = document.getElementById('dropzone-matriz');
+  if (dropzoneMatriz) {
+    dropzoneMatriz.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzoneMatriz.style.background = '#f0fdf4';
+      dropzoneMatriz.style.borderColor = '#16a34a';
+    });
+    dropzoneMatriz.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropzoneMatriz.style.background = '#f8fafc';
+      dropzoneMatriz.style.borderColor = '#94a3b8';
+    });
+    dropzoneMatriz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzoneMatriz.style.background = '#f8fafc';
+      dropzoneMatriz.style.borderColor = '#94a3b8';
+      manejarSeleccionArchivoMatriz(e);
+    });
+  }
 }
 
 // Helper: Toast Notifications
@@ -6140,6 +6166,509 @@ async function guardarTasaBcvDiaria(e) {
     }
   }
 }
+
+// ============================================================================
+// SUB-MÓDULO DE AUDITORÍA Y SINCERACIÓN DE INVENTARIO (PUNTO CERO OCTUBRE 2026)
+// ============================================================================
+
+let matrizAuditadaRows = [];
+let itemsPreviaAuditoria = [];
+let filtroTextoPrevia = '';
+let filtroTipoPrevia = 'TODOS';
+
+function initPuntoCeroConfig() {
+  const fInput = document.getElementById('pzero-fecha');
+  const tInput = document.getElementById('pzero-tasa-bcv');
+  if (fInput && !fInput.value) {
+    fInput.value = '2026-10-31'; // Corte Octubre 2026
+  }
+  if (tInput && (!tInput.value || Number(tInput.value) === 0)) {
+    const tasaActual = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo('2026-10') : 889.58;
+    tInput.value = (tasaActual || 889.58).toFixed(2);
+  }
+}
+
+async function descargarMatrizAuditoria() {
+  try {
+    showToast('Generando matriz maestra de productos para auditoría física...', 'info');
+    const res = await fetch('/api/auditoria/matriz');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Error al obtener matriz de auditoría del servidor');
+    }
+    const matriz = await res.json();
+    if (!Array.isArray(matriz) || matriz.length === 0) {
+      throw new Error('No se encontraron productos en el maestro de inventario.');
+    }
+
+    if (typeof XLSX === 'undefined') {
+      throw new Error('La librería SheetJS (XLSX) no está disponible en este momento.');
+    }
+
+    const headers = [
+      'Código de Producto',
+      'Descripción',
+      'Unidad de Medida',
+      'Almacén',
+      'Categoría',
+      'Stock Actual',
+      'Costo Histórico S/IVA',
+      'IVA',
+      'Total Costo',
+      'Precio de Venta S/IVA',
+      'IVA Venta',
+      'Precio Total',
+      'CANTIDAD FÍSICA REAL',
+      'COSTO ACTUALIZADO S/IVA',
+      'ESTATUS'
+    ];
+
+    const dataRows = matriz.map(r => [
+      r.codigo,
+      r.descripcion,
+      r.unidad_medida,
+      r.almacen,
+      r.categoria,
+      r.stock_actual,
+      r.costo_historico_s_iva,
+      r.iva_costo,
+      r.total_costo,
+      r.precio_venta_s_iva,
+      r.iva_venta,
+      r.precio_total,
+      '', // 13: CANTIDAD FÍSICA REAL (vacío para conteo)
+      '', // 14: COSTO ACTUALIZADO S/IVA (vacío para costos)
+      r.estatus // 15: Estatus
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    ws['!cols'] = [
+      { wch: 16 }, { wch: 45 }, { wch: 12 }, { wch: 18 }, { wch: 20 },
+      { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 },
+      { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 26 }, { wch: 16 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MATRIZ_PUNTO_CERO');
+
+    const fileName = `MATRIZ_AUDITORIA_PUNTO_CERO_OCTUBRE_2026.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast(`Matriz exportada exitosamente (${matriz.length} productos).`, 'success');
+  } catch (err) {
+    console.error('Error en descargarMatrizAuditoria:', err);
+    showToast(err.message, 'error');
+  }
+}
+
+function manejarSeleccionArchivoMatriz(event) {
+  const file = event.target.files ? event.target.files[0] : (event.dataTransfer ? event.dataTransfer.files[0] : null);
+  if (!file) return;
+
+  initPuntoCeroConfig();
+
+  const label = document.getElementById('label-archivo-matriz');
+  if (label) {
+    label.innerHTML = `⏳ Leyendo archivo: <strong>${file.name}</strong>...`;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet);
+
+      if (!rows || rows.length === 0) {
+        throw new Error('El archivo no contiene filas con datos o está vacío.');
+      }
+
+      matrizAuditadaRows = rows;
+      if (label) {
+        label.innerHTML = `✅ <strong>${file.name}</strong> (${rows.length} productos cargados listos para procesar)`;
+      }
+
+      const btnSim = document.getElementById('btn-simular-punto-cero');
+      const btnApl = document.getElementById('btn-aplicar-punto-cero');
+      if (btnSim) btnSim.disabled = false;
+      if (btnApl) btnApl.disabled = false;
+
+      showToast(`Archivo cargado: ${rows.length} productos. Haz clic en "🔍 1. Analizar y Simular".`, 'info');
+    } catch (err) {
+      console.error('Error al procesar Excel:', err);
+      if (label) label.textContent = '❌ Error al leer el archivo. Intenta de nuevo.';
+      showToast('Error al leer el archivo Excel: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function ejecutarAuditoriaPuntoCero(simular = true) {
+  if (!matrizAuditadaRows || matrizAuditadaRows.length === 0) {
+    showToast('Por favor selecciona primero un archivo de Matriz Auditada.', 'warning');
+    return;
+  }
+
+  initPuntoCeroConfig();
+
+  const fecha = document.getElementById('pzero-fecha')?.value || '2026-10-31';
+  const tasaBcv = parseFloat(document.getElementById('pzero-tasa-bcv')?.value || '889.58') || 889.58;
+  const btn = document.getElementById(simular ? 'btn-simular-punto-cero' : 'btn-aplicar-punto-cero');
+
+  const oldHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>⏳ ${simular ? 'Simulando...' : 'Aplicando Sinceración...'}</span>`;
+  }
+
+  try {
+    const res = await fetch('/api/auditoria/procesar-matriz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: matrizAuditadaRows,
+        opciones: {
+          simular,
+          fecha,
+          tasa_bcv: tasaBcv,
+          usuario_responsable: 'ADMIN_DG67',
+          observaciones: `Sinceración y Auditoría General de Inventario (Punto Cero Octubre 2026 - ${fecha})`
+        }
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al procesar la auditoría en el servidor');
+    }
+
+    mostrarResultadosAuditoria(data, simular, tasaBcv);
+
+    if (!simular) {
+      showToast(data.mensaje || 'Sinceración y ajustes de Octubre aplicados exitosamente.', 'success');
+      if (typeof loadProducts === 'function') loadProducts();
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof loadMovements === 'function') loadMovements();
+    } else {
+      showToast('Simulación de Punto Cero calculada con éxito. Revisa el resumen y la tabla.', 'info');
+    }
+  } catch (err) {
+    console.error('Error en ejecutarAuditoriaPuntoCero:', err);
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
+  }
+}
+
+function confirmarYAplicarPuntoCero() {
+  if (!matrizAuditadaRows || matrizAuditadaRows.length === 0) {
+    showToast('Selecciona primero la Matriz Auditada completada por la tienda.', 'warning');
+    return;
+  }
+
+  const fecha = document.getElementById('pzero-fecha')?.value || '2026-10-31';
+  const conf = confirm(
+    `¿Confirmas la aplicación definitiva de la Auditoría y Sinceración (Punto Cero) para el mes de OCTUBRE 2026 (${fecha})?\n\n` +
+    `• Se generarán los asientos legales de ajuste en Kardex (Entradas por Sinceración y Salidas por Merma).\n` +
+    `• Se actualizarán los costos promedio y precios de venta en el Maestro de Productos.\n` +
+    `• Los productos marcados como "Inactivo" pasarán a baja lógica sin eliminar facturas históricas.\n\n` +
+    `¿Deseas continuar?`
+  );
+
+  if (conf) {
+    ejecutarAuditoriaPuntoCero(false);
+  }
+}
+
+function mostrarResultadosAuditoria(data, simular, tasaBcv) {
+  const panel = document.getElementById('panel-resultados-auditoria');
+  if (panel) panel.style.display = 'block';
+
+  const r = data.resumen;
+  if (!r) return;
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // 1. Banner de Estado
+  const banner = document.getElementById('banner-estado-auditoria');
+  const titulo = document.getElementById('titulo-estado-auditoria');
+  const subtitulo = document.getElementById('subtitulo-estado-auditoria');
+  const accionesBanner = document.getElementById('acciones-banner-auditoria');
+
+  if (banner && titulo && subtitulo) {
+    if (simular) {
+      banner.style.background = '#f0fdf4';
+      banner.style.border = '1.5px solid #86efac';
+      banner.style.color = '#14532d';
+      titulo.textContent = '🔍 SIMULACIÓN DE PUNTO CERO (OCTUBRE 2026) - SIN IMPACTO EN BASE DE DATOS';
+      subtitulo.textContent = `Se auditaron ${r.total_auditados} ítems al corte del ${r.fecha} (Tasa Oficial BCV: Bs. ${r.tasa_bcv.toFixed(2)}). Revisa las discrepancias abajo. Haz clic en "⚡ 2. Aplicar Sinceración" para asentar los movimientos definitivos.`;
+      if (accionesBanner) {
+        accionesBanner.innerHTML = `
+          <button type="button" class="btn btn-emerald" onclick="confirmarYAplicarPuntoCero()" style="font-weight:800; padding:6px 14px;">
+            ⚡ Aplicar Definitivo Ahora
+          </button>
+        `;
+      }
+    } else {
+      banner.style.background = '#ecfdf5';
+      banner.style.border = '1.5px solid #10b981';
+      banner.style.color = '#065f46';
+      titulo.textContent = '✅ SINCERACIÓN Y AJUSTES DE OCTUBRE 2026 APLICADOS EXITOSAMENTE';
+      subtitulo.textContent = `Se generaron los asientos de ajuste consolidados en Kardex con fecha ${r.fecha}. El catálogo maestro de productos ha sido revalorizado.`;
+      if (accionesBanner) {
+        accionesBanner.innerHTML = `
+          <span style="font-size:0.78rem; font-weight:800; background:#10b981; color:#fff; padding:4px 10px; border-radius:6px;">
+            ASIENTOS EN KARDEX CONSOLIDADOS
+          </span>
+        `;
+      }
+    }
+  }
+
+  // 2. KPIs Ejecutivos
+  const elEntCant = document.getElementById('kpi-pzero-entradas-cant');
+  const elEntMonto = document.getElementById('kpi-pzero-entradas-monto');
+  if (elEntCant) elEntCant.textContent = `${r.entradas_sinceracion.cantidad_productos} prods / ${r.entradas_sinceracion.unidades_totales} unds`;
+  if (elEntMonto) elEntMonto.textContent = `Bs. ${fmtBs(r.entradas_sinceracion.total_bs)} ($${fmtUsd(r.entradas_sinceracion.total_usd)} USD)`;
+
+  const elSalCant = document.getElementById('kpi-pzero-salidas-cant');
+  const elSalMonto = document.getElementById('kpi-pzero-salidas-monto');
+  if (elSalCant) elSalCant.textContent = `${r.salidas_ajuste.cantidad_productos} prods / ${r.salidas_ajuste.unidades_totales} unds`;
+  if (elSalMonto) elSalMonto.textContent = `Bs. ${fmtBs(r.salidas_ajuste.total_bs)} ($${fmtUsd(r.salidas_ajuste.total_usd)} USD)`;
+
+  const elCosCant = document.getElementById('kpi-pzero-costos-cant');
+  const elCosSub = document.getElementById('kpi-pzero-costos-sub');
+  if (elCosCant) elCosCant.textContent = `${r.actualizaciones_costo.cantidad} costos / ${r.actualizaciones_precio_venta?.cantidad || 0} precios`;
+  if (elCosSub) elCosSub.textContent = `Actualizados al corte de Octubre 2026`;
+
+  const elInactCant = document.getElementById('kpi-pzero-inactivos-cant');
+  if (elInactCant) elInactCant.textContent = `${r.depuracion_soft_delete.inactivados} inactivos`;
+
+  // 3. Estructurar lista para la tabla interactiva
+  const itemsMap = new Map();
+
+  // A. Entradas por sinceración
+  r.entradas_sinceracion.detalle.forEach(it => {
+    itemsMap.set(it.codigo, {
+      tipo: 'ENTRADA',
+      codigo: it.codigo,
+      descripcion: it.descripcion,
+      stock_sistema: it.stock_anterior,
+      stock_fisico: it.stock_real,
+      diferencia: it.diferencia,
+      costo_usd: it.costo_unitario_usd,
+      costo_bs: it.costo_unitario_bs,
+      precio_usd: 0,
+      precio_bs: 0,
+      total_usd: it.total_linea_usd,
+      total_bs: it.total_linea_bs,
+      estatus: 'Activo'
+    });
+  });
+
+  // B. Salidas por ajuste
+  r.salidas_ajuste.detalle.forEach(it => {
+    itemsMap.set(it.codigo, {
+      tipo: 'SALIDA',
+      codigo: it.codigo,
+      descripcion: it.descripcion,
+      stock_sistema: it.stock_anterior,
+      stock_fisico: it.stock_real,
+      diferencia: -it.diferencia,
+      costo_usd: it.costo_unitario_usd,
+      costo_bs: it.costo_unitario_bs,
+      precio_usd: 0,
+      precio_bs: 0,
+      total_usd: it.total_linea_usd,
+      total_bs: it.total_linea_bs,
+      estatus: 'Activo'
+    });
+  });
+
+  // C. Costos actualizados
+  r.actualizaciones_costo.detalle.forEach(it => {
+    const existing = itemsMap.get(it.codigo);
+    if (existing) {
+      existing.costo_usd = it.costo_nuevo_usd;
+      existing.costo_bs = it.costo_nuevo_bs;
+      existing.cambio_costo = true;
+    } else {
+      itemsMap.set(it.codigo, {
+        tipo: 'COSTO',
+        codigo: it.codigo,
+        descripcion: it.descripcion,
+        stock_sistema: '--',
+        stock_fisico: '--',
+        diferencia: 0,
+        costo_usd: it.costo_nuevo_usd,
+        costo_bs: it.costo_nuevo_bs,
+        precio_usd: 0,
+        precio_bs: 0,
+        total_usd: 0,
+        total_bs: 0,
+        estatus: 'Activo',
+        cambio_costo: true
+      });
+    }
+  });
+
+  // D. Precios de venta actualizados
+  if (r.actualizaciones_precio_venta?.detalle) {
+    r.actualizaciones_precio_venta.detalle.forEach(it => {
+      const existing = itemsMap.get(it.codigo);
+      if (existing) {
+        existing.precio_usd = it.precio_nuevo_usd;
+        existing.precio_bs = it.precio_nuevo_bs;
+        existing.cambio_precio = true;
+      } else {
+        itemsMap.set(it.codigo, {
+          tipo: 'PRECIO',
+          codigo: it.codigo,
+          descripcion: it.descripcion,
+          stock_sistema: '--',
+          stock_fisico: '--',
+          diferencia: 0,
+          costo_usd: 0,
+          costo_bs: 0,
+          precio_usd: it.precio_nuevo_usd,
+          precio_bs: it.precio_nuevo_bs,
+          total_usd: 0,
+          total_bs: 0,
+          estatus: 'Activo',
+          cambio_precio: true
+        });
+      }
+    });
+  }
+
+  // E. Inactivos (Soft Delete)
+  r.depuracion_soft_delete.detalle_inactivados.forEach(it => {
+    const existing = itemsMap.get(it.codigo);
+    if (existing) {
+      existing.estatus = 'Inactivo';
+    } else {
+      itemsMap.set(it.codigo, {
+        tipo: 'INACTIVO',
+        codigo: it.codigo,
+        descripcion: it.descripcion,
+        stock_sistema: '--',
+        stock_fisico: '--',
+        diferencia: 0,
+        costo_usd: 0,
+        costo_bs: 0,
+        precio_usd: 0,
+        precio_bs: 0,
+        total_usd: 0,
+        total_bs: 0,
+        estatus: 'Inactivo'
+      });
+    }
+  });
+
+  itemsPreviaAuditoria = Array.from(itemsMap.values());
+  aplicarFiltrosTablaPrevia();
+}
+
+function filtrarTablaPreviaAuditoria(query) {
+  filtroTextoPrevia = String(query || '').trim().toLowerCase();
+  aplicarFiltrosTablaPrevia();
+}
+
+function filtrarTablaPreviaPorTipo(tipo) {
+  filtroTipoPrevia = tipo || 'TODOS';
+  aplicarFiltrosTablaPrevia();
+}
+
+function aplicarFiltrosTablaPrevia() {
+  let list = itemsPreviaAuditoria;
+
+  if (filtroTipoPrevia === 'ENTRADAS') {
+    list = list.filter(it => it.tipo === 'ENTRADA');
+  } else if (filtroTipoPrevia === 'SALIDA' || filtroTipoPrevia === 'SALIDAS') {
+    list = list.filter(it => it.tipo === 'SALIDA');
+  } else if (filtroTipoPrevia === 'COSTOS') {
+    list = list.filter(it => it.tipo === 'COSTO' || it.cambio_costo);
+  } else if (filtroTipoPrevia === 'PRECIOS') {
+    list = list.filter(it => it.tipo === 'PRECIO' || it.cambio_precio);
+  } else if (filtroTipoPrevia === 'INACTIVOS') {
+    list = list.filter(it => it.estatus === 'Inactivo' || it.tipo === 'INACTIVO');
+  } else if (filtroTipoPrevia === 'SIN_CAMBIOS') {
+    list = list.filter(it => it.tipo === 'SIN_CAMBIOS');
+  }
+
+  if (filtroTextoPrevia) {
+    list = list.filter(it => 
+      String(it.codigo).toLowerCase().includes(filtroTextoPrevia) ||
+      String(it.descripcion).toLowerCase().includes(filtroTextoPrevia)
+    );
+  }
+
+  const badge = document.getElementById('badge-total-items-previa');
+  if (badge) badge.textContent = `${list.length} ítems`;
+
+  renderizarTablaPreviaAuditoria(list);
+}
+
+function renderizarTablaPreviaAuditoria(items) {
+  const tbody = document.getElementById('tbody-previa-auditoria');
+  if (!tbody) return;
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:16px; color:#64748b;">No hay discrepancias que coincidan con el filtro</td></tr>`;
+    return;
+  }
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  tbody.innerHTML = items.map(it => {
+    let diffBadge = '--';
+    if (it.diferencia > 0) {
+      diffBadge = `<span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:4px; font-weight:800;">+${it.diferencia} (Sobrante)</span>`;
+    } else if (it.diferencia < 0) {
+      diffBadge = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:4px; font-weight:800;">${it.diferencia} (Faltante)</span>`;
+    } else {
+      diffBadge = `<span style="color:#64748b;">0 (Exacto)</span>`;
+    }
+
+    let estBadge = `<span style="background:#f1f5f9; color:#334155; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:700;">Activo</span>`;
+    if (it.estatus === 'Inactivo') {
+      estBadge = `<span style="background:#ffe4e6; color:#be123c; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:800;">🔒 Inactivo (Baja)</span>`;
+    }
+
+    const costoTexto = it.costo_usd > 0
+      ? `<div>$${fmtUsd(it.costo_usd)} USD</div><div style="font-size:0.7rem; color:#64748b;">Bs. ${fmtBs(it.costo_bs)}</div>`
+      : '<span style="color:#94a3b8;">--</span>';
+
+    const precioTexto = it.precio_usd > 0
+      ? `<div style="color:#0284c7; font-weight:700;">$${fmtUsd(it.precio_usd)} USD</div><div style="font-size:0.7rem; color:#64748b;">Bs. ${fmtBs(it.precio_bs)}</div>`
+      : '<span style="color:#94a3b8;">--</span>';
+
+    const impactoTexto = it.total_usd > 0
+      ? `<div style="font-weight:800; color:#0B2447;">Bs. ${fmtBs(it.total_bs)}</div><div style="font-size:0.72rem; color:#15803d; font-weight:700;">$${fmtUsd(it.total_usd)} USD</div>`
+      : '<span style="color:#94a3b8;">--</span>';
+
+    return `
+      <tr>
+        <td style="padding:8px 10px; font-family:monospace; font-weight:800; color:#0B2447;">${it.codigo}</td>
+        <td style="padding:8px 10px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${it.descripcion}">${it.descripcion}</td>
+        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${it.stock_sistema}</td>
+        <td style="padding:8px 10px; text-align:right; font-family:monospace; font-weight:700; color:#0369a1;">${it.stock_fisico}</td>
+        <td style="padding:8px 10px; text-align:center;">${diffBadge}</td>
+        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${costoTexto}</td>
+        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${precioTexto}</td>
+        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${impactoTexto}</td>
+        <td style="padding:8px 10px; text-align:center;">${estBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
 
 
 

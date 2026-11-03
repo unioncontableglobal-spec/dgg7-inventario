@@ -16,6 +16,11 @@ import {
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
 } from './lib/cruce_engine.js';
+import { 
+  getMatrizAuditoriaProductos, 
+  generarExcelMatrizAuditoria, 
+  procesarMatrizAuditada 
+} from './lib/auditoria_punto_cero.js';
 
 dotenv.config();
 
@@ -472,20 +477,33 @@ app.get('/api/productos', async (req, res) => {
           COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
           p.stock_minimo,
           p.costo_referencial_usd,
+          p.precio_venta_usd,
           ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                 THEN -md.cantidad 
             ELSE 0 
           END), 0), 2) AS stock_actual,
           ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                 THEN -md.cantidad 
             ELSE 0 
           END), 0) * p.costo_referencial_usd, 2) AS valor_total_usd,
           CASE 
             WHEN COALESCE(SUM(CASE 
-              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-              WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   THEN md.cantidad 
+              WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   THEN -md.cantidad 
               ELSE 0 
             END), 0) <= p.stock_minimo THEN 'SOLICITAR MATERIAL'
             ELSE 'HAY SUFICIENTE'
@@ -1034,6 +1052,48 @@ app.get('/api/export/libro-art177', async (req, res) => {
     res.send(buf);
   } catch (error) {
     console.error('Error exportando Art. 177:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.1 Sub-módulo Auditoría y Sinceración de Inventario (Punto Cero - Fase 1: Matriz de Productos)
+app.get('/api/auditoria/matriz', async (req, res) => {
+  try {
+    const matriz = await getMatrizAuditoriaProductos(db);
+    res.json(matriz);
+  } catch (error) {
+    console.error('Error obteniendo matriz de auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.2 Descarga Directa XLSX de la Matriz Oficial de 15 Columnas
+app.get('/api/auditoria/exportar-matriz', async (req, res) => {
+  try {
+    const matriz = await getMatrizAuditoriaProductos(db);
+    const wb = generarExcelMatrizAuditoria(matriz, XLSX);
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });
+    const fechaStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Disposition', `attachment; filename="MATRIZ_AUDITORIA_PUNTO_CERO_DG67_${fechaStr}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (error) {
+    console.error('Error exportando matriz de auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.3 Sub-módulo Auditoría y Sinceración de Inventario (Punto Cero - Fase 2: Procesamiento Masivo)
+app.post('/api/auditoria/procesar-matriz', async (req, res) => {
+  try {
+    const { items, opciones } = req.body;
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'Se requiere un arreglo de productos auditados en el cuerpo de la solicitud (items)' });
+    }
+    const resultado = await procesarMatrizAuditada(items, opciones || {}, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error procesando matriz de auditoría:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1803,27 +1863,43 @@ app.get('/api/export/excel', async (req, res) => {
           COALESCE(a.nombre, 'PRINCIPAL') as "ALMACÉN",
           p.stock_minimo as "STOCK MÍNIMO",
           ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                 THEN -md.cantidad 
             ELSE 0 
           END), 0), 2) as "INVENTARIO AL CORTE",
           ? as "TASA BCV APLICADA",
           ROUND(p.costo_referencial_usd * ?, 2) as "COSTO UNITARIO (BS)",
           p.costo_referencial_usd as "COSTO UNITARIO ($)",
           ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                 THEN -md.cantidad 
             ELSE 0 
           END), 0) * p.costo_referencial_usd * ?, 2) as "VALOR TOTAL (BS)",
           ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-            WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                 THEN -md.cantidad 
             ELSE 0 
           END), 0) * p.costo_referencial_usd, 2) as "VALOR TOTAL ($)",
           CASE 
             WHEN COALESCE(SUM(CASE 
-              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
-              WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   THEN md.cantidad 
+              WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   THEN -md.cantidad 
               ELSE 0 
             END), 0) <= p.stock_minimo THEN 'SOLICITAR MATERIAL'
             ELSE 'HAY SUFICIENTE'
