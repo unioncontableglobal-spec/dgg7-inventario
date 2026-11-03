@@ -830,6 +830,143 @@ export async function onRequest(context) {
     // ----------------------------------------------------
     // CONTROL FISCAL & SENIAT
     // ----------------------------------------------------
+    if (path === '/api/fiscal/conciliar-factura' && method === 'POST') {
+      const body = await request.json();
+      const { libro_compra_id, movimiento_id, observaciones } = body;
+      await db.execute({
+        sql: `
+          UPDATE libro_compras
+          SET estatus_conciliacion = 'CONCILIADO',
+              movimiento_id = ?,
+              observaciones_cruce = ?
+          WHERE id = ?
+        `,
+        args: [movimiento_id, observaciones || 'Conciliado manualmente con movimiento de almacén', libro_compra_id]
+      });
+      return jsonResponse({ success: true, message: 'Factura conciliada con éxito' });
+    }
+
+    if (path === '/api/fiscal/entradas-tienda' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      const q = url.searchParams.get('q');
+      const soloPendientes = url.searchParams.get('soloPendientes');
+      let sql = `
+        SELECT 
+          m.id as movimiento_id,
+          m.fecha,
+          strftime('%Y-%m', m.fecha) as periodo,
+          CASE 
+            WHEN m.numero_documento IS NOT NULL AND m.numero_documento NOT LIKE 'COMPRA-%' AND m.numero_documento != 'CONTROL DE INVETRIO' THEN m.numero_documento
+            WHEN m.observaciones IS NOT NULL AND m.observaciones != '' THEN m.observaciones
+            ELSE m.numero_documento
+          END as nro_factura_tienda,
+          m.numero_documento,
+          COALESCE(m.fecha_factura, m.fecha) as fecha_factura,
+          m.fecha as fecha_recepcion,
+          COALESCE(m.nro_control, '') as nro_control,
+          COALESCE(m.tasa_bcv_factura, m.tasa_bcv, 889.58) as tasa_bcv_factura,
+          COALESCE(m.tasa_bcv, 889.58) as tasa_bcv,
+          COALESCE(m.fecha_tasa_bcv, m.fecha_factura, m.fecha) as fecha_tasa_bcv,
+          m.observaciones,
+          m.proveedor_id,
+          COALESCE(pr.rif, 'S/RIF') as rif,
+          COALESCE(pr.razon_social, 'Proveedor General') as razon_social,
+          COALESCE(pr.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
+          COALESCE(pr.aplica_inventario, 1) as aplica_inventario,
+          COALESCE(pr.porcentaje_retencion, 75.0) as porcentaje_retencion,
+          COUNT(md.id) as total_items,
+          COALESCE(SUM(md.cantidad), 0) as total_unidades,
+          COALESCE(SUM(COALESCE(md.base_imponible_bs, md.total_linea_bs, 0)), 0) as base_imponible_bs,
+          COALESCE(SUM(COALESCE(md.base_imponible_divisa, md.total_linea_divisa, md.cantidad * md.costo_unitario_usd, 0)), 0) as base_imponible_divisa,
+          COALESCE(SUM(COALESCE(md.monto_iva_bs, 0)), 0) as iva_bs,
+          COALESCE(SUM(COALESCE(md.total_linea_bs, 0)), 0) as total_bs,
+          COALESCE(SUM(COALESCE(md.total_linea_divisa, md.cantidad * md.costo_unitario_usd, 0)), 0) as total_usd,
+          GROUP_CONCAT(p.codigo || ' (' || CAST(md.cantidad AS INT) || ')', ', ') as resumen_productos,
+          (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) as libro_compra_id
+        FROM movimientos m
+        LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
+        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+        LEFT JOIN productos p ON md.producto_id = p.id
+        WHERE m.tipo = 'ENTRADA_COMPRA'
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
+        args.push(periodo);
+      }
+      if (q) {
+        sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ? OR pr.razon_social LIKE ? OR pr.rif LIKE ?)`;
+        args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+      }
+      if (soloPendientes === 'true' || soloPendientes === '1') {
+        sql += ` AND (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) IS NULL`;
+      }
+      sql += `
+        GROUP BY m.id
+        ORDER BY m.fecha DESC, m.id DESC
+        LIMIT 200
+      `;
+      const result = await db.execute({ sql, args });
+      return jsonResponse(result.rows);
+    }
+
+    if (path === '/api/fiscal/salidas-tienda' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      const fecha = url.searchParams.get('fecha');
+      const q = url.searchParams.get('q');
+      let sql = `
+        SELECT 
+          m.fecha,
+          strftime('%Y-%m', m.fecha) as periodo,
+          COUNT(DISTINCT m.id) as cantidad_movimientos,
+          COUNT(DISTINCT CASE 
+            WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones 
+            ELSE m.numero_documento 
+          END) as cantidad_comprobantes,
+          MIN(CASE 
+            WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
+            WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
+            ELSE m.observaciones
+          END) as factura_desde,
+          MAX(CASE 
+            WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
+            WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
+            ELSE m.observaciones
+          END) as factura_hasta,
+          GROUP_CONCAT(DISTINCT CASE 
+            WHEN m.observaciones != '' THEN m.observaciones 
+            ELSE m.numero_documento 
+          END) as lista_facturas,
+          COALESCE(SUM(md.cantidad), 0) as total_unidades_despachadas,
+          COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd, 0)), 0) as valor_referencial_usd,
+          (SELECT lv.id FROM libro_ventas lv WHERE lv.fecha = m.fecha LIMIT 1) as libro_venta_id
+        FROM movimientos m
+        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+        LEFT JOIN productos p ON md.producto_id = p.id
+        WHERE m.tipo = 'SALIDA_VENTA'
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
+        args.push(periodo);
+      }
+      if (fecha) {
+        sql += ` AND m.fecha = ?`;
+        args.push(fecha);
+      }
+      if (q) {
+        sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ?)`;
+        args.push(`%${q}%`, `%${q}%`);
+      }
+      sql += `
+        GROUP BY m.fecha
+        ORDER BY m.fecha DESC
+        LIMIT 150
+      `;
+      const result = await db.execute({ sql, args });
+      return jsonResponse(result.rows);
+    }
+
     if (path === '/api/fiscal/verificar-duplicado-compra' && method === 'GET') {
       const rif = url.searchParams.get('rif');
       const numFact = url.searchParams.get('nro_factura');

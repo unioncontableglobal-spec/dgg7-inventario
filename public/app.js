@@ -2884,8 +2884,12 @@ async function cargarEntradasPendientesTienda() {
   try {
     const url = `/api/fiscal/entradas-tienda?soloPendientes=true&periodo=${encodeURIComponent(perFiltro)}`;
     const res = await fetch(url);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Error ${res.status}`);
+    }
     const rows = await res.json();
-    entradasTiendaPendientesCache = rows || [];
+    entradasTiendaPendientesCache = Array.isArray(rows) ? rows : [];
     entradasTiendaPendientesFiltradas = [...entradasTiendaPendientesCache];
 
     if (badgeContador) {
