@@ -1775,6 +1775,24 @@
                   </div>
                 </div>
 
+                <!-- Selector Dinámico de Causa Justificada (Art. 177 RISLR / Art. 27 LISLR) -->
+                <div id="drawer-motivo-container" style="display:none; margin-bottom:12px; background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:8px; padding:10px 12px; transition:all 0.2s ease;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:0.75rem; font-weight:800; color:#0B2447; display:flex; align-items:center; gap:6px; margin:0;">
+                      <span id="drawer-motivo-icon">⚖️</span>
+                      <span id="drawer-motivo-title">Causa Legal del Ajuste (Art. 177 RISLR) *:</span>
+                    </label>
+                    <span style="font-size:0.68rem; background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:700;" id="drawer-motivo-tag">REQUERIDO</span>
+                  </div>
+                  <select id="drawer-motivo-select" class="form-control" style="font-size:0.82rem; font-weight:700; margin-bottom:8px; padding:7px 10px; border:1.5px solid #94a3b8; color:#0f172a; cursor:pointer;">
+                    <!-- Opciones inyectadas dinámicamente según si diff < 0 o diff > 0 -->
+                  </select>
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#475569; display:block; margin-bottom:2px;">Soporte Legal / N° de Acta Interna / Detalle:</label>
+                    <input type="text" id="drawer-justificacion-detalle" class="form-control" placeholder="Ej: Acta de Desincorporación N° 04-2026 / Repuesto roto en almacén" style="font-size:0.78rem; padding:6px 10px;">
+                  </div>
+                </div>
+
                 <!-- Toggle Soft Delete (Inactivar Código) -->
                 <div style="background:#fff1f2; border:1px solid #fecdd3; border-radius:8px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between;">
                   <div>

@@ -121,7 +121,9 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
     fecha = '2026-10-31',
     tasa_bcv = 889.58,
     usuario = 'ADMIN_DG67',
-    observaciones = 'Auditoría interactiva en tiempo real (Punto Cero Octubre 2026)'
+    observaciones = 'Toma física y ajuste de inventario (Octubre 2026)',
+    motivo_ajuste = '',
+    justificacion_detalle = ''
   } = payload;
 
   const tasaNum = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : 889.58;
@@ -165,10 +167,60 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   if (tieneFisico && diff !== 0) {
     const isSobrante = diff > 0;
     const tipo = 'AJUSTE';
-    const subtipo = isSobrante ? 'AJUSTE_POSITIVO_STOCK' : 'AJUSTE_NEGATIVO_STOCK';
+
+    // Tipificación legal contable (Art. 177 RISLR / Art. 27 LISLR)
+    let subtipo = isSobrante ? 'AJUSTE_POSITIVO_STOCK' : 'AJUSTE_NEGATIVO_STOCK';
+    let motivoTexto = '';
+
+    if (!isSobrante) {
+      if (motivo_ajuste === 'MERCANCIA_DANADA') {
+        subtipo = 'AJUSTE_NEGATIVO_DANO';
+        motivoTexto = 'Mercancía Dañada / Deterioro';
+      } else if (motivo_ajuste === 'MERMA_OPERATIVA') {
+        subtipo = 'AJUSTE_NEGATIVO_MERMA';
+        motivoTexto = 'Merma Operativa Normal';
+      } else if (motivo_ajuste === 'OBSOLESCENCIA') {
+        subtipo = 'AJUSTE_NEGATIVO_OBSOLESCENCIA';
+        motivoTexto = 'Obsolescencia / Descontinuado';
+      } else if (motivo_ajuste === 'RETIRO_AUTOCONSUMO') {
+        subtipo = 'AJUSTE_NEGATIVO_AUTOCONSUMO';
+        motivoTexto = 'Retiro de Socios / Autoconsumo (Art. 4 LIVA)';
+      } else if (motivo_ajuste === 'EXTRAVIO_FALTANTE') {
+        subtipo = 'AJUSTE_NEGATIVO_FALTANTE';
+        motivoTexto = 'Faltante en Toma Física';
+      } else if (motivo_ajuste === 'ERROR_CONTEO_PREVIO') {
+        subtipo = 'AJUSTE_NEGATIVO_CORRECCION';
+        motivoTexto = 'Corrección Conteo Previo';
+      } else {
+        motivoTexto = motivo_ajuste || 'Ajuste Negativo de Stock';
+      }
+    } else {
+      if (motivo_ajuste === 'SOBRANTE_AUDITORIA') {
+        subtipo = 'AJUSTE_POSITIVO_SOBRANTE';
+        motivoTexto = 'Sobrante Físico en Almacén';
+      } else if (motivo_ajuste === 'OMISION_COMPRA') {
+        subtipo = 'AJUSTE_POSITIVO_OMISION';
+        motivoTexto = 'Omisión Histórica de Factura Compra';
+      } else if (motivo_ajuste === 'DEVOLUCION_CLIENTE') {
+        subtipo = 'AJUSTE_POSITIVO_DEVOLUCION';
+        motivoTexto = 'Reingreso por Devolución / Garantía';
+      } else if (motivo_ajuste === 'RECLASIFICACION_CODIGO') {
+        subtipo = 'AJUSTE_POSITIVO_RECLASIF';
+        motivoTexto = 'Reclasificación de Código';
+      } else if (motivo_ajuste === 'ERROR_CONTEO_PREVIO') {
+        subtipo = 'AJUSTE_POSITIVO_CORRECCION';
+        motivoTexto = 'Corrección Conteo Previo';
+      } else {
+        motivoTexto = motivo_ajuste || 'Ajuste Positivo de Stock';
+      }
+    }
+
     const docPrefix = isSobrante ? 'AJUSTE-ENTRADA' : 'AJUSTE-SALIDA';
     const nroDoc = `${docPrefix}-${p.codigo}-${timestamp}`;
     const diffAbs = Math.abs(diff);
+
+    const detalleSoporte = justificacion_detalle ? ` [Soporte: ${justificacion_detalle}]` : '';
+    const obsCompleta = `[${motivoTexto}]${detalleSoporte} - [${p.codigo}] ${p.descripcion}. Diff: ${diff > 0 ? '+' : ''}${diff} unds (Art. 177 RISLR)`;
 
     const costoAplicar = nuevoCosto > 0 ? nuevoCosto : Number(p.costo_referencial_usd || 0);
     const costoBs = Number((costoAplicar * tasaNum).toFixed(2));
@@ -189,7 +241,7 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
         fecha,
         nroDoc,
         usuario,
-        `${observaciones} - [${p.codigo}] ${p.descripcion}. Diff: ${diff > 0 ? '+' : ''}${diff} unds`,
+        obsCompleta,
         tasaNum,
         fecha
       ]

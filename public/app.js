@@ -6501,6 +6501,8 @@ function abrirDrawerAuditoria(index) {
   if (elToggleInactivo) {
     elToggleInactivo.checked = p.inactivo === 1;
   }
+  const elJust = document.getElementById('drawer-justificacion-detalle');
+  if (elJust) elJust.value = '';
   calcularDiferenciaDrawer();
 
   // 3. Bloque B: Estructura de Costos
@@ -6570,12 +6572,41 @@ function calcularDiferenciaDrawer() {
   const elInfo = document.getElementById('drawer-diff-asiento-info');
   const banner = document.getElementById('drawer-diff-banner');
 
+  const motivoContainer = document.getElementById('drawer-motivo-container');
+  const motivoIcon = document.getElementById('drawer-motivo-icon');
+  const motivoTitle = document.getElementById('drawer-motivo-title');
+  const motivoSelect = document.getElementById('drawer-motivo-select');
+  const motivoTag = document.getElementById('drawer-motivo-tag');
+
   if (diff > 0) {
     if (elDiff) elDiff.innerHTML = `<span style="color:#15803d; font-weight:800;">+${diff.toFixed(2)} und (Sobrante Físico)</span>`;
     if (elInfo) elInfo.innerHTML = `<span style="color:#15803d;">Genera Asiento: <strong>Entrada por Ajuste de Inventario</strong> (Kardex Octubre)</span>`;
     if (banner) {
       banner.style.background = '#f0fdf4';
       banner.style.borderColor = '#bbf7d0';
+    }
+    if (motivoContainer) {
+      motivoContainer.style.display = 'block';
+      motivoContainer.style.background = '#f0fdf4';
+      motivoContainer.style.borderColor = '#86efac';
+      if (motivoIcon) motivoIcon.textContent = '📈';
+      if (motivoTitle) motivoTitle.textContent = 'Causa Legal de Incorporación / Entrada (Art. 177 RISLR) *:';
+      if (motivoTag) {
+        motivoTag.style.background = '#dcfce7';
+        motivoTag.style.color = '#15803d';
+        motivoTag.textContent = 'ENTRADA REQUERIDA';
+      }
+      if (motivoSelect && !motivoSelect.dataset.tipo || motivoSelect.dataset.tipo !== 'POSITIVO') {
+        motivoSelect.dataset.tipo = 'POSITIVO';
+        motivoSelect.innerHTML = `
+          <option value="SOBRANTE_AUDITORIA">🔍 Sobrante Físico en Almacén (Toma Física)</option>
+          <option value="OMISION_COMPRA">📥 Omisión Histórica de Factura de Compra</option>
+          <option value="ERROR_CONTEO_PREVIO">✏️ Corrección de Conteo Administrativo Anterior</option>
+          <option value="DEVOLUCION_CLIENTE">🔄 Reingreso por Garantía / Devolución</option>
+          <option value="RECLASIFICACION_CODIGO">🏷️ Corrección por Reclasificación de Código</option>
+          <option value="OTRO">📋 Otro Motivo Justificado (Indicar en Detalle)</option>
+        `;
+      }
     }
   } else if (diff < 0) {
     if (elDiff) elDiff.innerHTML = `<span style="color:#b91c1c; font-weight:800;">${diff.toFixed(2)} und (Faltante / Merma)</span>`;
@@ -6584,12 +6615,42 @@ function calcularDiferenciaDrawer() {
       banner.style.background = '#fef2f2';
       banner.style.borderColor = '#fecaca';
     }
+    if (motivoContainer) {
+      motivoContainer.style.display = 'block';
+      motivoContainer.style.background = '#fffdfd';
+      motivoContainer.style.borderColor = '#fca5a5';
+      if (motivoIcon) motivoIcon.textContent = '📉';
+      if (motivoTitle) motivoTitle.textContent = 'Causa Legal de Desincorporación / Salida (Art. 177 RISLR) *:';
+      if (motivoTag) {
+        motivoTag.style.background = '#fee2e2';
+        motivoTag.style.color = '#991b1b';
+        motivoTag.textContent = 'SALIDA REQUERIDA';
+      }
+      if (motivoSelect && !motivoSelect.dataset.tipo || motivoSelect.dataset.tipo !== 'NEGATIVO') {
+        motivoSelect.dataset.tipo = 'NEGATIVO';
+        motivoSelect.innerHTML = `
+          <option value="MERCANCIA_DANADA">💥 Mercancía Dañada / Deterioro / Avería (Acta Interna)</option>
+          <option value="MERMA_OPERATIVA">📉 Merma / Desgaste Operativo Normal</option>
+          <option value="OBSOLESCENCIA">📦 Obsolescencia / Repuesto Descontinuado</option>
+          <option value="EXTRAVIO_FALTANTE" selected>🔍 Faltante en Toma Física (Auditoría de Almacén)</option>
+          <option value="ERROR_CONTEO_PREVIO">✏️ Corrección de Conteo Administrativo Anterior</option>
+          <option value="RETIRO_AUTOCONSUMO">👤 Retiro de Socios / Autoconsumo (Art. 4 LIVA)</option>
+          <option value="OTRO">📋 Otro Motivo Justificado (Indicar en Detalle)</option>
+        `;
+      }
+    }
   } else {
     if (elDiff) elDiff.innerHTML = `<span style="color:#64748b;">0.00 und (Existencia Cuadrada)</span>`;
     if (elInfo) elInfo.innerHTML = `<span style="color:#64748b;">Sin ajuste de Kardex requerido</span>`;
     if (banner) {
       banner.style.background = '#f8fafc';
       banner.style.borderColor = '#e2e8f0';
+    }
+    if (motivoContainer) {
+      motivoContainer.style.display = 'none';
+    }
+    if (motivoSelect) {
+      delete motivoSelect.dataset.tipo;
     }
   }
 }
@@ -6703,6 +6764,9 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   const inactivo = document.getElementById('drawer-toggle-inactivo')?.checked ? 1 : 0;
   const fecha = document.getElementById('drawer-fecha-asiento')?.value || '2026-10-31';
 
+  const motivoAjuste = document.getElementById('drawer-motivo-select')?.value || '';
+  const justificacionDetalle = document.getElementById('drawer-justificacion-detalle')?.value?.trim() || '';
+
   if (isNaN(cantFisica) || cantFisica < 0) {
     showToast('Por favor introduce una Cantidad Física Real válida.', 'warning');
     document.getElementById('drawer-cant-fisica')?.focus();
@@ -6727,7 +6791,9 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
         fecha,
         tasa_bcv: pzeroTasaBcv,
         usuario: 'ADMIN_DG67',
-        observaciones: `Auditoría interactiva código [${p.codigo}] - Octubre 2026`
+        observaciones: `Toma física código [${p.codigo}] - Octubre 2026`,
+        motivo_ajuste: motivoAjuste,
+        justificacion_detalle: justificacionDetalle
       })
     });
 
