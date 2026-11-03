@@ -19,7 +19,10 @@ import {
 import { 
   getMatrizAuditoriaProductos, 
   generarExcelMatrizAuditoria, 
-  procesarMatrizAuditada 
+  procesarMatrizAuditada,
+  getListadoAuditoriaEnVivo,
+  actualizarProductoAuditoria,
+  toggleAuditadoProducto
 } from './lib/auditoria_punto_cero.js';
 
 dotenv.config();
@@ -1094,6 +1097,42 @@ app.post('/api/auditoria/procesar-matriz', async (req, res) => {
     res.json(resultado);
   } catch (error) {
     console.error('Error procesando matriz de auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.4 Listado de Auditoría Interactiva en Tiempo Real (Punto Cero)
+app.get('/api/auditoria/listado-en-vivo', async (req, res) => {
+  try {
+    const listado = await getListadoAuditoriaEnVivo(db);
+    res.json(listado);
+  } catch (error) {
+    console.error('Error obteniendo listado en vivo de auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.5 Actualización Individual de Producto (Bloques A, B y C)
+app.post('/api/auditoria/actualizar-producto/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resultado = await actualizarProductoAuditoria(id, req.body, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error actualizando producto en auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.6 Alternar Estado Auditado Rápido desde la Tabla
+app.post('/api/auditoria/toggle-auditado/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { auditado } = req.body;
+    const resultado = await toggleAuditadoProducto(id, auditado, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error alternando estado auditado:', error);
     res.status(500).json({ error: error.message });
   }
 });

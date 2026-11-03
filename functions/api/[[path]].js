@@ -9,7 +9,10 @@ import {
 } from '../lib/cruce_engine.js';
 import { 
   getMatrizAuditoriaProductos, 
-  procesarMatrizAuditada 
+  procesarMatrizAuditada,
+  getListadoAuditoriaEnVivo,
+  actualizarProductoAuditoria,
+  toggleAuditadoProducto
 } from '../lib/auditoria_punto_cero.js';
 
 const TURSO_URL = 'libsql://inventario-dg67-unioncontableglobal-spec.aws-us-east-1.turso.io';
@@ -559,6 +562,25 @@ export async function onRequest(context) {
         return jsonResponse({ error: 'Se requiere un arreglo de productos auditados (items)' }, 400);
       }
       const resultado = await procesarMatrizAuditada(items, opciones || {}, db);
+      return jsonResponse(resultado);
+    }
+
+    if (path === '/api/auditoria/listado-en-vivo' && method === 'GET') {
+      const listado = await getListadoAuditoriaEnVivo(db);
+      return jsonResponse(listado);
+    }
+
+    if (path.startsWith('/api/auditoria/actualizar-producto/') && method === 'POST') {
+      const id = path.split('/api/auditoria/actualizar-producto/')[1];
+      const body = await request.json();
+      const resultado = await actualizarProductoAuditoria(id, body, db);
+      return jsonResponse(resultado);
+    }
+
+    if (path.startsWith('/api/auditoria/toggle-auditado/') && method === 'POST') {
+      const id = path.split('/api/auditoria/toggle-auditado/')[1];
+      const body = await request.json();
+      const resultado = await toggleAuditadoProducto(id, body?.auditado, db);
       return jsonResponse(resultado);
     }
 

@@ -394,7 +394,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-declaraciones') loadDeclaracionDetalle();
   if (tabId === 'tab-retenciones-islr') loadModuloRetencionesISLR();
   if (tabId === 'tab-proveedores') loadProveedoresDirectorio();
-  if (tabId === 'tab-punto-cero') initPuntoCeroConfig();
+  if (tabId === 'tab-punto-cero') cargarAuditoriaEnVivo();
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
 
@@ -6168,29 +6168,640 @@ async function guardarTasaBcvDiaria(e) {
 }
 
 // ============================================================================
-// SUB-MÓDULO DE AUDITORÍA Y SINCERACIÓN DE INVENTARIO (PUNTO CERO OCTUBRE 2026)
+// SUB-MÓDULO DE AUDITORÍA INTERACTIVA EN TIEMPO REAL (PUNTO CERO OCTUBRE 2026)
 // ============================================================================
 
-let matrizAuditadaRows = [];
-let itemsPreviaAuditoria = [];
-let filtroTextoPrevia = '';
-let filtroTipoPrevia = 'TODOS';
+let pzeroProductos = [];
+let pzeroFiltrados = [];
+let pzeroFiltroPill = 'TODOS';
+let pzeroFiltroTexto = '';
+let pzeroFiltroCat = 'TODAS';
+let pzeroFiltroAlm = 'TODOS';
+let pzeroProductoActualIndex = -1;
+let pzeroTasaBcv = 889.58;
 
-function initPuntoCeroConfig() {
-  const fInput = document.getElementById('pzero-fecha');
-  const tInput = document.getElementById('pzero-tasa-bcv');
-  if (fInput && !fInput.value) {
-    fInput.value = '2026-10-31'; // Corte Octubre 2026
+// Cargar listado en vivo desde el servidor
+async function cargarAuditoriaEnVivo() {
+  const tbody = document.getElementById('tbody-auditoria-en-vivo');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" class="text-center" style="padding:28px; color:#64748b;">
+          <div class="loading-spinner" style="margin:0 auto 10px auto;"></div>
+          Cargando catálogo maestro para auditoría en tiempo real...
+        </td>
+      </tr>
+    `;
   }
-  if (tInput && (!tInput.value || Number(tInput.value) === 0)) {
-    const tasaActual = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo('2026-10') : 889.58;
-    tInput.value = (tasaActual || 889.58).toFixed(2);
+
+  // Tasa Oficial BCV para Octubre 2026
+  if (typeof getTasaBcvPorFechaOPeriodo === 'function') {
+    pzeroTasaBcv = Number(getTasaBcvPorFechaOPeriodo('2026-10') || 889.58);
+  }
+  const tasaBadge = document.getElementById('pzero-kpi-tasa');
+  if (tasaBadge) tasaBadge.textContent = `Bs. ${pzeroTasaBcv.toFixed(2)}`;
+
+  try {
+    const res = await fetch('/api/auditoria/listado-en-vivo');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al obtener el listado de auditoría');
+    }
+
+    const data = await res.json();
+    pzeroProductos = Array.isArray(data.productos) ? data.productos : [];
+
+    // Poblar dropdowns de categorías y almacenes
+    poblarFiltrosAuditoria();
+
+    // Actualizar métricas y barra de progreso
+    actualizarMetricasAuditoria(data.estadisticas);
+
+    // Renderizar tabla
+    filtrarAuditoriaEnVivo();
+  } catch (error) {
+    console.error('Error cargando auditoría en vivo:', error);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding:20px; color:#dc2626;">❌ ${error.message}</td></tr>`;
+    }
+    showToast(error.message, 'error');
   }
 }
 
+// Poblar selects de categoría y almacén
+function poblarFiltrosAuditoria() {
+  const catSelect = document.getElementById('pzero-filter-cat');
+  const almSelect = document.getElementById('pzero-filter-alm');
+
+  const categorias = new Set();
+  const almacenes = new Set();
+
+  pzeroProductos.forEach(p => {
+    if (p.categoria) categorias.add(p.categoria);
+    if (p.almacen) almacenes.add(p.almacen);
+  });
+
+  if (catSelect) {
+    catSelect.innerHTML = `<option value="TODAS">Todas las Categorías</option>` +
+      Array.from(categorias).sort().map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  if (almSelect) {
+    almSelect.innerHTML = `<option value="TODOS">Todos los Almacenes</option>` +
+      Array.from(almacenes).sort().map(a => `<option value="${a}">${a}</option>`).join('');
+  }
+}
+
+// Actualizar barra de progreso y chips de estadísticas
+function actualizarMetricasAuditoria(stats) {
+  if (!stats) {
+    const total = pzeroProductos.length;
+    const auditados = pzeroProductos.filter(p => p.auditado === 1).length;
+    const pendientes = Math.max(0, total - auditados);
+    const inactivos = pzeroProductos.filter(p => p.inactivo === 1).length;
+    const diferencias = pzeroProductos.filter(p => p.diferencia !== 0 && p.auditado === 1).length;
+    const pct = total > 0 ? Number(((auditados / total) * 100).toFixed(1)) : 0;
+    stats = {
+      total_productos: total,
+      auditados,
+      pendientes,
+      porcentaje_auditado: pct,
+      inactivos,
+      con_diferencia_stock: diferencias
+    };
+  }
+
+  const elProgresoTexto = document.getElementById('pzero-progreso-texto');
+  const elBarra = document.getElementById('pzero-barra-progreso');
+
+  if (elProgresoTexto) {
+    elProgresoTexto.textContent = `${stats.auditados} / ${stats.total_productos} (${stats.porcentaje_auditado}%)`;
+  }
+  if (elBarra) {
+    elBarra.style.width = `${Math.min(100, Math.max(0, stats.porcentaje_auditado))}%`;
+  }
+
+  // Chips
+  const elTot = document.getElementById('pzero-kpi-total');
+  const elAud = document.getElementById('pzero-kpi-auditados');
+  const elPen = document.getElementById('pzero-kpi-pendientes');
+  const elDif = document.getElementById('pzero-kpi-diferencias');
+  const elIna = document.getElementById('pzero-kpi-inactivos');
+
+  if (elTot) elTot.textContent = stats.total_productos;
+  if (elAud) elAud.textContent = stats.auditados;
+  if (elPen) elPen.textContent = stats.pendientes;
+  if (elDif) elDif.textContent = stats.con_diferencia_stock;
+  if (elIna) elIna.textContent = stats.inactivos;
+
+  // Pills counters
+  const cTodos = document.getElementById('count-pill-todos');
+  const cPen = document.getElementById('count-pill-pendientes');
+  const cAud = document.getElementById('count-pill-auditados');
+  const cDif = document.getElementById('count-pill-diferencias');
+  const cIna = document.getElementById('count-pill-inactivos');
+
+  if (cTodos) cTodos.textContent = stats.total_productos;
+  if (cPen) cPen.textContent = stats.pendientes;
+  if (cAud) cAud.textContent = stats.auditados;
+  if (cDif) cDif.textContent = stats.con_diferencia_stock;
+  if (cIna) cIna.textContent = stats.inactivos;
+}
+
+// Cambiar filtro por Pills
+function cambiarFiltroPills(tipo) {
+  pzeroFiltroPill = tipo;
+
+  const pills = ['todos', 'pendientes', 'auditados', 'diferencias', 'inactivos'];
+  pills.forEach(p => {
+    const el = document.getElementById(`pzero-pill-${p}`);
+    if (el) el.classList.toggle('active', p.toUpperCase() === tipo.toUpperCase());
+  });
+
+  filtrarAuditoriaEnVivo();
+}
+
+// Filtrar la lista en vivo
+function filtrarAuditoriaEnVivo() {
+  const searchInput = document.getElementById('pzero-search-input');
+  const catSelect = document.getElementById('pzero-filter-cat');
+  const almSelect = document.getElementById('pzero-filter-alm');
+
+  pzeroFiltroTexto = String(searchInput?.value || '').trim().toLowerCase();
+  pzeroFiltroCat = catSelect?.value || 'TODAS';
+  pzeroFiltroAlm = almSelect?.value || 'TODOS';
+
+  pzeroFiltrados = pzeroProductos.filter(p => {
+    // 1. Filtro Pill
+    if (pzeroFiltroPill === 'PENDIENTES' && p.auditado === 1) return false;
+    if (pzeroFiltroPill === 'AUDITADOS' && p.auditado !== 1) return false;
+    if (pzeroFiltroPill === 'DIFERENCIAS' && p.diferencia === 0) return false;
+    if (pzeroFiltroPill === 'INACTIVOS' && p.inactivo !== 1) return false;
+
+    // 2. Filtro Categoría
+    if (pzeroFiltroCat !== 'TODAS' && p.categoria !== pzeroFiltroCat) return false;
+
+    // 3. Filtro Almacén
+    if (pzeroFiltroAlm !== 'TODOS' && p.almacen !== pzeroFiltroAlm) return false;
+
+    // 4. Búsqueda de texto
+    if (pzeroFiltroTexto) {
+      const matchCod = String(p.codigo || '').toLowerCase().includes(pzeroFiltroTexto);
+      const matchDesc = String(p.descripcion || '').toLowerCase().includes(pzeroFiltroTexto);
+      const matchCat = String(p.categoria || '').toLowerCase().includes(pzeroFiltroTexto);
+      const matchAlm = String(p.almacen || '').toLowerCase().includes(pzeroFiltroTexto);
+      if (!matchCod && !matchDesc && !matchCat && !matchAlm) return false;
+    }
+
+    return true;
+  });
+
+  renderizarTablaAuditoriaEnVivo();
+}
+
+// Renderizar filas de la tabla
+function renderizarTablaAuditoriaEnVivo() {
+  const tbody = document.getElementById('tbody-auditoria-en-vivo');
+  const conteoEl = document.getElementById('pzero-tabla-conteo');
+  if (!tbody) return;
+
+  if (conteoEl) {
+    conteoEl.textContent = `Mostrando ${pzeroFiltrados.length} de ${pzeroProductos.length} productos`;
+  }
+
+  if (pzeroFiltrados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" class="text-center" style="padding:24px; color:#64748b;">
+          No se encontraron productos con los filtros seleccionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  tbody.innerHTML = pzeroFiltrados.map((p, index) => {
+    const isAuditado = p.auditado === 1;
+    const isInactive = p.inactivo === 1;
+
+    let trClass = '';
+    if (isAuditado) trClass = 'fila-auditada';
+    if (isInactive) trClass = 'fila-inactiva';
+
+    // Badge diferencia
+    let diffBadge = `<span style="color:#64748b; font-size:0.75rem;">0.00 (Exacto)</span>`;
+    if (p.diferencia > 0) {
+      diffBadge = `<span style="background:#dcfce7; color:#15803d; font-weight:800; font-size:0.72rem; padding:2px 6px; border-radius:4px;">+${p.diferencia} (Sobrante)</span>`;
+    } else if (p.diferencia < 0) {
+      diffBadge = `<span style="background:#fee2e2; color:#b91c1c; font-weight:800; font-size:0.72rem; padding:2px 6px; border-radius:4px;">${p.diferencia} (Faltante)</span>`;
+    }
+
+    const checkClass = isAuditado ? 'checked' : '';
+    const checkIcon = isAuditado ? '✓' : '';
+
+    const costoBs = p.costo_s_iva_usd * pzeroTasaBcv;
+    const precioBs = p.precio_venta_s_iva_usd * pzeroTasaBcv;
+
+    return `
+      <tr class="${trClass}" style="cursor:pointer;" onclick="if (!event.target.closest('button, input')) abrirDrawerAuditoriaPorId(${p.producto_id})">
+        <td style="text-align:center;">
+          <button type="button" class="pzero-check-btn ${checkClass}" title="${isAuditado ? 'Auditado' : 'Marcar como Auditado'}" onclick="event.stopPropagation(); toggleAuditadoDirecto(${p.producto_id}, event)">
+            ${checkIcon}
+          </button>
+        </td>
+        <td style="font-family:monospace; font-weight:800; color:#0B2447;">
+          ${p.codigo}
+          ${isInactive ? '<br><span style="font-size:0.65rem; color:#be123c; font-weight:700;">INACTIVO</span>' : ''}
+        </td>
+        <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.descripcion}">
+          <div style="font-weight:600; color:#0f172a;">${p.descripcion}</div>
+          <div style="font-size:0.7rem; color:#64748b;">${p.unidad_medida} • Ref: $${fmtUsd(p.costo_s_iva_usd)}</div>
+        </td>
+        <td style="font-size:0.74rem;">
+          <div style="color:#0B2447; font-weight:700;">${p.almacen}</div>
+          <div style="color:#64748b;">${p.categoria}</div>
+        </td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; color:#334155;">
+          ${Number(p.stock_actual).toFixed(2)}
+        </td>
+        <td style="text-align:right; font-family:monospace; font-weight:800; color:#0369a1;">
+          ${Number(p.stock_fisico).toFixed(2)}
+        </td>
+        <td style="text-align:center;">
+          ${diffBadge}
+        </td>
+        <td style="text-align:right;">
+          <div style="font-weight:700; color:#0B2447;">$${fmtUsd(p.costo_s_iva_usd)}</div>
+          <div class="pzero-sub-ref">Bs. ${fmtBs(costoBs)}</div>
+        </td>
+        <td style="text-align:right;">
+          <div style="font-weight:800; color:#0284c7;">$${fmtUsd(p.precio_venta_s_iva_usd)}</div>
+          <div class="pzero-sub-ref">Bs. ${fmtBs(precioBs)}</div>
+        </td>
+        <td style="text-align:center;">
+          <button type="button" class="btn btn-sm btn-navy" style="padding:4px 8px; font-size:0.75rem; font-weight:700;" onclick="event.stopPropagation(); abrirDrawerAuditoriaPorId(${p.producto_id})">
+            ✏️ Auditar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ----------------------------------------------------------------------------
+// DRAWER / PANEL LATERAL: LAS 3 ZONAS DE EDICIÓN
+// ----------------------------------------------------------------------------
+
+function abrirDrawerAuditoriaPorId(productoId) {
+  const index = pzeroProductos.findIndex(p => p.producto_id === productoId);
+  if (index !== -1) {
+    abrirDrawerAuditoria(index);
+  }
+}
+
+function abrirDrawerAuditoria(index) {
+  if (index < 0 || index >= pzeroProductos.length) return;
+  pzeroProductoActualIndex = index;
+
+  const p = pzeroProductos[index];
+  const drawer = document.getElementById('pzero-drawer');
+  const backdrop = document.getElementById('pzero-drawer-backdrop');
+
+  // 1. Header del Drawer
+  const elIndex = document.getElementById('drawer-index-display');
+  const elCod = document.getElementById('drawer-codigo');
+  const elDesc = document.getElementById('drawer-descripcion');
+  const elBadgeStatus = document.getElementById('drawer-badge-status');
+
+  if (elIndex) elIndex.textContent = `Producto ${index + 1} de ${pzeroProductos.length}`;
+  if (elCod) elCod.textContent = p.codigo;
+  if (elDesc) elDesc.textContent = p.descripcion;
+
+  if (elBadgeStatus) {
+    if (p.auditado === 1) {
+      elBadgeStatus.innerHTML = `<span style="color:#059669;">✅ Auditado y Actualizado</span>`;
+    } else {
+      elBadgeStatus.innerHTML = `<span style="color:#d97706;">⏳ Pendiente de Auditoría</span>`;
+    }
+  }
+
+  // 2. Bloque A: Sinceración de Inventario (Cantidades & Estatus)
+  const elStockTeorico = document.getElementById('drawer-stock-teorico');
+  const elCantFisica = document.getElementById('drawer-cant-fisica');
+  const elToggleInactivo = document.getElementById('drawer-toggle-inactivo');
+
+  if (elStockTeorico) elStockTeorico.textContent = `${Number(p.stock_actual).toFixed(2)} und`;
+  if (elCantFisica) {
+    // Si ya tiene stock físico auditado colocarlo, de lo contrario sugerir el actual
+    elCantFisica.value = (p.stock_fisico !== null && p.stock_fisico !== undefined) ? p.stock_fisico : p.stock_actual;
+  }
+  if (elToggleInactivo) {
+    elToggleInactivo.checked = p.inactivo === 1;
+  }
+  calcularDiferenciaDrawer();
+
+  // 3. Bloque B: Estructura de Costos
+  const elCostoSIVA = document.getElementById('drawer-costo-s-iva');
+  if (elCostoSIVA) {
+    elCostoSIVA.value = Number(p.costo_s_iva_usd || 0).toFixed(2);
+  }
+  calcularCostosDrawer('S_IVA');
+
+  // 4. Bloque C: Estructura de Precios de Venta
+  const elPrecioSIVA = document.getElementById('drawer-precio-s-iva');
+  if (elPrecioSIVA) {
+    elPrecioSIVA.value = Number(p.precio_venta_s_iva_usd || 0).toFixed(2);
+  }
+  calcularPreciosDrawer('S_IVA');
+
+  // Abrir Drawer
+  if (drawer) drawer.classList.add('open');
+  if (backdrop) backdrop.classList.add('active');
+
+  // Focus en el input de cantidad física para agilidad
+  setTimeout(() => {
+    elCantFisica?.focus();
+    elCantFisica?.select();
+  }, 150);
+}
+
+function cerrarDrawerAuditoria() {
+  const drawer = document.getElementById('pzero-drawer');
+  const backdrop = document.getElementById('pzero-drawer-backdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('active');
+}
+
+function navegarProductoAuditoria(delta) {
+  const nuevoIndex = pzeroProductoActualIndex + delta;
+  if (nuevoIndex >= 0 && nuevoIndex < pzeroProductos.length) {
+    abrirDrawerAuditoria(nuevoIndex);
+  } else {
+    showToast('Llegaste al límite del catálogo.', 'info');
+  }
+}
+
+// Iniciar Modo Auditoría Rápida (busca el primer pendiente)
+function iniciarModoAuditoriaRapida() {
+  const primerPendienteIndex = pzeroProductos.findIndex(p => p.auditado !== 1);
+  if (primerPendienteIndex !== -1) {
+    abrirDrawerAuditoria(primerPendienteIndex);
+    showToast('⚡ Modo Auditoría Rápida activado. Edita el producto y haz clic en "Guardar y Siguiente ➔".', 'info');
+  } else {
+    showToast('🎉 ¡Todos los productos han sido auditados! No quedan pendientes.', 'success');
+    abrirDrawerAuditoria(0);
+  }
+}
+
+// Cálculos automáticos Bloque A
+function calcularDiferenciaDrawer() {
+  if (pzeroProductoActualIndex < 0) return;
+  const p = pzeroProductos[pzeroProductoActualIndex];
+  const stockTeorico = Number(p.stock_actual) || 0;
+  const cantFisicaInput = document.getElementById('drawer-cant-fisica');
+  const rawVal = cantFisicaInput ? parseFloat(cantFisicaInput.value) : NaN;
+  const cantFisica = isNaN(rawVal) ? stockTeorico : rawVal;
+
+  const diff = Number((cantFisica - stockTeorico).toFixed(2));
+  const elDiff = document.getElementById('drawer-diff-display');
+  const elInfo = document.getElementById('drawer-diff-asiento-info');
+  const banner = document.getElementById('drawer-diff-banner');
+
+  if (diff > 0) {
+    if (elDiff) elDiff.innerHTML = `<span style="color:#15803d; font-weight:800;">+${diff.toFixed(2)} und (Sobrante Físico)</span>`;
+    if (elInfo) elInfo.innerHTML = `<span style="color:#15803d;">Genera Asiento: <strong>Entrada por Sinceración</strong> (Kardex Octubre)</span>`;
+    if (banner) {
+      banner.style.background = '#f0fdf4';
+      banner.style.borderColor = '#bbf7d0';
+    }
+  } else if (diff < 0) {
+    if (elDiff) elDiff.innerHTML = `<span style="color:#b91c1c; font-weight:800;">${diff.toFixed(2)} und (Faltante / Merma)</span>`;
+    if (elInfo) elInfo.innerHTML = `<span style="color:#b91c1c;">Genera Asiento: <strong>Salida por Ajuste</strong> (Kardex Octubre)</span>`;
+    if (banner) {
+      banner.style.background = '#fef2f2';
+      banner.style.borderColor = '#fecaca';
+    }
+  } else {
+    if (elDiff) elDiff.innerHTML = `<span style="color:#64748b;">0.00 und (Existencia Cuadrada)</span>`;
+    if (elInfo) elInfo.innerHTML = `<span style="color:#64748b;">Sin ajuste de Kardex requerido</span>`;
+    if (banner) {
+      banner.style.background = '#f8fafc';
+      banner.style.borderColor = '#e2e8f0';
+    }
+  }
+}
+
+// Cálculos automáticos Bloque B: Costos
+function calcularCostosDrawer(origen) {
+  const elSIVA = document.getElementById('drawer-costo-s-iva');
+  const elIVA = document.getElementById('drawer-costo-iva');
+  const elTotal = document.getElementById('drawer-costo-total');
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let sIVA = parseFloat(elSIVA?.value || 0);
+  let total = parseFloat(elTotal?.value || 0);
+
+  if (origen === 'TOTAL') {
+    sIVA = Number((total / 1.16).toFixed(2));
+    if (elSIVA) elSIVA.value = sIVA.toFixed(2);
+  }
+
+  const iva = Number((sIVA * 0.16).toFixed(2));
+  total = Number((sIVA + iva).toFixed(2));
+
+  if (elIVA) elIVA.value = iva.toFixed(2);
+  if (origen !== 'TOTAL' && elTotal) elTotal.value = total.toFixed(2);
+
+  // Sub-referencias en Bolívares
+  const elSIVABs = document.getElementById('drawer-costo-s-iva-bs');
+  const elIVABs = document.getElementById('drawer-costo-iva-bs');
+  const elTotalBs = document.getElementById('drawer-costo-total-bs');
+
+  if (elSIVABs) elSIVABs.textContent = `Bs. ${fmtBs(sIVA * pzeroTasaBcv)}`;
+  if (elIVABs) elIVABs.textContent = `Bs. ${fmtBs(iva * pzeroTasaBcv)}`;
+  if (elTotalBs) elTotalBs.textContent = `Bs. ${fmtBs(total * pzeroTasaBcv)}`;
+
+  calcularMargenDrawer();
+}
+
+// Cálculos automáticos Bloque C: Precios de Venta
+function calcularPreciosDrawer(origen) {
+  const elSIVA = document.getElementById('drawer-precio-s-iva');
+  const elIVA = document.getElementById('drawer-precio-iva');
+  const elTotal = document.getElementById('drawer-precio-total');
+
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let sIVA = parseFloat(elSIVA?.value || 0);
+  let total = parseFloat(elTotal?.value || 0);
+
+  if (origen === 'TOTAL') {
+    sIVA = Number((total / 1.16).toFixed(2));
+    if (elSIVA) elSIVA.value = sIVA.toFixed(2);
+  }
+
+  const iva = Number((sIVA * 0.16).toFixed(2));
+  total = Number((sIVA + iva).toFixed(2));
+
+  if (elIVA) elIVA.value = iva.toFixed(2);
+  if (origen !== 'TOTAL' && elTotal) elTotal.value = total.toFixed(2);
+
+  // Sub-referencias en Bolívares
+  const elSIVABs = document.getElementById('drawer-precio-s-iva-bs');
+  const elIVABs = document.getElementById('drawer-precio-iva-bs');
+  const elTotalBs = document.getElementById('drawer-precio-total-bs');
+
+  if (elSIVABs) elSIVABs.textContent = `Bs. ${fmtBs(sIVA * pzeroTasaBcv)}`;
+  if (elIVABs) elIVABs.textContent = `Bs. ${fmtBs(iva * pzeroTasaBcv)}`;
+  if (elTotalBs) elTotalBs.textContent = `Bs. ${fmtBs(total * pzeroTasaBcv)}`;
+
+  calcularMargenDrawer();
+}
+
+// Indicador de Margen Comercial de Ganancia
+function calcularMargenDrawer() {
+  const costo = parseFloat(document.getElementById('drawer-costo-s-iva')?.value || 0);
+  const precio = parseFloat(document.getElementById('drawer-precio-s-iva')?.value || 0);
+  const elMargen = document.getElementById('drawer-margen-display');
+  if (!elMargen) return;
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (precio > 0) {
+    const utilidadUsd = Number((precio - costo).toFixed(2));
+    const utilidadBs = Number((utilidadUsd * pzeroTasaBcv).toFixed(2));
+    const margenPct = Number(((utilidadUsd / precio) * 100).toFixed(1));
+
+    const color = margenPct >= 20 ? '#15803d' : (margenPct > 0 ? '#b45309' : '#b91c1c');
+    elMargen.style.color = color;
+    elMargen.textContent = `Margen: ${margenPct > 0 ? '+' : ''}${margenPct}% (Utilidad: $${fmtUsd(utilidadUsd)} USD • Bs. ${fmtBs(utilidadBs)})`;
+  } else {
+    elMargen.textContent = `Margen: 0.0% (Sin precio de venta definido)`;
+    elMargen.style.color = '#64748b';
+  }
+}
+
+function onToggleInactivoDrawer(el) {
+  if (el.checked) {
+    showToast('El producto será marcado como INACTIVO (Soft Delete sin borrar facturas).', 'info');
+  }
+}
+
+// Guardar producto auditado (Bloques A, B y C)
+async function guardarProductoAuditoria(avanzarSiguiente = false) {
+  if (pzeroProductoActualIndex < 0) return;
+  const p = pzeroProductos[pzeroProductoActualIndex];
+
+  const cantFisica = parseFloat(document.getElementById('drawer-cant-fisica')?.value);
+  const costoSIVA = parseFloat(document.getElementById('drawer-costo-s-iva')?.value);
+  const precioSIVA = parseFloat(document.getElementById('drawer-precio-s-iva')?.value);
+  const inactivo = document.getElementById('drawer-toggle-inactivo')?.checked ? 1 : 0;
+  const fecha = document.getElementById('drawer-fecha-asiento')?.value || '2026-10-31';
+
+  if (isNaN(cantFisica) || cantFisica < 0) {
+    showToast('Por favor introduce una Cantidad Física Real válida.', 'warning');
+    document.getElementById('drawer-cant-fisica')?.focus();
+    return;
+  }
+
+  const btnGuardar = document.getElementById('btn-drawer-guardar');
+  const btnGuardarSig = document.getElementById('btn-drawer-guardar-sig');
+  if (btnGuardar) btnGuardar.disabled = true;
+  if (btnGuardarSig) btnGuardarSig.disabled = true;
+
+  try {
+    const res = await fetch(`/api/auditoria/actualizar-producto/${p.producto_id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cantidad_fisica_real: cantFisica,
+        costo_s_iva_usd: isNaN(costoSIVA) ? p.costo_s_iva_usd : costoSIVA,
+        precio_venta_s_iva_usd: isNaN(precioSIVA) ? p.precio_venta_s_iva_usd : precioSIVA,
+        inactivo,
+        auditado: 1,
+        fecha,
+        tasa_bcv: pzeroTasaBcv,
+        usuario: 'ADMIN_DG67',
+        observaciones: `Auditoría interactiva código [${p.codigo}] - Octubre 2026`
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar la auditoría');
+
+    showToast(`✅ [${p.codigo}] auditado y actualizado con éxito.`, 'success');
+
+    // Actualizar producto en el estado local
+    p.stock_actual = data.producto_actualizado?.stock_actual ?? cantFisica;
+    p.stock_fisico = cantFisica;
+    p.diferencia = 0; // Ahora está cuadrado
+    p.costo_s_iva_usd = data.producto_actualizado?.costo_s_iva_usd ?? costoSIVA;
+    p.precio_venta_s_iva_usd = data.producto_actualizado?.precio_venta_s_iva_usd ?? precioSIVA;
+    p.auditado = 1;
+    p.inactivo = inactivo;
+
+    // Actualizar métricas globales
+    actualizarMetricasAuditoria(data.estadisticas);
+
+    // Refrescar fila en la tabla
+    filtrarAuditoriaEnVivo();
+
+    // Sincronizar catálogo general si está disponible
+    if (typeof loadProducts === 'function') loadProducts();
+
+    if (avanzarSiguiente) {
+      navegarProductoAuditoria(1);
+    } else {
+      cerrarDrawerAuditoria();
+    }
+  } catch (error) {
+    console.error('Error guardando producto:', error);
+    showToast(error.message, 'error');
+  } finally {
+    if (btnGuardar) btnGuardar.disabled = false;
+    if (btnGuardarSig) btnGuardarSig.disabled = false;
+  }
+}
+
+// Toggle directo de checkbox en la tabla
+async function toggleAuditadoDirecto(productoId, event) {
+  const p = pzeroProductos.find(item => item.producto_id === productoId);
+  if (!p) return;
+
+  const nuevoEstado = p.auditado === 1 ? 0 : 1;
+  const btn = event?.currentTarget;
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/auditoria/toggle-auditado/${productoId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auditado: nuevoEstado })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cambiar estado');
+
+    p.auditado = nuevoEstado;
+    actualizarMetricasAuditoria(data.estadisticas);
+    filtrarAuditoriaEnVivo();
+
+    showToast(`[${p.codigo}] marcado como ${nuevoEstado === 1 ? 'Auditado ✅' : 'Pendiente ⏳'}`, 'info');
+  } catch (err) {
+    console.error('Error toggling auditado:', err);
+    showToast(err.message, 'error');
+  }
+}
+
+// Fase 1: Descargar Matriz Oficial de 15 Columnas (.XLSX) como respaldo
 async function descargarMatrizAuditoria() {
   try {
-    showToast('Generando matriz maestra de productos para auditoría física...', 'info');
+    showToast('Generando matriz de productos para auditoría física...', 'info');
     const res = await fetch('/api/auditoria/matriz');
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -6206,39 +6817,17 @@ async function descargarMatrizAuditoria() {
     }
 
     const headers = [
-      'Código de Producto',
-      'Descripción',
-      'Unidad de Medida',
-      'Almacén',
-      'Categoría',
-      'Stock Actual',
-      'Costo Histórico S/IVA',
-      'IVA',
-      'Total Costo',
-      'Precio de Venta S/IVA',
-      'IVA Venta',
-      'Precio Total',
-      'CANTIDAD FÍSICA REAL',
-      'COSTO ACTUALIZADO S/IVA',
-      'ESTATUS'
+      'Código de Producto', 'Descripción', 'Unidad de Medida', 'Almacén', 'Categoría',
+      'Stock Actual', 'Costo Histórico S/IVA', 'IVA', 'Total Costo',
+      'Precio de Venta S/IVA', 'IVA Venta', 'Precio Total',
+      'CANTIDAD FÍSICA REAL', 'COSTO ACTUALIZADO S/IVA', 'ESTATUS'
     ];
 
     const dataRows = matriz.map(r => [
-      r.codigo,
-      r.descripcion,
-      r.unidad_medida,
-      r.almacen,
-      r.categoria,
-      r.stock_actual,
-      r.costo_historico_s_iva,
-      r.iva_costo,
-      r.total_costo,
-      r.precio_venta_s_iva,
-      r.iva_venta,
-      r.precio_total,
-      '', // 13: CANTIDAD FÍSICA REAL (vacío para conteo)
-      '', // 14: COSTO ACTUALIZADO S/IVA (vacío para costos)
-      r.estatus // 15: Estatus
+      r.codigo, r.descripcion, r.unidad_medida, r.almacen, r.categoria,
+      r.stock_actual, r.costo_historico_s_iva, r.iva_costo, r.total_costo,
+      r.precio_venta_s_iva, r.iva_venta, r.precio_total,
+      '', '', r.estatus
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
@@ -6260,414 +6849,6 @@ async function descargarMatrizAuditoria() {
   }
 }
 
-function manejarSeleccionArchivoMatriz(event) {
-  const file = event.target.files ? event.target.files[0] : (event.dataTransfer ? event.dataTransfer.files[0] : null);
-  if (!file) return;
-
-  initPuntoCeroConfig();
-
-  const label = document.getElementById('label-archivo-matriz');
-  if (label) {
-    label.innerHTML = `⏳ Leyendo archivo: <strong>${file.name}</strong>...`;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json(worksheet);
-
-      if (!rows || rows.length === 0) {
-        throw new Error('El archivo no contiene filas con datos o está vacío.');
-      }
-
-      matrizAuditadaRows = rows;
-      if (label) {
-        label.innerHTML = `✅ <strong>${file.name}</strong> (${rows.length} productos cargados listos para procesar)`;
-      }
-
-      const btnSim = document.getElementById('btn-simular-punto-cero');
-      const btnApl = document.getElementById('btn-aplicar-punto-cero');
-      if (btnSim) btnSim.disabled = false;
-      if (btnApl) btnApl.disabled = false;
-
-      showToast(`Archivo cargado: ${rows.length} productos. Haz clic en "🔍 1. Analizar y Simular".`, 'info');
-    } catch (err) {
-      console.error('Error al procesar Excel:', err);
-      if (label) label.textContent = '❌ Error al leer el archivo. Intenta de nuevo.';
-      showToast('Error al leer el archivo Excel: ' + err.message, 'error');
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-async function ejecutarAuditoriaPuntoCero(simular = true) {
-  if (!matrizAuditadaRows || matrizAuditadaRows.length === 0) {
-    showToast('Por favor selecciona primero un archivo de Matriz Auditada.', 'warning');
-    return;
-  }
-
-  initPuntoCeroConfig();
-
-  const fecha = document.getElementById('pzero-fecha')?.value || '2026-10-31';
-  const tasaBcv = parseFloat(document.getElementById('pzero-tasa-bcv')?.value || '889.58') || 889.58;
-  const btn = document.getElementById(simular ? 'btn-simular-punto-cero' : 'btn-aplicar-punto-cero');
-
-  const oldHtml = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span>⏳ ${simular ? 'Simulando...' : 'Aplicando Sinceración...'}</span>`;
-  }
-
-  try {
-    const res = await fetch('/api/auditoria/procesar-matriz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        items: matrizAuditadaRows,
-        opciones: {
-          simular,
-          fecha,
-          tasa_bcv: tasaBcv,
-          usuario_responsable: 'ADMIN_DG67',
-          observaciones: `Sinceración y Auditoría General de Inventario (Punto Cero Octubre 2026 - ${fecha})`
-        }
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al procesar la auditoría en el servidor');
-    }
-
-    mostrarResultadosAuditoria(data, simular, tasaBcv);
-
-    if (!simular) {
-      showToast(data.mensaje || 'Sinceración y ajustes de Octubre aplicados exitosamente.', 'success');
-      if (typeof loadProducts === 'function') loadProducts();
-      if (typeof loadDashboard === 'function') loadDashboard();
-      if (typeof loadMovements === 'function') loadMovements();
-    } else {
-      showToast('Simulación de Punto Cero calculada con éxito. Revisa el resumen y la tabla.', 'info');
-    }
-  } catch (err) {
-    console.error('Error en ejecutarAuditoriaPuntoCero:', err);
-    showToast(err.message, 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
-  }
-}
-
-function confirmarYAplicarPuntoCero() {
-  if (!matrizAuditadaRows || matrizAuditadaRows.length === 0) {
-    showToast('Selecciona primero la Matriz Auditada completada por la tienda.', 'warning');
-    return;
-  }
-
-  const fecha = document.getElementById('pzero-fecha')?.value || '2026-10-31';
-  const conf = confirm(
-    `¿Confirmas la aplicación definitiva de la Auditoría y Sinceración (Punto Cero) para el mes de OCTUBRE 2026 (${fecha})?\n\n` +
-    `• Se generarán los asientos legales de ajuste en Kardex (Entradas por Sinceración y Salidas por Merma).\n` +
-    `• Se actualizarán los costos promedio y precios de venta en el Maestro de Productos.\n` +
-    `• Los productos marcados como "Inactivo" pasarán a baja lógica sin eliminar facturas históricas.\n\n` +
-    `¿Deseas continuar?`
-  );
-
-  if (conf) {
-    ejecutarAuditoriaPuntoCero(false);
-  }
-}
-
-function mostrarResultadosAuditoria(data, simular, tasaBcv) {
-  const panel = document.getElementById('panel-resultados-auditoria');
-  if (panel) panel.style.display = 'block';
-
-  const r = data.resumen;
-  if (!r) return;
-
-  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  // 1. Banner de Estado
-  const banner = document.getElementById('banner-estado-auditoria');
-  const titulo = document.getElementById('titulo-estado-auditoria');
-  const subtitulo = document.getElementById('subtitulo-estado-auditoria');
-  const accionesBanner = document.getElementById('acciones-banner-auditoria');
-
-  if (banner && titulo && subtitulo) {
-    if (simular) {
-      banner.style.background = '#f0fdf4';
-      banner.style.border = '1.5px solid #86efac';
-      banner.style.color = '#14532d';
-      titulo.textContent = '🔍 SIMULACIÓN DE PUNTO CERO (OCTUBRE 2026) - SIN IMPACTO EN BASE DE DATOS';
-      subtitulo.textContent = `Se auditaron ${r.total_auditados} ítems al corte del ${r.fecha} (Tasa Oficial BCV: Bs. ${r.tasa_bcv.toFixed(2)}). Revisa las discrepancias abajo. Haz clic en "⚡ 2. Aplicar Sinceración" para asentar los movimientos definitivos.`;
-      if (accionesBanner) {
-        accionesBanner.innerHTML = `
-          <button type="button" class="btn btn-emerald" onclick="confirmarYAplicarPuntoCero()" style="font-weight:800; padding:6px 14px;">
-            ⚡ Aplicar Definitivo Ahora
-          </button>
-        `;
-      }
-    } else {
-      banner.style.background = '#ecfdf5';
-      banner.style.border = '1.5px solid #10b981';
-      banner.style.color = '#065f46';
-      titulo.textContent = '✅ SINCERACIÓN Y AJUSTES DE OCTUBRE 2026 APLICADOS EXITOSAMENTE';
-      subtitulo.textContent = `Se generaron los asientos de ajuste consolidados en Kardex con fecha ${r.fecha}. El catálogo maestro de productos ha sido revalorizado.`;
-      if (accionesBanner) {
-        accionesBanner.innerHTML = `
-          <span style="font-size:0.78rem; font-weight:800; background:#10b981; color:#fff; padding:4px 10px; border-radius:6px;">
-            ASIENTOS EN KARDEX CONSOLIDADOS
-          </span>
-        `;
-      }
-    }
-  }
-
-  // 2. KPIs Ejecutivos
-  const elEntCant = document.getElementById('kpi-pzero-entradas-cant');
-  const elEntMonto = document.getElementById('kpi-pzero-entradas-monto');
-  if (elEntCant) elEntCant.textContent = `${r.entradas_sinceracion.cantidad_productos} prods / ${r.entradas_sinceracion.unidades_totales} unds`;
-  if (elEntMonto) elEntMonto.textContent = `Bs. ${fmtBs(r.entradas_sinceracion.total_bs)} ($${fmtUsd(r.entradas_sinceracion.total_usd)} USD)`;
-
-  const elSalCant = document.getElementById('kpi-pzero-salidas-cant');
-  const elSalMonto = document.getElementById('kpi-pzero-salidas-monto');
-  if (elSalCant) elSalCant.textContent = `${r.salidas_ajuste.cantidad_productos} prods / ${r.salidas_ajuste.unidades_totales} unds`;
-  if (elSalMonto) elSalMonto.textContent = `Bs. ${fmtBs(r.salidas_ajuste.total_bs)} ($${fmtUsd(r.salidas_ajuste.total_usd)} USD)`;
-
-  const elCosCant = document.getElementById('kpi-pzero-costos-cant');
-  const elCosSub = document.getElementById('kpi-pzero-costos-sub');
-  if (elCosCant) elCosCant.textContent = `${r.actualizaciones_costo.cantidad} costos / ${r.actualizaciones_precio_venta?.cantidad || 0} precios`;
-  if (elCosSub) elCosSub.textContent = `Actualizados al corte de Octubre 2026`;
-
-  const elInactCant = document.getElementById('kpi-pzero-inactivos-cant');
-  if (elInactCant) elInactCant.textContent = `${r.depuracion_soft_delete.inactivados} inactivos`;
-
-  // 3. Estructurar lista para la tabla interactiva
-  const itemsMap = new Map();
-
-  // A. Entradas por sinceración
-  r.entradas_sinceracion.detalle.forEach(it => {
-    itemsMap.set(it.codigo, {
-      tipo: 'ENTRADA',
-      codigo: it.codigo,
-      descripcion: it.descripcion,
-      stock_sistema: it.stock_anterior,
-      stock_fisico: it.stock_real,
-      diferencia: it.diferencia,
-      costo_usd: it.costo_unitario_usd,
-      costo_bs: it.costo_unitario_bs,
-      precio_usd: 0,
-      precio_bs: 0,
-      total_usd: it.total_linea_usd,
-      total_bs: it.total_linea_bs,
-      estatus: 'Activo'
-    });
-  });
-
-  // B. Salidas por ajuste
-  r.salidas_ajuste.detalle.forEach(it => {
-    itemsMap.set(it.codigo, {
-      tipo: 'SALIDA',
-      codigo: it.codigo,
-      descripcion: it.descripcion,
-      stock_sistema: it.stock_anterior,
-      stock_fisico: it.stock_real,
-      diferencia: -it.diferencia,
-      costo_usd: it.costo_unitario_usd,
-      costo_bs: it.costo_unitario_bs,
-      precio_usd: 0,
-      precio_bs: 0,
-      total_usd: it.total_linea_usd,
-      total_bs: it.total_linea_bs,
-      estatus: 'Activo'
-    });
-  });
-
-  // C. Costos actualizados
-  r.actualizaciones_costo.detalle.forEach(it => {
-    const existing = itemsMap.get(it.codigo);
-    if (existing) {
-      existing.costo_usd = it.costo_nuevo_usd;
-      existing.costo_bs = it.costo_nuevo_bs;
-      existing.cambio_costo = true;
-    } else {
-      itemsMap.set(it.codigo, {
-        tipo: 'COSTO',
-        codigo: it.codigo,
-        descripcion: it.descripcion,
-        stock_sistema: '--',
-        stock_fisico: '--',
-        diferencia: 0,
-        costo_usd: it.costo_nuevo_usd,
-        costo_bs: it.costo_nuevo_bs,
-        precio_usd: 0,
-        precio_bs: 0,
-        total_usd: 0,
-        total_bs: 0,
-        estatus: 'Activo',
-        cambio_costo: true
-      });
-    }
-  });
-
-  // D. Precios de venta actualizados
-  if (r.actualizaciones_precio_venta?.detalle) {
-    r.actualizaciones_precio_venta.detalle.forEach(it => {
-      const existing = itemsMap.get(it.codigo);
-      if (existing) {
-        existing.precio_usd = it.precio_nuevo_usd;
-        existing.precio_bs = it.precio_nuevo_bs;
-        existing.cambio_precio = true;
-      } else {
-        itemsMap.set(it.codigo, {
-          tipo: 'PRECIO',
-          codigo: it.codigo,
-          descripcion: it.descripcion,
-          stock_sistema: '--',
-          stock_fisico: '--',
-          diferencia: 0,
-          costo_usd: 0,
-          costo_bs: 0,
-          precio_usd: it.precio_nuevo_usd,
-          precio_bs: it.precio_nuevo_bs,
-          total_usd: 0,
-          total_bs: 0,
-          estatus: 'Activo',
-          cambio_precio: true
-        });
-      }
-    });
-  }
-
-  // E. Inactivos (Soft Delete)
-  r.depuracion_soft_delete.detalle_inactivados.forEach(it => {
-    const existing = itemsMap.get(it.codigo);
-    if (existing) {
-      existing.estatus = 'Inactivo';
-    } else {
-      itemsMap.set(it.codigo, {
-        tipo: 'INACTIVO',
-        codigo: it.codigo,
-        descripcion: it.descripcion,
-        stock_sistema: '--',
-        stock_fisico: '--',
-        diferencia: 0,
-        costo_usd: 0,
-        costo_bs: 0,
-        precio_usd: 0,
-        precio_bs: 0,
-        total_usd: 0,
-        total_bs: 0,
-        estatus: 'Inactivo'
-      });
-    }
-  });
-
-  itemsPreviaAuditoria = Array.from(itemsMap.values());
-  aplicarFiltrosTablaPrevia();
-}
-
-function filtrarTablaPreviaAuditoria(query) {
-  filtroTextoPrevia = String(query || '').trim().toLowerCase();
-  aplicarFiltrosTablaPrevia();
-}
-
-function filtrarTablaPreviaPorTipo(tipo) {
-  filtroTipoPrevia = tipo || 'TODOS';
-  aplicarFiltrosTablaPrevia();
-}
-
-function aplicarFiltrosTablaPrevia() {
-  let list = itemsPreviaAuditoria;
-
-  if (filtroTipoPrevia === 'ENTRADAS') {
-    list = list.filter(it => it.tipo === 'ENTRADA');
-  } else if (filtroTipoPrevia === 'SALIDA' || filtroTipoPrevia === 'SALIDAS') {
-    list = list.filter(it => it.tipo === 'SALIDA');
-  } else if (filtroTipoPrevia === 'COSTOS') {
-    list = list.filter(it => it.tipo === 'COSTO' || it.cambio_costo);
-  } else if (filtroTipoPrevia === 'PRECIOS') {
-    list = list.filter(it => it.tipo === 'PRECIO' || it.cambio_precio);
-  } else if (filtroTipoPrevia === 'INACTIVOS') {
-    list = list.filter(it => it.estatus === 'Inactivo' || it.tipo === 'INACTIVO');
-  } else if (filtroTipoPrevia === 'SIN_CAMBIOS') {
-    list = list.filter(it => it.tipo === 'SIN_CAMBIOS');
-  }
-
-  if (filtroTextoPrevia) {
-    list = list.filter(it => 
-      String(it.codigo).toLowerCase().includes(filtroTextoPrevia) ||
-      String(it.descripcion).toLowerCase().includes(filtroTextoPrevia)
-    );
-  }
-
-  const badge = document.getElementById('badge-total-items-previa');
-  if (badge) badge.textContent = `${list.length} ítems`;
-
-  renderizarTablaPreviaAuditoria(list);
-}
-
-function renderizarTablaPreviaAuditoria(items) {
-  const tbody = document.getElementById('tbody-previa-auditoria');
-  if (!tbody) return;
-
-  if (!items || items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:16px; color:#64748b;">No hay discrepancias que coincidan con el filtro</td></tr>`;
-    return;
-  }
-
-  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  tbody.innerHTML = items.map(it => {
-    let diffBadge = '--';
-    if (it.diferencia > 0) {
-      diffBadge = `<span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:4px; font-weight:800;">+${it.diferencia} (Sobrante)</span>`;
-    } else if (it.diferencia < 0) {
-      diffBadge = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:4px; font-weight:800;">${it.diferencia} (Faltante)</span>`;
-    } else {
-      diffBadge = `<span style="color:#64748b;">0 (Exacto)</span>`;
-    }
-
-    let estBadge = `<span style="background:#f1f5f9; color:#334155; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:700;">Activo</span>`;
-    if (it.estatus === 'Inactivo') {
-      estBadge = `<span style="background:#ffe4e6; color:#be123c; padding:2px 6px; border-radius:4px; font-size:0.72rem; font-weight:800;">🔒 Inactivo (Baja)</span>`;
-    }
-
-    const costoTexto = it.costo_usd > 0
-      ? `<div>$${fmtUsd(it.costo_usd)} USD</div><div style="font-size:0.7rem; color:#64748b;">Bs. ${fmtBs(it.costo_bs)}</div>`
-      : '<span style="color:#94a3b8;">--</span>';
-
-    const precioTexto = it.precio_usd > 0
-      ? `<div style="color:#0284c7; font-weight:700;">$${fmtUsd(it.precio_usd)} USD</div><div style="font-size:0.7rem; color:#64748b;">Bs. ${fmtBs(it.precio_bs)}</div>`
-      : '<span style="color:#94a3b8;">--</span>';
-
-    const impactoTexto = it.total_usd > 0
-      ? `<div style="font-weight:800; color:#0B2447;">Bs. ${fmtBs(it.total_bs)}</div><div style="font-size:0.72rem; color:#15803d; font-weight:700;">$${fmtUsd(it.total_usd)} USD</div>`
-      : '<span style="color:#94a3b8;">--</span>';
-
-    return `
-      <tr>
-        <td style="padding:8px 10px; font-family:monospace; font-weight:800; color:#0B2447;">${it.codigo}</td>
-        <td style="padding:8px 10px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${it.descripcion}">${it.descripcion}</td>
-        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${it.stock_sistema}</td>
-        <td style="padding:8px 10px; text-align:right; font-family:monospace; font-weight:700; color:#0369a1;">${it.stock_fisico}</td>
-        <td style="padding:8px 10px; text-align:center;">${diffBadge}</td>
-        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${costoTexto}</td>
-        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${precioTexto}</td>
-        <td style="padding:8px 10px; text-align:right; font-family:monospace;">${impactoTexto}</td>
-        <td style="padding:8px 10px; text-align:center;">${estBadge}</td>
-      </tr>
-    `;
-  }).join('');
-}
 
 
 
