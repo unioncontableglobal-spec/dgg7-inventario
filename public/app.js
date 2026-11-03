@@ -1341,6 +1341,20 @@ function resetForm(formId) {
 
   if (formId === 'form-entrada') {
     document.getElementById('tbody-items-entrada').innerHTML = '';
+    const alertEnt = document.getElementById('alerta-duplicado-entrada');
+    if (alertEnt) alertEnt.style.display = 'none';
+    const inputDoc = document.getElementById('ent-factura');
+    if (inputDoc) {
+      inputDoc.style.borderColor = '';
+      inputDoc.style.backgroundColor = '';
+    }
+    const submitBtn = document.getElementById('btn-submit-entrada');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+    }
     if (document.getElementById('ent-control')) document.getElementById('ent-control').value = '00-';
     if (document.getElementById('ent-fecha-factura')) document.getElementById('ent-fecha-factura').value = today;
     if (document.getElementById('ent-fecha')) document.getElementById('ent-fecha').value = today;
@@ -1754,6 +1768,22 @@ async function viewMovementDetail(id) {
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.style.display = 'none';
+  if (modalId === 'modal-nueva-compra') {
+    const alertBox = document.getElementById('alerta-duplicado-compra');
+    if (alertBox) alertBox.style.display = 'none';
+    const inputFact = document.getElementById('m-comp-factura');
+    if (inputFact) {
+      inputFact.style.borderColor = '';
+      inputFact.style.backgroundColor = '';
+    }
+    const btnSave = document.getElementById('btn-save-compra');
+    if (btnSave) {
+      btnSave.disabled = false;
+      btnSave.textContent = 'Guardar en Libro de Compras';
+      btnSave.style.opacity = '1';
+      btnSave.style.cursor = 'pointer';
+    }
+  }
 }
 
 let currentMonthlyReportData = [];
@@ -1970,6 +2000,19 @@ function setupEventListeners() {
   document.getElementById('mov-filter-tipo')?.addEventListener('change', loadMovements);
   document.getElementById('mov-filter-desde')?.addEventListener('change', loadMovements);
   document.getElementById('mov-filter-hasta')?.addEventListener('change', loadMovements);
+
+  // Anti-Duplicados en Entrada de Almacén (Tiempo Real)
+  document.getElementById('ent-factura')?.addEventListener('input', verificarEntradaAlmacenDuplicadaUI);
+  document.getElementById('ent-factura')?.addEventListener('blur', verificarEntradaAlmacenDuplicadaUI);
+  document.getElementById('ent-proveedor')?.addEventListener('change', verificarEntradaAlmacenDuplicadaUI);
+
+  // Anti-Duplicados en Libro de Compras Modal (Tiempo Real)
+  document.getElementById('m-comp-factura')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
+  document.getElementById('m-comp-factura')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
+  document.getElementById('m-comp-rif')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
+  document.getElementById('m-comp-rif')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
+  document.getElementById('m-comp-control')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
+  document.getElementById('m-comp-control')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
 }
 
 // Helper: Toast Notifications
@@ -2981,12 +3024,28 @@ function seleccionarEntradaPendienteTienda(idx) {
   if (btnToggle) btnToggle.textContent = '👁️ Mostrar Lista de Pendientes';
 
   document.getElementById('m-comp-base')?.focus();
+  verificarFacturaCompraDuplicadaUI();
 }
 
 function desvincularEntradaTienda() {
   document.getElementById('m-comp-movimiento-id').value = '';
   const badge = document.getElementById('badge-entrada-vinculada');
   if (badge) badge.style.display = 'none';
+
+  const alertBox = document.getElementById('alerta-duplicado-compra');
+  if (alertBox) alertBox.style.display = 'none';
+  const inputFact = document.getElementById('m-comp-factura');
+  if (inputFact) {
+    inputFact.style.borderColor = '';
+    inputFact.style.backgroundColor = '';
+  }
+  const btnSave = document.getElementById('btn-save-compra');
+  if (btnSave) {
+    btnSave.disabled = false;
+    btnSave.textContent = 'Guardar en Libro de Compras';
+    btnSave.style.opacity = '1';
+    btnSave.style.cursor = 'pointer';
+  }
 
   const wrapper = document.getElementById('wrapper-lista-entradas-pendientes');
   if (wrapper) wrapper.style.display = 'block';
@@ -3195,6 +3254,138 @@ function autoCompletarProveedorPorRif(rif) {
     if (prov.tipo_servicio) document.getElementById('m-comp-tipo').value = prov.tipo_servicio;
     document.getElementById('m-comp-aplica-inv').checked = (prov.aplica_inventario === 1);
   }
+  verificarFacturaCompraDuplicadaUI();
+}
+
+let debounceTimerCheckCompra = null;
+async function verificarFacturaCompraDuplicadaUI() {
+  clearTimeout(debounceTimerCheckCompra);
+  debounceTimerCheckCompra = setTimeout(async () => {
+    const rif = document.getElementById('m-comp-rif')?.value.trim();
+    const fact = document.getElementById('m-comp-factura')?.value.trim();
+    const ctrl = document.getElementById('m-comp-control')?.value.trim() || '';
+    const alertBox = document.getElementById('alerta-duplicado-compra');
+    const alertText = document.getElementById('texto-alerta-duplicado-compra');
+    const btnSave = document.getElementById('btn-save-compra');
+    const inputFact = document.getElementById('m-comp-factura');
+
+    if (!rif || !fact) {
+      if (alertBox) alertBox.style.display = 'none';
+      if (inputFact) {
+        inputFact.style.borderColor = '';
+        inputFact.style.backgroundColor = '';
+      }
+      if (btnSave) {
+        btnSave.disabled = false;
+        btnSave.textContent = 'Guardar en Libro de Compras';
+        btnSave.style.opacity = '1';
+        btnSave.style.cursor = 'pointer';
+      }
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/fiscal/verificar-duplicado-compra?rif=${encodeURIComponent(rif)}&nro_factura=${encodeURIComponent(fact)}&nro_control=${encodeURIComponent(ctrl)}`);
+      const data = await res.json();
+
+      if (data.duplicado) {
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          if (alertText) alertText.textContent = data.mensaje;
+        }
+        if (inputFact) {
+          inputFact.style.borderColor = '#ef4444';
+          inputFact.style.backgroundColor = '#fef2f2';
+        }
+        if (btnSave) {
+          btnSave.disabled = true;
+          btnSave.textContent = '⛔ Factura Duplicada - Bloqueada';
+          btnSave.style.opacity = '0.55';
+          btnSave.style.cursor = 'not-allowed';
+        }
+        showToast('⚠️ Factura Duplicada: Ya existe en el Libro de Compras', 'error');
+      } else {
+        if (alertBox) alertBox.style.display = 'none';
+        if (inputFact) {
+          inputFact.style.borderColor = '#10b981';
+          inputFact.style.backgroundColor = '#f0fdf4';
+        }
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.textContent = 'Guardar en Libro de Compras';
+          btnSave.style.opacity = '1';
+          btnSave.style.cursor = 'pointer';
+        }
+      }
+    } catch (e) {
+      console.warn('Error verificando duplicado compra:', e);
+    }
+  }, 300);
+}
+
+let debounceTimerCheckEntrada = null;
+async function verificarEntradaAlmacenDuplicadaUI() {
+  clearTimeout(debounceTimerCheckEntrada);
+  debounceTimerCheckEntrada = setTimeout(async () => {
+    const provId = document.getElementById('ent-proveedor')?.value;
+    const doc = document.getElementById('ent-factura')?.value.trim();
+    const alertBox = document.getElementById('alerta-duplicado-entrada');
+    const alertText = document.getElementById('texto-alerta-duplicado-entrada');
+    const submitBtn = document.getElementById('btn-submit-entrada');
+    const inputDoc = document.getElementById('ent-factura');
+
+    if (!provId || !doc) {
+      if (alertBox) alertBox.style.display = 'none';
+      if (inputDoc) {
+        inputDoc.style.borderColor = '';
+        inputDoc.style.backgroundColor = '';
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+      }
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/movimientos/verificar-duplicado-entrada?proveedor_id=${encodeURIComponent(provId)}&numero_documento=${encodeURIComponent(doc)}`);
+      const data = await res.json();
+
+      if (data.duplicado) {
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          if (alertText) alertText.textContent = data.mensaje;
+        }
+        if (inputDoc) {
+          inputDoc.style.borderColor = '#ef4444';
+          inputDoc.style.backgroundColor = '#fef2f2';
+        }
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = '⛔ Entrada Duplicada - Bloqueada';
+          submitBtn.style.opacity = '0.55';
+          submitBtn.style.cursor = 'not-allowed';
+        }
+        showToast('⚠️ Entrada Duplicada: Esta factura ya tiene ingreso físico en Almacén', 'error');
+      } else {
+        if (alertBox) alertBox.style.display = 'none';
+        if (inputDoc) {
+          inputDoc.style.borderColor = '#10b981';
+          inputDoc.style.backgroundColor = '#f0fdf4';
+        }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
+          submitBtn.style.opacity = '1';
+          submitBtn.style.cursor = 'pointer';
+        }
+      }
+    } catch (e) {
+      console.warn('Error verificando duplicado entrada:', e);
+    }
+  }, 300);
 }
 
 async function guardarNuevaCompra(e) {

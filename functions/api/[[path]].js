@@ -1,5 +1,12 @@
 import { createClient } from '@libsql/client/web';
-import { conciliarReporteZ, conciliarTodosReportesZ, conciliarVentaIndividual, getResumenCruceDobleVia } from '../lib/cruce_engine.js';
+import { 
+  conciliarReporteZ, 
+  conciliarTodosReportesZ, 
+  conciliarVentaIndividual, 
+  getResumenCruceDobleVia,
+  verificarDuplicadoLibroCompras,
+  verificarDuplicadoEntradaAlmacen
+} from '../lib/cruce_engine.js';
 
 const TURSO_URL = 'libsql://inventario-dg67-unioncontableglobal-spec.aws-us-east-1.turso.io';
 const TURSO_AUTH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI3NzEzNTEsImlkIjoiMDFhMTY5N2YtYTAwMS03MjNlLWI5NTYtNWExYjA0Yjk2OGI5Iiwia2lkIjoiUVl1M2JpWWk5QUZtZXY4TmZod0x4Z0FDMG9RQ0VGNXBfemt5MmxMZHdkVSIsInJpZCI6ImM4YzJkOTQzLTFmMjctNDBkYi1iNTk1LTI1OTAyNGRkYzUzOSJ9.kYMvoWFHgysur-aq2okfAawMCpTmjCa8wld7JH9kkN9esWS9sZSRNMU0RfnUABAr9mq_WHBw2_ps2LueRoH-Aw';
@@ -617,6 +624,14 @@ export async function onRequest(context) {
       return jsonResponse(res.rows);
     }
 
+    if (path === '/api/movimientos/verificar-duplicado-entrada' && method === 'GET') {
+      const provId = url.searchParams.get('proveedor_id');
+      const numDoc = url.searchParams.get('numero_documento');
+      const excId = url.searchParams.get('exclude_id');
+      const res = await verificarDuplicadoEntradaAlmacen(provId, numDoc, excId, db);
+      return jsonResponse(res);
+    }
+
     if (path.startsWith('/api/movimientos/') && method === 'GET') {
       const id = path.split('/')[3];
       const [hdr, dtl] = await Promise.all([
@@ -673,6 +688,18 @@ export async function onRequest(context) {
       let numFacturaNum = null;
       const matchNum = String(numero_documento).match(/(\d+)/);
       if (matchNum) numFacturaNum = parseInt(matchNum[1], 10);
+
+      // VALIDACIÓN ANTI-DUPLICADOS PARA ENTRADAS DE ALMACÉN
+      if (tipo === 'ENTRADA_COMPRA' && proveedor_id) {
+        const dupEnt = await verificarDuplicadoEntradaAlmacen(proveedor_id, numero_documento, null, db);
+        if (dupEnt.duplicado) {
+          return jsonResponse({
+            error: dupEnt.mensaje,
+            duplicado: true,
+            detalle: dupEnt
+          }, 409);
+        }
+      }
 
       const headerResult = await db.execute({
         sql: `INSERT INTO movimientos 
@@ -803,6 +830,15 @@ export async function onRequest(context) {
     // ----------------------------------------------------
     // CONTROL FISCAL & SENIAT
     // ----------------------------------------------------
+    if (path === '/api/fiscal/verificar-duplicado-compra' && method === 'GET') {
+      const rif = url.searchParams.get('rif');
+      const numFact = url.searchParams.get('nro_factura');
+      const numCtrl = url.searchParams.get('nro_control');
+      const excId = url.searchParams.get('exclude_id');
+      const res = await verificarDuplicadoLibroCompras(rif, numFact, numCtrl, excId, db);
+      return jsonResponse(res);
+    }
+
     if (path === '/api/fiscal/libro-compras' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
       let sql = `SELECT lc.*, p.razon_social as proveedor_registrado_nombre FROM libro_compras lc LEFT JOIN proveedores p ON lc.proveedor_id = p.id WHERE 1=1`;
@@ -907,6 +943,20 @@ export async function onRequest(context) {
 
       if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
         return jsonResponse({ error: 'Faltan campos obligatorios para el Libro de Compras' }, 400);
+      }
+
+      const cleanRif = String(rif).trim().toUpperCase();
+      const cleanRazon = String(razon_social).trim();
+
+      // VALIDACIÓN ESTRICTA ANTI-DUPLICADOS FISCALES (SENIAT Art. 75-76 RLIVA)
+      const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, null, db);
+      if (checkDup.duplicado) {
+        return jsonResponse({
+          error: checkDup.mensaje,
+          duplicado: true,
+          tipo: checkDup.tipo,
+          factura_existente: checkDup.factura
+        }, 409);
       }
 
       const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });

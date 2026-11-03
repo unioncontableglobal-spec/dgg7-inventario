@@ -8,7 +8,14 @@ import compression from 'compression';
 import { createClient } from '@libsql/client';
 import xlsxPkg from 'xlsx';
 const XLSX = xlsxPkg.utils ? xlsxPkg : (xlsxPkg.default || xlsxPkg);
-import { conciliarReporteZ, conciliarTodosReportesZ, conciliarVentaIndividual, getResumenCruceDobleVia } from './lib/cruce_engine.js';
+import { 
+  conciliarReporteZ, 
+  conciliarTodosReportesZ, 
+  conciliarVentaIndividual, 
+  getResumenCruceDobleVia,
+  verificarDuplicadoLibroCompras,
+  verificarDuplicadoEntradaAlmacen
+} from './lib/cruce_engine.js';
 
 dotenv.config();
 
@@ -1332,6 +1339,18 @@ app.post('/api/movimientos', async (req, res) => {
     const fechaFacturaNorm = req.body.fecha_factura || fecha;
     const tasaFacturaNorm = Number(req.body.tasa_bcv_factura || tasaNum);
 
+    // VALIDACIÓN ANTI-DUPLICADOS PARA ENTRADAS DE ALMACÉN
+    if (tipo === 'ENTRADA_COMPRA' && proveedor_id) {
+      const dupEnt = await verificarDuplicadoEntradaAlmacen(proveedor_id, numero_documento, null, db);
+      if (dupEnt.duplicado) {
+        return res.status(409).json({
+          error: dupEnt.mensaje,
+          duplicado: true,
+          detalle: dupEnt
+        });
+      }
+    }
+
     // Build header insert with full traceability + BCV rate date & valuation method
     const headerResult = await db.execute({
       sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones, fecha_factura, tasa_bcv_factura)
@@ -1444,6 +1463,18 @@ app.post('/api/movimientos', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating movement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 6.1 Verificar Entrada Duplicada en Almacén en Tiempo Real
+app.get('/api/movimientos/verificar-duplicado-entrada', async (req, res) => {
+  try {
+    const { proveedor_id, numero_documento, exclude_id } = req.query;
+    const resultado = await verificarDuplicadoEntradaAlmacen(proveedor_id, numero_documento, exclude_id, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error verificando duplicado de entrada:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2280,6 +2311,18 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     const cleanRif = String(rif).trim().toUpperCase();
     const cleanRazon = String(razon_social).trim();
+
+    // VALIDACIÓN ESTRICTA ANTI-DUPLICADOS FISCALES (SENIAT Art. 75-76 RLIVA)
+    const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, null, db);
+    if (checkDup.duplicado) {
+      return res.status(409).json({
+        error: checkDup.mensaje,
+        duplicado: true,
+        tipo: checkDup.tipo,
+        factura_existente: checkDup.factura
+      });
+    }
+
     const fechaRecepcionOp = fecha_recepcion || fecha;
     const tasaRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
     const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 889.58);
@@ -2364,6 +2407,18 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
     });
   } catch (error) {
     console.error('Error registrando factura en libro compras:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.6.1 Verificar Duplicado en Libro de Compras en Tiempo Real
+app.get('/api/fiscal/verificar-duplicado-compra', async (req, res) => {
+  try {
+    const { rif, nro_factura, nro_control, exclude_id } = req.query;
+    const resultado = await verificarDuplicadoLibroCompras(rif, nro_factura, nro_control, exclude_id, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error verificando duplicado de compra:', error);
     res.status(500).json({ error: error.message });
   }
 });

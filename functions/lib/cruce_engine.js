@@ -1,7 +1,7 @@
 /**
- * functions/lib/cruce_engine.js
+ * lib/cruce_engine.js
  * Motor de Conciliación de Doble Vía (Cruce de Información DG67 ↔ UCG)
- * Compatible con Cloudflare Pages y Node.js (@libsql/client)
+ * Compatible con @libsql/client (SQLite local y Turso Cloud)
  */
 
 export async function conciliarReporteZ(reporteZId, db) {
@@ -344,3 +344,125 @@ export async function getResumenCruceDobleVia(periodo, db) {
     }
   };
 }
+
+/**
+ * Verifica si una factura de compra ya se encuentra registrada en el Libro de Compras
+ * Evita duplicados fiscales por Proveedor (RIF) + Número de Factura o Número de Control (Art. 75-76 RLIVA)
+ */
+export async function verificarDuplicadoLibroCompras(rif, nroFactura, nroControl, excludeId, db) {
+  if (!rif || !nroFactura) return { duplicado: false };
+  const cleanRif = String(rif).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const cleanFactura = String(nroFactura).trim();
+  const matchNum = cleanFactura.match(/\d+/);
+  const numInt = matchNum ? parseInt(matchNum[0], 10) : null;
+  const exclude = excludeId ? Number(excludeId) : 0;
+
+  // 1. Verificación por RIF del Proveedor y Número de Factura (exacto o correlativo numérico)
+  let sql = `
+    SELECT id, periodo, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control, 
+           total_bs, total_divisa, base_imponible_bs, iva_bs, estatus_conciliacion
+    FROM libro_compras
+    WHERE id != ?
+      AND UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = ?
+      AND (
+        UPPER(TRIM(nro_factura)) = UPPER(?)
+        ${numInt ? 'OR (CAST(nro_factura AS INTEGER) > 0 AND CAST(nro_factura AS INTEGER) = ?)' : ''}
+      )
+    LIMIT 1
+  `;
+  const args = [exclude, cleanRif, cleanFactura];
+  if (numInt) args.push(numInt);
+
+  const res = await db.execute({ sql, args });
+  if (res.rows.length > 0) {
+    const f = res.rows[0];
+    const totalBsFmt = Number(f.total_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 });
+    const totalDivFmt = Number(f.total_divisa).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    return {
+      duplicado: true,
+      tipo: 'MISMO_PROVEEDOR_Y_FACTURA',
+      mensaje: `⚠️ FACTURA DUPLICADA EN LIBRO DE COMPRAS: La factura N° ${cleanFactura} del proveedor ${f.razon_social} (${f.rif}) ya se encuentra registrada en el período ${f.periodo} (Fecha: ${f.fecha}, Total: Bs. ${totalBsFmt} / $${totalDivFmt} USD). Por normativa fiscal SENIAT, no se permite registrar una factura duplicada.`,
+      factura: f
+    };
+  }
+
+  // 2. Verificación por RIF del Proveedor y Número de Control SENIAT
+  if (nroControl && String(nroControl).trim()) {
+    const ctrlNorm = String(nroControl).trim();
+    const isGenericCtrl = /^(00-|00|0|s\/c|s\/ctrl|sin control)$/i.test(ctrlNorm);
+    if (!isGenericCtrl && ctrlNorm.length >= 4) {
+      const ctrlRes = await db.execute({
+        sql: `SELECT id, periodo, fecha, rif, razon_social, nro_factura, nro_control, total_bs, total_divisa
+              FROM libro_compras
+              WHERE id != ?
+                AND UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = ?
+                AND UPPER(TRIM(nro_control)) = UPPER(?)
+              LIMIT 1`,
+        args: [exclude, cleanRif, ctrlNorm]
+      });
+      if (ctrlRes.rows.length > 0) {
+        const f = ctrlRes.rows[0];
+        return {
+          duplicado: true,
+          tipo: 'MISMO_NUMERO_CONTROL',
+          mensaje: `⚠️ CONTROL FISCAL DUPLICADO: El N° de Control Fiscal "${ctrlNorm}" del proveedor ${f.razon_social} ya fue registrado en la Factura N° ${f.nro_factura} del período ${f.periodo}.`,
+          factura: f
+        };
+      }
+    }
+  }
+
+  return { duplicado: false };
+}
+
+/**
+ * Verifica si ya existe una entrada física de almacén para ese mismo Proveedor y Número de Factura/Documento
+ */
+export async function verificarDuplicadoEntradaAlmacen(proveedorId, nroDocumento, excludeId, db) {
+  if (!proveedorId || !nroDocumento) return { duplicado: false };
+  const provId = parseInt(proveedorId, 10);
+  const cleanDoc = String(nroDocumento).trim();
+  const matchNum = cleanDoc.match(/\d+/);
+  const numInt = matchNum ? parseInt(matchNum[0], 10) : null;
+  const exclude = excludeId ? Number(excludeId) : 0;
+
+  if (/^(control|inventario|ajuste|s\/n|s\/d)/i.test(cleanDoc)) {
+    return { duplicado: false };
+  }
+
+  let sql = `
+    SELECT m.id, m.fecha, m.numero_documento, m.nro_control, p.razon_social, p.rif,
+           (SELECT COUNT(*) FROM movimiento_detalles md WHERE md.movimiento_id = m.id) as items_cant,
+           COALESCE(
+             (SELECT SUM(total_linea_bs) FROM movimiento_detalles md WHERE md.movimiento_id = m.id),
+             0
+           ) as total_bs
+    FROM movimientos m
+    LEFT JOIN proveedores p ON m.proveedor_id = p.id
+    WHERE m.id != ?
+      AND m.tipo = 'ENTRADA_COMPRA'
+      AND m.proveedor_id = ?
+      AND (
+        UPPER(TRIM(m.numero_documento)) = UPPER(?)
+        ${numInt ? 'OR (m.numero_factura_numerico > 0 AND m.numero_factura_numerico = ?)' : ''}
+      )
+    ORDER BY m.id DESC
+    LIMIT 1
+  `;
+  const args = [exclude, provId, cleanDoc];
+  if (numInt) args.push(numInt);
+
+  const res = await db.execute({ sql, args });
+  if (res.rows.length > 0) {
+    const m = res.rows[0];
+    const totalBsFmt = Number(m.total_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 });
+    return {
+      duplicado: true,
+      tipo: 'ENTRADA_ALMACEN_EXISTENTE',
+      mensaje: `⚠️ ENTRADA YA REGISTRADA EN ALMACÉN: Ya existe una entrada física registrada para la factura N° ${cleanDoc} del proveedor ${m.razon_social || provId} (Fecha: ${m.fecha}, Movimiento #${m.id}, ${m.items_cant} repuestos, Total: Bs. ${totalBsFmt}). No se permite duplicar el ingreso físico al inventario.`,
+      movimiento: m
+    };
+  }
+  return { duplicado: false };
+}
+
