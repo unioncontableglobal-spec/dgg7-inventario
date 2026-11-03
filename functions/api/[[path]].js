@@ -190,8 +190,8 @@ export async function onRequest(context) {
               substr(m.fecha, 1, 7) as mes,
               count(distinct m.id) as cant_compras,
               sum(md.cantidad) as unidades_compradas,
-              sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.costo_unitario_usd, 0))) as monto_compras_usd,
-              sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.costo_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_compras_bs
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_divisa, 0), md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), 2.5))), 2) as monto_compras_usd,
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * m.tasa_bcv, md.cantidad * COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_usd * m.tasa_bcv, 2.5 * m.tasa_bcv))), 2) as monto_compras_bs
             FROM movimientos m
             JOIN movimiento_detalles md ON m.id = md.movimiento_id
             WHERE m.tipo IN ('ENTRADA_COMPRA', 'INVENTARIO_INICIAL')
@@ -202,8 +202,8 @@ export async function onRequest(context) {
               substr(m.fecha, 1, 7) as mes,
               count(distinct m.id) as cant_ventas,
               sum(md.cantidad) as unidades_vendidas,
-              sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.precio_unitario_divisa, md.costo_unitario_usd, 0))) as monto_ventas_usd,
-              sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.precio_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_ventas_bs
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_divisa, 0), md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5))), 2) as monto_ventas_usd,
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * m.tasa_bcv, md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5) * m.tasa_bcv)), 2) as monto_ventas_bs
             FROM movimientos m
             JOIN movimiento_detalles md ON m.id = md.movimiento_id
             WHERE m.tipo = 'SALIDA_VENTA'
@@ -383,49 +383,134 @@ export async function onRequest(context) {
       const cat = url.searchParams.get('categoria');
       const alm = url.searchParams.get('almacen');
       const est = url.searchParams.get('estado');
+      const fechaCorte = url.searchParams.get('fecha_corte');
       const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
 
-      let sql = `
-        SELECT producto_id, codigo, descripcion, unidad_medida, 
-               categoria, almacen, stock_minimo, costo_referencial_usd, 
-               stock_actual, valor_total_usd, estado_stock
-        FROM vista_inventario_actual
-        WHERE 1=1
-      `;
+      let sql;
       const args = [];
+      let tasa = 889.26;
+      let fechaTasa = '31/10/2026';
 
-      if (q) {
-        sql += ` AND (codigo LIKE ? OR descripcion LIKE ?)`;
-        args.push(`%${q}%`, `%${q}%`);
-      }
-      if (cat && cat !== 'TODAS') {
-        sql += ` AND categoria = ?`;
-        args.push(cat);
-      }
-      if (alm && alm !== 'TODOS') {
-        sql += ` AND almacen = ?`;
-        args.push(alm);
-      }
-      if (est && est !== 'TODOS') {
-        sql += ` AND estado_stock = ?`;
-        args.push(est);
+      if (fechaCorte) {
+        const targetPeriodo = String(fechaCorte).slice(0, 7);
+        const [tasaRes, cfgRes] = await Promise.all([
+          db.execute({
+            sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?",
+            args: [targetPeriodo]
+          }),
+          db.execute("SELECT tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
+        ]);
+
+        if (tasaRes.rows.length > 0 && tasaRes.rows[0].tasa_bcv) {
+          tasa = Number(tasaRes.rows[0].tasa_bcv);
+          fechaTasa = tasaRes.rows[0].fecha_cierre || fechaCorte;
+        } else {
+          tasa = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.26);
+          fechaTasa = cfgRes.rows[0]?.fecha_bcv_activa_dia || fechaCorte;
+        }
+
+        sql = `
+          SELECT 
+            p.id AS producto_id,
+            p.codigo,
+            p.descripcion,
+            p.unidad_medida,
+            COALESCE(c.nombre, 'GENERAL') AS categoria,
+            COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
+            p.stock_minimo,
+            p.costo_referencial_usd,
+            ROUND(COALESCE(SUM(CASE 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
+              WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+              ELSE 0 
+            END), 0), 2) AS stock_actual,
+            ROUND(COALESCE(SUM(CASE 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
+              WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+              ELSE 0 
+            END), 0) * p.costo_referencial_usd, 2) AS valor_total_usd,
+            CASE 
+              WHEN COALESCE(SUM(CASE 
+                WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') THEN md.cantidad 
+                WHEN m.tipo = 'SALIDA_VENTA' THEN -md.cantidad 
+                ELSE 0 
+              END), 0) <= p.stock_minimo THEN 'SOLICITAR MATERIAL'
+              ELSE 'HAY SUFICIENTE'
+            END AS estado_stock
+          FROM productos p
+          LEFT JOIN categorias c ON p.categoria_id = c.id
+          LEFT JOIN almacenes a ON p.almacen_id = a.id
+          LEFT JOIN movimiento_detalles md ON p.id = md.producto_id
+          LEFT JOIN movimientos m ON md.movimiento_id = m.id AND m.fecha <= ?
+          WHERE 1=1
+        `;
+        args.push(fechaCorte);
+
+        if (q) {
+          sql += ` AND (p.codigo LIKE ? OR p.descripcion LIKE ?)`;
+          args.push(`%${q}%`, `%${q}%`);
+        }
+        if (cat && cat !== 'TODAS') {
+          sql += ` AND COALESCE(c.nombre, 'GENERAL') = ?`;
+          args.push(cat);
+        }
+        if (alm && alm !== 'TODOS') {
+          sql += ` AND COALESCE(a.nombre, 'PRINCIPAL') = ?`;
+          args.push(alm);
+        }
+
+        sql += ` GROUP BY p.id`;
+        if (est && est !== 'TODOS') {
+          sql += ` HAVING estado_stock = ?`;
+          args.push(est);
+        }
+
+        sql += ` ORDER BY p.codigo ASC LIMIT ?`;
+        args.push(limit);
+
+      } else {
+        const cfgRes = await db.execute("SELECT tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1");
+        tasa = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.26);
+        fechaTasa = cfgRes.rows[0]?.fecha_bcv_activa_dia || 'Al día';
+
+        sql = `
+          SELECT producto_id, codigo, descripcion, unidad_medida, 
+                 categoria, almacen, stock_minimo, costo_referencial_usd, 
+                 stock_actual, valor_total_usd, estado_stock
+          FROM vista_inventario_actual
+          WHERE 1=1
+        `;
+
+        if (q) {
+          sql += ` AND (codigo LIKE ? OR descripcion LIKE ?)`;
+          args.push(`%${q}%`, `%${q}%`);
+        }
+        if (cat && cat !== 'TODAS') {
+          sql += ` AND categoria = ?`;
+          args.push(cat);
+        }
+        if (alm && alm !== 'TODOS') {
+          sql += ` AND almacen = ?`;
+          args.push(alm);
+        }
+        if (est && est !== 'TODOS') {
+          sql += ` AND estado_stock = ?`;
+          args.push(est);
+        }
+
+        sql += ` ORDER BY codigo ASC LIMIT ?`;
+        args.push(limit);
       }
 
-      sql += ` ORDER BY codigo ASC LIMIT ?`;
-      args.push(limit);
+      const res = await db.execute({ sql, args });
 
-      const [res, cfgRes] = await Promise.all([
-        db.execute({ sql, args }),
-        db.execute("SELECT tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
-      ]);
-
-      const tasa = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.26);
       const enriched = res.rows.map(r => {
         const cUsd = Number(r.costo_referencial_usd || 0);
         const vUsd = Number(r.valor_total_usd || 0);
         return {
           ...r,
           tasa_bcv_aplicada: tasa,
+          fecha_tasa_bcv: fechaTasa,
           costo_unitario_bs: Number((cUsd * tasa).toFixed(2)),
           valor_total_bs: Number((vUsd * tasa).toFixed(2))
         };
