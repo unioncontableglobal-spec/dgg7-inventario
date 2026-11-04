@@ -946,8 +946,153 @@
             </div>
           </div>
 
+          <!-- PANEL INTERACTIVO DE CONCILIACIÓN DE COMPRAS (ALMACÉN VS LIBRO DE COMPRAS) -->
+          <div class="panel-card" style="margin-bottom: 20px; border-top: 4px solid #0A5CF5; background: #ffffff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+              <div>
+                <strong style="color: #0B2447; font-size: 1.02rem; display: flex; align-items: center; gap: 8px;">
+                  <span>⚖️ Conciliación de Compras: Almacén Físico ↔ Libro de Compras Fiscal</span>
+                  <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 11px;">CRUCE EN TIEMPO REAL</span>
+                </strong>
+                <span style="font-size: 0.78rem; color: #64748b;">Verifica qué facturas registradas en el Libro de Compras ya ingresaron al almacén y cuáles faltan por detallar ítem por ítem.</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <label style="font-size: 0.78rem; font-weight: 700; color: #475569;">Período:</label>
+                <select id="filtro-cruce-entradas-periodo" class="form-control" style="font-size: 0.8rem; padding: 4px 10px; width: auto; font-weight: 700;" onchange="cargarPanelCruceEntradas()">
+                  <option value="2026-10" selected>10 - Octubre 2026</option>
+                  <option value="2026-09">09 - Septiembre 2026</option>
+                  <option value="2026-08">08 - Agosto 2026</option>
+                  <option value="TODOS">Todos los Períodos</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="toggleVisibilidadPanelCruceEntradas()" id="btn-toggle-panel-cruce-ent" style="font-size: 0.76rem;">
+                  👁️ Ocultar / Mostrar
+                </button>
+              </div>
+            </div>
+
+            <!-- Mini KPIs de Conciliación -->
+            <div id="cruce-entradas-content">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                <!-- KPI 1: Pendientes por Detallar -->
+                <div style="background: #fffdfa; border: 1.5px solid #fdba74; border-radius: 8px; padding: 10px 14px; cursor: pointer;" onclick="cambiarTabCruceEntradas('PENDIENTES')">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #9a3412;">⏳ Pendientes por Detallar:</span>
+                    <span id="kpi-ent-pendientes-badge" style="background: #ea580c; color: #fff; padding: 2px 7px; border-radius: 12px; font-size: 0.72rem; font-weight: 800;">0</span>
+                  </div>
+                  <div id="kpi-ent-pendientes-txt" style="font-size: 1.15rem; font-weight: 800; color: #c2410c; font-family: monospace; margin-top: 4px;">0 facturas</div>
+                  <span style="font-size: 0.7rem; color: #b45309;">En Libro de Compras, falta detallar repuestos</span>
+                </div>
+
+                <!-- KPI 2: Conciliadas -->
+                <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 10px 14px; cursor: pointer;" onclick="cambiarTabCruceEntradas('CONCILIADAS')">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #166534;">✅ Entradas Conciliadas:</span>
+                    <span id="kpi-ent-conciliadas-badge" style="background: #16a34a; color: #fff; padding: 2px 7px; border-radius: 12px; font-size: 0.72rem; font-weight: 800;">0</span>
+                  </div>
+                  <div id="kpi-ent-conciliadas-txt" style="font-size: 1.15rem; font-weight: 800; color: #15803d; font-family: monospace; margin-top: 4px;">0 facturas</div>
+                  <span style="font-size: 0.7rem; color: #166534;">Cruzadas con Almacén y Libro Compras</span>
+                </div>
+
+                <!-- KPI 3: Sin Factura Fiscal -->
+                <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; cursor: pointer;" onclick="cambiarTabCruceEntradas('SIN_FISCAL')">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #475569;">⚠️ Almacén sin Factura Fiscal:</span>
+                    <span id="kpi-ent-sin-fiscal-badge" style="background: #64748b; color: #fff; padding: 2px 7px; border-radius: 12px; font-size: 0.72rem; font-weight: 800;">0</span>
+                  </div>
+                  <div id="kpi-ent-sin-fiscal-txt" style="font-size: 1.15rem; font-weight: 800; color: #334155; font-family: monospace; margin-top: 4px;">0 recepciones</div>
+                  <span style="font-size: 0.7rem; color: #64748b;">Ingresadas en almacén esperando factura UCG</span>
+                </div>
+              </div>
+
+              <!-- Pestañas de Vista y Contenedor de Tabla Dinámica -->
+              <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px;">
+                <button type="button" id="tab-btn-cruce-pendientes" class="btn btn-sm" onclick="cambiarTabCruceEntradas('PENDIENTES')" style="background: #ea580c; color: #fff; font-weight: 800; border-radius: 6px 6px 0 0;">
+                  ⏳ Facturas Pendientes por Detallar Entrada (<span id="count-tab-pendientes">0</span>)
+                </button>
+                <button type="button" id="tab-btn-cruce-conciliadas" class="btn btn-sm" onclick="cambiarTabCruceEntradas('CONCILIADAS')" style="background: #f1f5f9; color: #475569; font-weight: 700; border-radius: 6px 6px 0 0;">
+                  ✅ Conciliadas (<span id="count-tab-conciliadas">0</span>)
+                </button>
+                <button type="button" id="tab-btn-cruce-sin-fiscal" class="btn btn-sm" onclick="cambiarTabCruceEntradas('SIN_FISCAL')" style="background: #f1f5f9; color: #475569; font-weight: 700; border-radius: 6px 6px 0 0;">
+                  ⚠️ Entradas sin Factura Fiscal (<span id="count-tab-sin-fiscal">0</span>)
+                </button>
+              </div>
+
+              <!-- Vista 1: Facturas Pendientes por Detallar Entrada -->
+              <div id="vista-cruce-pendientes" style="overflow-x: auto;">
+                <table class="data-table" style="font-size: 0.78rem;">
+                  <thead>
+                    <tr>
+                      <th>FECHA FISCAL</th>
+                      <th>N° FACTURA</th>
+                      <th>N° CONTROL</th>
+                      <th>PROVEEDOR & RIF</th>
+                      <th class="text-right">BASE IMPONIBLE (BS.)</th>
+                      <th class="text-right">TOTAL FACTURA</th>
+                      <th class="text-center">ACCIÓN</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-pendientes-almacen">
+                    <tr><td colspan="7" class="text-center">Cargando facturas pendientes...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Vista 2: Conciliadas -->
+              <div id="vista-cruce-conciliadas" style="display: none; overflow-x: auto;">
+                <table class="data-table" style="font-size: 0.78rem;">
+                  <thead>
+                    <tr>
+                      <th>FECHA</th>
+                      <th>FACTURA</th>
+                      <th>PROVEEDOR</th>
+                      <th>MOV. ALMACÉN</th>
+                      <th class="text-right">TOTAL (BS. / USD)</th>
+                      <th class="text-center">ESTATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-conciliadas">
+                    <tr><td colspan="6" class="text-center">Cargando conciliadas...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Vista 3: Entradas sin Factura Fiscal -->
+              <div id="vista-cruce-sin-fiscal" style="display: none; overflow-x: auto;">
+                <table class="data-table" style="font-size: 0.78rem;">
+                  <thead>
+                    <tr>
+                      <th>FECHA RECEPCIÓN</th>
+                      <th>DOCUMENTO / NOTA</th>
+                      <th>PROVEEDOR</th>
+                      <th class="text-center">REPUESTOS / UNDS</th>
+                      <th class="text-right">COSTO TOTAL</th>
+                      <th class="text-center">ESTATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-sin-fiscal">
+                    <tr><td colspan="6" class="text-center">Cargando recepciones de almacén...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           <div class="form-container">
+            <!-- Banner Informativo de Vinculación Activa con Libro de Compras -->
+            <div id="banner-entrada-vinculada-lc" style="display:none; margin-bottom:14px; background:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <strong style="color:#166534; font-size:0.85rem;" id="banner-entrada-vinculada-title"></strong>
+                  <p style="margin:2px 0 0; font-size:0.75rem; color:#14532d;" id="banner-entrada-vinculada-sub"></p>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="desvincularEntradaLibroCompra()" style="font-size:11px;">
+                  ✕ Cancelar Vinculación
+                </button>
+              </div>
+            </div>
+
             <form id="form-entrada" class="movement-form">
+              <input type="hidden" id="ent-libro-compra-id" value="">
               <!-- Document Header -->
               <div class="form-section">
                 <div
@@ -3531,7 +3676,7 @@
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label>Período Fiscal:</label>
-              <select id="m-vent-periodo" class="form-control" required>
+              <select id="m-vent-periodo" class="form-control" required onchange="onCambioPeriodoVentaZ()">
                 <option value="2026-10" selected>10 - Octubre 2026</option>
                 <option value="2026-11">11 - Noviembre 2026</option>
                 <option value="2026-12">12 - Diciembre 2026</option>
@@ -3548,7 +3693,20 @@
             </div>
             <div class="form-group">
               <label>Fecha de Operación / Reporte:</label>
-              <input type="date" id="m-vent-fecha" class="form-control" required>
+              <input type="date" id="m-vent-fecha" class="form-control" required onchange="onCambioFechaVentaZ()">
+            </div>
+          </div>
+
+          <!-- Banner Informativo de Sugerencia Automática desde Salidas de DG67 -->
+          <div id="banner-sugerencia-salidas-z" style="display:none; margin-bottom:12px; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div>
+                <strong id="banner-sugerencia-z-title" style="color:#15803d; font-size:0.82rem; display:block;"></strong>
+                <span id="banner-sugerencia-z-sub" style="font-size:0.74rem; color:#166534;"></span>
+              </div>
+              <button type="button" class="btn btn-sm btn-emerald" onclick="aplicarSugerenciaSalidasZ()" style="font-weight:800; font-size:0.75rem;">
+                ⚡ Autocompletar Montos desde DG67
+              </button>
             </div>
           </div>
 
@@ -3565,23 +3723,29 @@
 
           <div class="form-grid" style="grid-template-columns: 1.2fr 1.2fr 1fr; gap: 12px; margin-bottom: 12px;">
             <div class="form-group">
-              <label>Factura Desde (Inicial):</label>
-              <input type="text" id="m-vent-desde" class="form-control font-mono font-bold" placeholder="ej: 00002595" required>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>Factura Desde (Inicial):</label>
+                <span id="m-vent-correlativo-sugerido" style="font-size:0.68rem; color:#0369a1; font-weight:700;"></span>
+              </div>
+              <input type="text" id="m-vent-desde" class="form-control font-mono font-bold" placeholder="ej: 00002433" required oninput="calcularCantidadFacturasZ()">
             </div>
             <div class="form-group">
               <label>Factura Hasta (Final):</label>
-              <input type="text" id="m-vent-hasta" class="form-control font-mono font-bold" placeholder="ej: 00002602" required>
+              <input type="text" id="m-vent-hasta" class="form-control font-mono font-bold" placeholder="ej: 00002439" required oninput="calcularCantidadFacturasZ()">
             </div>
             <div class="form-group">
-              <label># Facturas Emitidas:</label>
-              <input type="number" id="m-vent-cant" class="form-control font-bold" value="8" min="1" required>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label># Facturas Emitidas:</label>
+                <span id="m-vent-cant-badge" style="font-size:0.68rem; color:#15803d; font-weight:800;"></span>
+              </div>
+              <input type="number" id="m-vent-cant" class="form-control font-bold" value="1" min="1" required oninput="calcularCantidadFacturasZ()">
             </div>
           </div>
 
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label># Facturas Anuladas:</label>
-              <input type="number" id="m-vent-anuladas" class="form-control font-mono" value="0" min="0">
+              <input type="number" id="m-vent-anuladas" class="form-control font-mono" value="0" min="0" oninput="calcularCantidadFacturasZ()">
             </div>
             <div class="form-group">
               <label>Monto Total Anulaciones (Bs.):</label>

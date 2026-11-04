@@ -386,6 +386,7 @@ function switchTab(tabId) {
   // Lazy refresh based on tab
   if (tabId === 'tab-dashboard') loadDashboard();
   if (tabId === 'tab-inventario') loadProducts();
+  if (tabId === 'tab-entrada') cargarPanelCruceEntradas();
   if (tabId === 'tab-mensual') loadMonthlyReport();
   if (tabId === 'tab-movimientos') loadMovements();
   if (tabId === 'tab-fiscal') loadFiscalReconciliation();
@@ -957,6 +958,253 @@ function onEntryCostInput(rowId, editedCurrency) {
   calculateEntryTotals(true);
 }
 
+// ---------------------------------------------------------------------
+// PANEL INTERACTIVO DE CONCILIACIÓN DE COMPRAS (ALMACÉN VS LIBRO DE COMPRAS)
+// ---------------------------------------------------------------------
+let cruceComprasCache = null;
+let tabCruceEntradasActivo = 'PENDIENTES';
+
+async function cargarPanelCruceEntradas() {
+  const selPer = document.getElementById('filtro-cruce-entradas-periodo');
+  const periodo = selPer ? selPer.value : '2026-10';
+
+  try {
+    const res = await fetch(`/api/fiscal/cruce-compras-entradas?periodo=${encodeURIComponent(periodo)}`);
+    if (!res.ok) return;
+    cruceComprasCache = await res.json();
+
+    // Actualizar KPIs
+    const kpis = cruceComprasCache.kpis || {};
+    const badgePend = document.getElementById('kpi-ent-pendientes-badge');
+    const txtPend = document.getElementById('kpi-ent-pendientes-txt');
+    if (badgePend) badgePend.textContent = kpis.pendientes_almacen_cant || 0;
+    if (txtPend) txtPend.textContent = `${kpis.pendientes_almacen_cant || 0} facturas`;
+
+    const badgeConc = document.getElementById('kpi-ent-conciliadas-badge');
+    const txtConc = document.getElementById('kpi-ent-conciliadas-txt');
+    if (badgeConc) badgeConc.textContent = kpis.conciliadas_cant || 0;
+    if (txtConc) txtConc.textContent = `${kpis.conciliadas_cant || 0} facturas`;
+
+    const badgeSin = document.getElementById('kpi-ent-sin-fiscal-badge');
+    const txtSin = document.getElementById('kpi-ent-sin-fiscal-txt');
+    if (badgeSin) badgeSin.textContent = kpis.entradas_sin_fiscal_cant || 0;
+    if (txtSin) txtSin.textContent = `${kpis.entradas_sin_fiscal_cant || 0} entradas`;
+
+    renderTablasCruceEntradas();
+  } catch (err) {
+    console.error('Error cargando panel de cruce de compras/entradas:', err);
+  }
+}
+
+function cambiarTabCruceEntradas(tabName) {
+  tabCruceEntradasActivo = tabName;
+  const tabs = [
+    { name: 'PENDIENTES', btn: 'tab-cruce-ent-btn-pendientes', view: 'tab-cruce-ent-view-pendientes' },
+    { name: 'CONCILIADAS', btn: 'tab-cruce-ent-btn-conciliadas', view: 'tab-cruce-ent-view-conciliadas' },
+    { name: 'SIN_FISCAL', btn: 'tab-cruce-ent-btn-sin-fiscal', view: 'tab-cruce-ent-view-sin-fiscal' }
+  ];
+
+  tabs.forEach(t => {
+    const btnEl = document.getElementById(t.btn);
+    const viewEl = document.getElementById(t.view);
+    const isActive = t.name === tabName;
+    if (btnEl) {
+      if (isActive) {
+        btnEl.classList.add('active');
+        btnEl.style.fontWeight = '800';
+      } else {
+        btnEl.classList.remove('active');
+        btnEl.style.fontWeight = '600';
+      }
+    }
+    if (viewEl) {
+      viewEl.style.display = isActive ? 'block' : 'none';
+    }
+  });
+}
+
+function toggleVisibilidadPanelCruceEntradas() {
+  const content = document.getElementById('cruce-entradas-content');
+  const btn = document.getElementById('btn-toggle-panel-cruce-ent');
+  if (!content) return;
+  const isOculto = content.style.display === 'none';
+  content.style.display = isOculto ? 'block' : 'none';
+  if (btn) btn.textContent = isOculto ? '👁️ Ocultar / Mostrar' : '👁️ Mostrar Panel';
+}
+
+function renderTablasCruceEntradas() {
+  if (!cruceComprasCache) return;
+
+  // 1. PENDIENTES POR DETALLAR EN ALMACÉN
+  const tbodyPend = document.getElementById('tbody-cruce-ent-pendientes');
+  if (tbodyPend) {
+    const list = cruceComprasCache.facturas_pendientes_almacen || [];
+    if (list.length === 0) {
+      tbodyPend.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px; color: #16a34a; font-weight: 700;">✅ ¡Excelente! No hay facturas fiscales pendientes por detallar en almacén.</td></tr>`;
+    } else {
+      tbodyPend.innerHTML = list.map(f => {
+        const totalBs = Number(f.total_bs || 0);
+        const totalUsd = Number(f.total_divisa || (totalBs / (f.tasa_bcv || 1)));
+        const tasa = Number(f.tasa_bcv || 0);
+
+        return `
+          <tr style="border-bottom: 1px solid #fed7aa; transition: background 0.15s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='transparent'">
+            <td class="font-mono font-bold" style="padding: 8px 10px; color: #0f172a;">${f.fecha}</td>
+            <td style="padding: 8px 10px;">
+              <span class="font-mono font-bold" style="color: #c2410c; font-size: 0.85rem;">${f.nro_factura}</span>
+              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">Ctrl: ${f.nro_control || 'S/N'}</div>
+            </td>
+            <td style="padding: 8px 10px;">
+              <strong style="color: #1e293b; font-size: 0.82rem;">${f.razon_social}</strong>
+              <div style="font-size: 0.72rem; color: #64748b; font-family: monospace;">${f.rif}</div>
+            </td>
+            <td style="padding: 8px 10px; text-align: right;">
+              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(totalBs)}</div>
+              <div style="font-size: 0.72rem; color: #059669; font-family: monospace; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
+              <div style="font-size: 0.68rem; color: #64748b; font-family: monospace;">Tasa BCV: ${tasa.toFixed(2)}</div>
+            </td>
+            <td class="text-center" style="padding: 8px 10px;">
+              <span class="badge" style="background: #ffedd5; color: #c2410c; font-size: 11px; font-weight: 700;">⏳ Falta Entrada en Almacén</span>
+            </td>
+            <td class="text-center" style="padding: 8px 10px;">
+              <button type="button" class="btn btn-sm btn-primary" onclick="seleccionarFacturaCompraParaDetallar(${f.libro_compra_id})" style="font-size: 11px; font-weight: 800; padding: 5px 12px; background: #0A5CF5; color: #fff; border-radius: 6px; box-shadow: 0 2px 4px rgba(10,92,245,0.2);">
+                📥 Detallar Entrada en Almacén ➔
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2. CONCILIADAS
+  const tbodyConc = document.getElementById('tbody-cruce-ent-conciliadas');
+  if (tbodyConc) {
+    const list = cruceComprasCache.compras_conciliadas || [];
+    if (list.length === 0) {
+      tbodyConc.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px; color: #64748b;">No hay compras conciliadas en este período.</td></tr>`;
+    } else {
+      tbodyConc.innerHTML = list.map(c => {
+        const totalBs = Number(c.total_bs || 0);
+        const totalUsd = Number(c.total_divisa || (totalBs / (c.tasa_bcv || 1)));
+
+        return `
+          <tr style="border-bottom: 1px solid #bbf7d0;">
+            <td class="font-mono" style="padding: 8px 10px;">${c.fecha}</td>
+            <td class="font-mono font-bold" style="padding: 8px 10px; color: #15803d;">${c.nro_factura}</td>
+            <td style="padding: 8px 10px;">
+              <strong style="color: #1e293b;">${c.razon_social}</strong>
+              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">${c.rif}</div>
+            </td>
+            <td class="font-mono" style="padding: 8px 10px;">Mov #${c.movimiento_id || '-'} (${c.fecha_almacen || c.fecha})</td>
+            <td style="padding: 8px 10px; text-align: right;">
+              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(totalBs)}</div>
+              <div style="font-size: 0.72rem; color: #15803d; font-family: monospace; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
+            </td>
+            <td class="text-center" style="padding: 8px 10px;">
+              <span class="badge" style="background: #dcfce7; color: #166534; font-size: 11px; font-weight: 800;">✅ CONCILIADO 100%</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // 3. ENTRADAS DE ALMACÉN SIN FACTURA FISCAL
+  const tbodySin = document.getElementById('tbody-cruce-ent-sin-fiscal');
+  if (tbodySin) {
+    const list = cruceComprasCache.entradas_sin_factura_fiscal || [];
+    if (list.length === 0) {
+      tbodySin.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 16px; color: #16a34a; font-weight: 700;">✅ Todas las entradas de almacén están respaldadas con su factura fiscal en Libro de Compras.</td></tr>`;
+    } else {
+      tbodySin.innerHTML = list.map(e => {
+        const costoBs = Number(e.total_costo_bs || 0);
+        const costoUsd = Number(e.total_costo_usd || 0);
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td class="font-mono font-bold" style="padding: 8px 10px;">${e.fecha}</td>
+            <td class="font-mono font-bold" style="padding: 8px 10px; color: #0B2447;">${e.numero_documento || 'S/N'}</td>
+            <td style="padding: 8px 10px;">
+              <strong style="color: #1e293b;">${e.proveedor_nombre || 'Proveedor General'}</strong>
+              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">${e.proveedor_rif || '-'}</div>
+            </td>
+            <td class="text-center" style="padding: 8px 10px;">
+              <span class="badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700;">${e.total_unidades} unds (${e.total_items} items)</span>
+            </td>
+            <td style="padding: 8px 10px; text-align: right;">
+              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(costoBs)}</div>
+              <div style="font-size: 0.72rem; color: #059669; font-family: monospace;">$${costoUsd.toFixed(2)} USD</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function seleccionarFacturaCompraParaDetallar(compraId) {
+  if (!cruceComprasCache) return;
+  const list = cruceComprasCache.facturas_pendientes_almacen || [];
+  const compra = list.find(c => Number(c.libro_compra_id) === Number(compraId));
+  if (!compra) return;
+
+  // 1. Guardar id en input oculto
+  const hiddenLc = document.getElementById('ent-libro-compra-id');
+  if (hiddenLc) hiddenLc.value = compra.libro_compra_id;
+
+  // 2. Autocompletar datos del documento en form-entrada
+  const fDoc = document.getElementById('ent-factura');
+  if (fDoc) fDoc.value = compra.nro_factura || '';
+
+  const fCtrl = document.getElementById('ent-control');
+  if (fCtrl) fCtrl.value = compra.nro_control || '00-';
+
+  const fFechaFac = document.getElementById('ent-fecha-factura');
+  if (fFechaFac) fFechaFac.value = compra.fecha || '';
+
+  const fFechaRec = document.getElementById('ent-fecha');
+  if (fFechaRec) fFechaRec.value = compra.fecha || '';
+
+  const fTasa = document.getElementById('ent-tasa');
+  if (fTasa && compra.tasa_bcv) fTasa.value = Number(compra.tasa_bcv).toFixed(4);
+
+  const fFechaTasa = document.getElementById('ent-fecha-tasa');
+  if (fFechaTasa) fFechaTasa.value = compra.fecha_tasa_bcv || compra.fecha || '';
+
+  // 3. Seleccionar proveedor coincidente en select
+  const selProv = document.getElementById('ent-proveedor');
+  if (selProv && state.suppliers) {
+    const provMatch = state.suppliers.find(p => 
+      (compra.rif && p.rif && p.rif.toLowerCase().replace(/[^a-z0-9]/g, '') === compra.rif.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+      (compra.razon_social && p.razon_social && p.razon_social.toLowerCase() === compra.razon_social.toLowerCase())
+    );
+    if (provMatch) selProv.value = provMatch.id;
+  }
+
+  // 4. Mostrar banner de vinculación activa
+  const banner = document.getElementById('banner-entrada-vinculada-lc');
+  const txt = document.getElementById('txt-entrada-vinculada-lc');
+  if (banner) banner.style.display = 'block';
+  if (txt) {
+    const totBs = Number(compra.total_bs || 0);
+    const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 1)));
+    txt.innerHTML = `Vinculando Entrada con <strong>Factura Fiscal #${compra.nro_factura}</strong> de <strong>${compra.razon_social}</strong> (${compra.rif}) por <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong>. Agrega los repuestos recibidos abajo:`;
+  }
+
+  // 5. Scroll suave al formulario
+  document.getElementById('form-entrada')?.scrollIntoView({ behavior: 'smooth' });
+  showToast(`Factura #${compra.nro_factura} vinculada. Ahora agrega los repuestos recibidos físicamente.`);
+}
+
+function desvincularEntradaLibroCompra() {
+  const hiddenLc = document.getElementById('ent-libro-compra-id');
+  if (hiddenLc) hiddenLc.value = '';
+  const banner = document.getElementById('banner-entrada-vinculada-lc');
+  if (banner) banner.style.display = 'none';
+  showToast('Vinculación con Libro de Compras cancelada.');
+}
+
 function calculateEntryTotals(skipInputSync = false) {
   const tasaFactura = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
   const fechaFactura = document.getElementById('ent-fecha-factura')?.value || '';
@@ -1273,6 +1521,7 @@ async function handleMovementSubmit(event, tipo) {
   }
 
   const tipoFinal = (subtipo.includes('AJUSTE')) ? 'AJUSTE' : tipo;
+  const libroComprasId = isEntrada ? (document.getElementById('ent-libro-compra-id')?.value || null) : null;
 
   const payload = {
     tipo: tipoFinal,
@@ -1288,6 +1537,7 @@ async function handleMovementSubmit(event, tipo) {
     moneda_operacion: (document.getElementById(isEntrada ? 'ent-modo-moneda' : 'sal-modo-moneda')?.value === 'BS' ? 'BS' : 'USD'),
     metodo_valoracion: metodoVal,
     proveedor_id: provId ? parseInt(provId, 10) : null,
+    libro_compras_id: libroComprasId ? parseInt(libroComprasId, 10) : null,
     observaciones: obs,
     items
   };
@@ -1308,7 +1558,7 @@ async function handleMovementSubmit(event, tipo) {
 
     if (data.conciliacion) {
       if (data.conciliacion.estatus === 'CONCILIADO') {
-        showToast('✅ Factura de salida registrada y CONCILIADA con el Reporte Z de hoy', 'success');
+        showToast('✅ Movimiento registrado y CONCILIADO exitosamente', 'success');
       } else if (data.conciliacion.faltantes_cant > 0) {
         showToast(`Factura registrada. Faltan ${data.conciliacion.faltantes_cant} facturas por detallar para cerrar el Reporte Z (${data.conciliacion.faltantes_lista.join(', ')})`, 'info');
       } else {
@@ -1324,7 +1574,12 @@ async function handleMovementSubmit(event, tipo) {
     else addExitRow();
 
     // Refresh Live Data
-    await Promise.all([loadDashboard(), loadProducts(), loadCruceDobleVia(cruceActivoPeriodo)]);
+    await Promise.all([
+      loadDashboard(),
+      loadProducts(),
+      loadCruceDobleVia(cruceActivoPeriodo),
+      isEntrada ? cargarPanelCruceEntradas() : Promise.resolve()
+    ]);
     switchTab('tab-inventario');
   } catch (err) {
     showToast(err.message, 'error');
@@ -1345,6 +1600,11 @@ function resetForm(formId) {
   const currentRateStr = (getTasaBcvPorFechaOPeriodo() || 889.58).toFixed(4);
 
   if (formId === 'form-entrada') {
+    const hiddenLc = document.getElementById('ent-libro-compra-id');
+    if (hiddenLc) hiddenLc.value = '';
+    const bannerLc = document.getElementById('banner-entrada-vinculada-lc');
+    if (bannerLc) bannerLc.style.display = 'none';
+
     document.getElementById('tbody-items-entrada').innerHTML = '';
     const alertEnt = document.getElementById('alerta-duplicado-entrada');
     if (alertEnt) alertEnt.style.display = 'none';
@@ -3851,17 +4111,151 @@ function renderLibroVentas(ventas) {
   document.getElementById('tot-ventas-total').innerHTML = `<div>Bs. ${totTotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#059669;">($${totTotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
 }
 
+// ---------------------------------------------------------------------
+// LLENADO AUTOMATIZADO DE REPORTES Z (PROXIMO CORRELATIVO Y CONTEO DINÁMICO)
+// ---------------------------------------------------------------------
+let ultimaSugerenciaSalidasZ = null;
+
+async function onCambioFechaVentaZ() {
+  const perInput = document.getElementById('m-vent-periodo');
+  const fecInput = document.getElementById('m-vent-fecha');
+  const desdeInput = document.getElementById('m-vent-desde');
+  const hastaInput = document.getElementById('m-vent-hasta');
+  const cantInput = document.getElementById('m-vent-cant');
+  const bannerSug = document.getElementById('banner-sugerencia-salidas-z');
+  const titleSug = document.getElementById('banner-sugerencia-z-title');
+  const subSug = document.getElementById('banner-sugerencia-z-sub');
+  const badgeSugg = document.getElementById('m-vent-correlativo-sugerido');
+
+  const fecha = fecInput?.value;
+  const periodo = perInput?.value || (fecha ? fecha.slice(0, 7) : '2026-10');
+
+  if (!fecha) return;
+
+  // Actualizar fecha y tasa oficial BCV
+  if (document.getElementById('m-vent-fecha-tasa')) {
+    document.getElementById('m-vent-fecha-tasa').value = fecha;
+  }
+  const tasaVal = getTasaBcvPorFechaOPeriodo(fecha);
+  if (document.getElementById('m-vent-tasa-bcv') && tasaVal) {
+    document.getElementById('m-vent-tasa-bcv').value = Number(tasaVal).toFixed(2);
+  }
+
+  try {
+    const res = await fetch(`/api/fiscal/proxima-factura-z?periodo=${encodeURIComponent(periodo)}&fecha=${encodeURIComponent(fecha)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (badgeSugg) {
+      if (data.proxima_factura) {
+        badgeSugg.textContent = `✨ Sugerido: ${data.proxima_factura} (Última previa: ${data.ultima_factura_anterior || '-'})`;
+      } else {
+        badgeSugg.textContent = '';
+      }
+    }
+
+    // Si el usuario aún no ha colocado una factura desde, sugerir el próximo correlativo consecutivo
+    if (desdeInput && (!desdeInput.value || desdeInput.dataset.autoSugerido === 'true')) {
+      desdeInput.value = data.proxima_factura || '00000001';
+      desdeInput.dataset.autoSugerido = 'true';
+    }
+
+    // Verificar si DG67 ya registró salidas en esa fecha
+    if (data.sugerencia_salidas && data.sugerencia_salidas.tiene_salidas) {
+      ultimaSugerenciaSalidasZ = data.sugerencia_salidas;
+      if (bannerSug) {
+        bannerSug.style.display = 'block';
+        if (titleSug) {
+          titleSug.innerHTML = `💡 Se detectaron <strong>${data.sugerencia_salidas.cantidad_facturas} facturas emitidas por DG67</strong> (${data.sugerencia_salidas.factura_desde} ➔ ${data.sugerencia_salidas.factura_hasta}) por <strong>Bs. ${fmtBs(data.sugerencia_salidas.total_bs)}</strong>`;
+        }
+        if (subSug) {
+          subSug.textContent = `Despachos en tienda: ${data.sugerencia_salidas.total_repuestos} repuestos. Base: Bs. ${fmtBs(data.sugerencia_salidas.base_imponible_bs)} | IVA: Bs. ${fmtBs(data.sugerencia_salidas.iva_bs)}`;
+        }
+      }
+      if (hastaInput && (!hastaInput.value || hastaInput.dataset.autoSugerido === 'true')) {
+        hastaInput.value = data.sugerencia_salidas.factura_hasta;
+        hastaInput.dataset.autoSugerido = 'true';
+      }
+    } else {
+      ultimaSugerenciaSalidasZ = null;
+      if (bannerSug) bannerSug.style.display = 'none';
+    }
+
+    calcularCantidadFacturasZ();
+  } catch (err) {
+    console.error('Error al obtener sugerencia de correlativo Z:', err);
+  }
+}
+
+function onCambioPeriodoVentaZ() {
+  const per = document.getElementById('m-vent-periodo')?.value;
+  if (!per) return;
+  const f = document.getElementById('m-vent-fecha');
+  if (f) {
+    if (!f.value.startsWith(per)) {
+      f.value = `${per}-01`;
+    }
+  }
+  onCambioFechaVentaZ();
+}
+
+function calcularCantidadFacturasZ() {
+  const desdeVal = document.getElementById('m-vent-desde')?.value || '';
+  const hastaVal = document.getElementById('m-vent-hasta')?.value || '';
+  const cantInput = document.getElementById('m-vent-cant');
+  const anuladasVal = Number(document.getElementById('m-vent-anuladas')?.value) || 0;
+  const badgeCant = document.getElementById('m-vent-cant-badge');
+
+  const matchD = desdeVal.match(/(\d+)/);
+  const matchH = hastaVal.match(/(\d+)/);
+
+  if (matchD && matchH) {
+    const numD = parseInt(matchD[1], 10);
+    const numH = parseInt(matchH[1], 10);
+    if (numH >= numD) {
+      const emitidas = (numH - numD + 1);
+      const efectivas = Math.max(0, emitidas - anuladasVal);
+      if (cantInput && document.activeElement !== cantInput) {
+        cantInput.value = emitidas;
+      }
+      if (badgeCant) {
+        badgeCant.textContent = `(${emitidas} del día${anuladasVal > 0 ? `, ${efectivas} efectivas` : ''})`;
+      }
+      return;
+    }
+  }
+  if (badgeCant) badgeCant.textContent = '';
+}
+
+function aplicarSugerenciaSalidasZ() {
+  if (!ultimaSugerenciaSalidasZ) return;
+  const sug = ultimaSugerenciaSalidasZ;
+  if (document.getElementById('m-vent-desde')) document.getElementById('m-vent-desde').value = sug.factura_desde;
+  if (document.getElementById('m-vent-hasta')) document.getElementById('m-vent-hasta').value = sug.factura_hasta;
+  if (document.getElementById('m-vent-cant')) document.getElementById('m-vent-cant').value = sug.cantidad_facturas;
+  if (document.getElementById('m-vent-base')) document.getElementById('m-vent-base').value = sug.base_imponible_bs;
+  if (document.getElementById('m-vent-iva')) document.getElementById('m-vent-iva').value = sug.iva_bs;
+  if (document.getElementById('m-vent-total')) document.getElementById('m-vent-total').value = sug.total_bs;
+
+  calcularIvaVenta('BS');
+  calcularCantidadFacturasZ();
+
+  showToast(`Autocompletado con ${sug.cantidad_facturas} facturas emitidas por DG67 (Bs. ${fmtBs(sug.total_bs)})`);
+}
+
 function openModalNuevaVenta() {
   document.getElementById('form-nueva-venta').reset();
   const badge = document.getElementById('badge-salida-vinculada');
   if (badge) badge.style.display = 'none';
   const list = document.getElementById('lista-resultados-salida-tienda');
   if (list) list.style.display = 'none';
+  const bannerSug = document.getElementById('banner-sugerencia-salidas-z');
+  if (bannerSug) bannerSug.style.display = 'none';
 
   const periodoActivo = document.getElementById('ventas-periodo-select')?.value;
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-vent-periodo').value = targetPeriodo;
-  const targetFecha = targetPeriodo === '2026-10' ? '2026-10-15' : `${targetPeriodo}-01`;
+  const targetFecha = targetPeriodo === '2026-10' ? '2026-10-01' : `${targetPeriodo}-01`;
   document.getElementById('m-vent-fecha').value = targetFecha;
   if (document.getElementById('m-vent-fecha-tasa')) document.getElementById('m-vent-fecha-tasa').value = targetFecha;
 
@@ -3871,6 +4265,9 @@ function openModalNuevaVenta() {
   }
   calcularIvaVenta('BS');
   document.getElementById('modal-nueva-venta').style.display = 'flex';
+
+  // Autoconsultar próximo correlativo consecutivo esperado y sugerencias de tienda
+  onCambioFechaVentaZ();
 }
 
 async function buscarSalidasTiendaParaVenta(query = '') {

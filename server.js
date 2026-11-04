@@ -13,6 +13,8 @@ import {
   conciliarTodosReportesZ, 
   conciliarVentaIndividual, 
   getResumenCruceDobleVia,
+  getProximaFacturaZ,
+  getCruceComprasEntradas,
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
 } from './lib/cruce_engine.js';
@@ -1535,21 +1537,24 @@ app.post('/api/movimientos', async (req, res) => {
     if (tipo === 'SALIDA_VENTA') {
       resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
     } else if (tipo === 'ENTRADA_COMPRA') {
+      let lcId = req.body.libro_compras_id || null;
       const matchNum = String(numero_documento).match(/(\d+)/);
-      if (matchNum) {
+      if (!lcId && matchNum) {
         const numFacturaNum = parseInt(matchNum[1], 10);
         const matchLC = await db.execute({
           sql: `SELECT id FROM libro_compras WHERE (nro_factura LIKE ? OR REPLACE(nro_factura, '0', '') = ?) AND aplica_inventario = 1 LIMIT 1`,
           args: [`%${numFacturaNum}%`, String(numFacturaNum)]
         });
         if (matchLC.rows.length > 0) {
-          const lcId = matchLC.rows[0].id;
-          await Promise.all([
-            db.execute({ sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [lcId, movimientoId] }),
-            db.execute({ sql: "UPDATE libro_compras SET movimiento_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [movimientoId, lcId] })
-          ]);
-          resultadoCruce = { estatus: 'CONCILIADO', libro_compras_id: lcId };
+          lcId = matchLC.rows[0].id;
         }
+      }
+      if (lcId) {
+        await Promise.all([
+          db.execute({ sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [lcId, movimientoId] }),
+          db.execute({ sql: "UPDATE libro_compras SET movimiento_id = ?, estatus_conciliacion = 'CONCILIADO', observaciones_cruce = 'Conciliado con entrada de almacén #' || ? WHERE id = ?", args: [movimientoId, movimientoId, lcId] })
+        ]);
+        resultadoCruce = { estatus: 'CONCILIADO', libro_compras_id: lcId };
       }
     }
 
@@ -2129,6 +2134,30 @@ app.get('/api/cruce/doble-via', async (req, res) => {
   }
 });
 
+// 10.4.1 Próxima Factura Correlativa Z y Sugerencia de Salidas de Tienda
+app.get('/api/fiscal/proxima-factura-z', async (req, res) => {
+  try {
+    const { periodo, fecha } = req.query;
+    const resultado = await getProximaFacturaZ(periodo, fecha, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error calculando próxima factura Z:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.4.2 Cruce de Compras y Entradas de Almacén (Pendientes vs Conciliadas)
+app.get('/api/fiscal/cruce-compras-entradas', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const resultado = await getCruceComprasEntradas(periodo, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error en cruce compras-entradas:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/cruce/ejecutar', async (req, res) => {
   try {
     const periodo = req.body?.periodo || '2026-10';
@@ -2237,12 +2266,13 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
         COALESCE(SUM(COALESCE(md.monto_iva_bs, 0)), 0) as iva_bs,
         COALESCE(SUM(COALESCE(md.total_linea_bs, 0)), 0) as total_bs,
         COALESCE(SUM(COALESCE(md.total_linea_divisa, md.cantidad * md.costo_unitario_usd, 0)), 0) as total_usd,
-        GROUP_CONCAT(p.codigo || ' (' || CAST(md.cantidad AS INT) || ')', ', ') as resumen_productos,
-        (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) as libro_compra_id
+        GROUP_CONCAT(COALESCE(p.codigo, 'PROD') || ' (' || CAST(md.cantidad AS INT) || ')', ', ') as resumen_productos,
+        COALESCE(m.libro_compras_id, lc.id) as libro_compra_id
       FROM movimientos m
       LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
       LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
       LEFT JOIN productos p ON md.producto_id = p.id
+      LEFT JOIN libro_compras lc ON (m.libro_compras_id = lc.id OR lc.movimiento_id = m.id)
       WHERE m.tipo = 'ENTRADA_COMPRA'
     `;
     const args = [];
@@ -2255,7 +2285,7 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
       args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
     if (soloPendientes === 'true' || soloPendientes === '1') {
-      sql += ` AND (SELECT lc.id FROM libro_compras lc WHERE lc.movimiento_id = m.id OR (lc.nro_factura = m.numero_documento AND lc.rif = pr.rif) LIMIT 1) IS NULL`;
+      sql += ` AND m.libro_compras_id IS NULL AND lc.id IS NULL AND (m.estatus_conciliacion IS NULL OR m.estatus_conciliacion != 'CONCILIADO')`;
     }
     sql += `
       GROUP BY m.id

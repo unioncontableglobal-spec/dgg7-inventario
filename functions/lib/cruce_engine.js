@@ -466,3 +466,202 @@ export async function verificarDuplicadoEntradaAlmacen(proveedorId, nroDocumento
   return { duplicado: false };
 }
 
+/**
+ * Calcula la próxima factura correlativa esperada para el Libro de Ventas (Reportes Z)
+ * y cruza automáticamente con las ventas registradas por DG67 en esa fecha
+ */
+export async function getProximaFacturaZ(periodo, fecha, db) {
+  const targetFecha = fecha || (periodo ? `${periodo}-01` : '2026-10-01');
+  const targetPeriodo = periodo || targetFecha.slice(0, 7);
+
+  // 1. Buscar el último Reporte Z registrado con fecha anterior a esta fecha
+  const prevZ = await db.execute({
+    sql: `
+      SELECT id, fecha, factura_hasta, periodo
+      FROM libro_ventas 
+      WHERE fecha < ? AND factura_hasta IS NOT NULL AND factura_hasta != ''
+      ORDER BY fecha DESC, id DESC 
+      LIMIT 1
+    `,
+    args: [targetFecha]
+  });
+
+  let ultimaFacturaHasta = null;
+  let ultimaFecha = null;
+  let proxFactNum = 1;
+
+  if (prevZ.rows.length > 0) {
+    ultimaFacturaHasta = prevZ.rows[0].factura_hasta;
+    ultimaFecha = prevZ.rows[0].fecha;
+    const match = String(ultimaFacturaHasta).match(/(\d+)/);
+    if (match) {
+      proxFactNum = parseInt(match[1], 10) + 1;
+    }
+  } else {
+    // Si no hay reporte antes de esa fecha, buscar el máximo de cualquier período anterior
+    const prevPer = await db.execute({
+      sql: `
+        SELECT factura_hasta, fecha
+        FROM libro_ventas
+        WHERE periodo < ? AND factura_hasta IS NOT NULL AND factura_hasta != ''
+        ORDER BY periodo DESC, id DESC
+        LIMIT 1
+      `,
+      args: [targetPeriodo]
+    });
+    if (prevPer.rows.length > 0) {
+      ultimaFacturaHasta = prevPer.rows[0].factura_hasta;
+      ultimaFecha = prevPer.rows[0].fecha;
+      const match = String(ultimaFacturaHasta).match(/(\d+)/);
+      if (match) {
+        proxFactNum = parseInt(match[1], 10) + 1;
+      }
+    }
+  }
+
+  const proximaFacturaStr = String(proxFactNum).padStart(8, '0');
+
+  // 2. Verificar si DG67 ya tiene salidas registradas en esta fecha
+  const movsDia = await db.execute({
+    sql: `
+      SELECT m.id, m.numero_documento, m.observaciones,
+             COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs), 0) AS total_bs,
+             COALESCE(SUM(md.cantidad), 0) AS total_unds
+      FROM movimientos m
+      LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      WHERE m.tipo = 'SALIDA_VENTA' AND m.fecha = ?
+      GROUP BY m.id
+      ORDER BY m.id ASC
+    `,
+    args: [targetFecha]
+  });
+
+  let sugerenciaSalidas = null;
+  if (movsDia.rows.length > 0) {
+    const factNums = [];
+    let totalBs = 0;
+    let totalUnds = 0;
+
+    for (const r of movsDia.rows) {
+      totalBs += Number(r.total_bs) || 0;
+      totalUnds += Number(r.total_unds) || 0;
+      const match = String(r.numero_documento).match(/(\d+)/) || String(r.observaciones).match(/(\d+)/);
+      if (match) factNums.push(parseInt(match[1], 10));
+    }
+
+    if (factNums.length > 0) {
+      const minF = Math.min(...factNums);
+      const maxF = Math.max(...factNums);
+      const cantFact = movsDia.rows.length;
+      const totalBsRounded = Number(totalBs.toFixed(2));
+      const baseBs = Number((totalBsRounded / 1.16).toFixed(2));
+      const ivaBs = Number((totalBsRounded - baseBs).toFixed(2));
+
+      sugerenciaSalidas = {
+        tiene_salidas: true,
+        cantidad_facturas: cantFact,
+        factura_desde: String(minF).padStart(8, '0'),
+        factura_hasta: String(maxF).padStart(8, '0'),
+        total_bs: totalBsRounded,
+        base_imponible_bs: baseBs,
+        iva_bs: ivaBs,
+        total_repuestos: totalUnds
+      };
+    }
+  }
+
+  return {
+    fecha: targetFecha,
+    periodo: targetPeriodo,
+    proxima_factura: proximaFacturaStr,
+    ultima_factura_anterior: ultimaFacturaHasta,
+    fecha_ultima_anterior: ultimaFecha,
+    sugerencia_salidas: sugerenciaSalidas
+  };
+}
+
+/**
+ * Consulta el estado de conciliación de compras (Libro de Compras Fiscal ↔ Entradas de Almacén)
+ */
+export async function getCruceComprasEntradas(periodo, db) {
+  const targetPeriodo = periodo || '2026-10';
+
+  // 1. Facturas de compra cargadas en Libro de Compras (aplica_inventario = 1)
+  let sqlLC = `
+    SELECT 
+      lc.id AS libro_compra_id, lc.periodo, lc.fecha, lc.rif, lc.razon_social,
+      lc.nro_factura, lc.nro_control, lc.tipo_servicio, lc.aplica_inventario,
+      lc.base_imponible_bs, lc.iva_bs, lc.total_bs, lc.total_divisa, lc.tasa_bcv,
+      lc.estatus_conciliacion, lc.movimiento_id, lc.observaciones_cruce,
+      m.id AS movimiento_almacen_id, m.fecha AS fecha_almacen, m.numero_documento AS doc_almacen
+    FROM libro_compras lc
+    LEFT JOIN movimientos m ON lc.movimiento_id = m.id
+    WHERE lc.aplica_inventario = 1
+  `;
+  const argsLC = [];
+  if (targetPeriodo !== 'TODOS') {
+    sqlLC += " AND lc.periodo = ?";
+    argsLC.push(targetPeriodo);
+  }
+  sqlLC += " ORDER BY lc.fecha DESC, lc.id DESC";
+  const resLC = await db.execute({ sql: sqlLC, args: argsLC });
+
+  const pendientesAlmacen = [];
+  const conciliadas = [];
+
+  for (const r of resLC.rows) {
+    if (r.estatus_conciliacion === 'CONCILIADO' && r.movimiento_id) {
+      conciliadas.push(r);
+    } else {
+      pendientesAlmacen.push(r);
+    }
+  }
+
+  // 2. Entradas de almacén registradas por DG67
+  let sqlEnt = `
+    SELECT 
+      m.id AS movimiento_id, m.fecha, m.numero_documento, m.observaciones,
+      m.estatus_conciliacion, m.libro_compras_id,
+      p.razon_social AS proveedor_nombre, p.rif AS proveedor_rif,
+      COUNT(md.id) AS total_items,
+      COALESCE(SUM(md.cantidad), 0) AS total_unidades,
+      COALESCE(SUM(md.total_linea_bs), SUM(md.cantidad * md.costo_unitario_ves), 0) AS total_costo_bs,
+      COALESCE(SUM(md.total_linea_divisa), SUM(md.cantidad * md.costo_unitario_usd), 0) AS total_costo_usd
+    FROM movimientos m
+    LEFT JOIN proveedores p ON m.proveedor_id = p.id
+    LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+    WHERE m.tipo = 'ENTRADA_COMPRA'
+  `;
+  const argsEnt = [];
+  if (targetPeriodo !== 'TODOS') {
+    sqlEnt += " AND strftime('%Y-%m', m.fecha) = ?";
+    argsEnt.push(targetPeriodo);
+  }
+  sqlEnt += " GROUP BY m.id ORDER BY m.fecha DESC, m.id DESC";
+  const resEnt = await db.execute({ sql: sqlEnt, args: argsEnt });
+
+  const entradasSinFiscal = [];
+  for (const e of resEnt.rows) {
+    if (!e.libro_compras_id || e.estatus_conciliacion === 'PENDIENTE_UCG') {
+      entradasSinFiscal.push(e);
+    }
+  }
+
+  return {
+    periodo: targetPeriodo,
+    kpis: {
+      total_facturas_compras: resLC.rows.length,
+      pendientes_almacen_cant: pendientesAlmacen.length,
+      conciliadas_cant: conciliadas.length,
+      entradas_sin_fiscal_cant: entradasSinFiscal.length,
+      porcentaje_cruce: resLC.rows.length > 0 
+        ? Number(((conciliadas.length / resLC.rows.length) * 100).toFixed(1)) 
+        : 0
+    },
+    facturas_pendientes_almacen: pendientesAlmacen,
+    compras_conciliadas: conciliadas,
+    entradas_sin_factura_fiscal: entradasSinFiscal
+  };
+}
+
+
