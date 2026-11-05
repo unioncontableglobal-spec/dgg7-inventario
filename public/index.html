@@ -1858,6 +1858,20 @@
                 </svg>
                 <span>📄 3. Ver / Imprimir Acta</span>
               </button>
+              <button class="btn btn-warning" id="btn-cerrar-toma-fisica" onclick="abrirModalCierreTomaFisica()" style="display:flex; align-items:center; gap:8px; font-weight:800; background:#b45309; color:#fff; box-shadow:0 2px 8px rgba(180,83,9,0.25);" title="Finalizar y cerrar formalmente la Toma Física del período">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>🔒 4. Cerrar Toma Física</span>
+              </button>
+              <button class="btn btn-emerald" id="btn-reabrir-toma-fisica" onclick="reabrirTomaFisicaPeriodo()" style="display:none; align-items:center; gap:8px; font-weight:800; background:#059669; color:#fff; box-shadow:0 2px 8px rgba(5,150,105,0.25);" title="Reabrir Toma Física para ajustes o rectificaciones">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                </svg>
+                <span>🔓 Reabrir Toma Física</span>
+              </button>
               <button class="btn btn-secondary" onclick="descargarMatrizAuditoria()" style="display:flex; align-items:center; gap:8px; font-weight:700;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -1875,7 +1889,7 @@
               <span style="font-size: 1.5rem;">📋</span>
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 0.72rem; font-weight: 800; background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px;">EXPEDIENTE OFICIAL ACTIVO</span>
+                  <span id="banner-acta-badge" style="font-size: 0.72rem; font-weight: 800; background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px;">EXPEDIENTE OFICIAL ACTIVO</span>
                   <strong id="banner-acta-nro" style="color: #0B2447; font-size: 0.95rem; font-family: monospace;">ACTA-INV-202610-01</strong>
                   <span id="banner-acta-periodo-texto" style="font-size: 0.74rem; color: #0369a1; font-weight: 700;">(Toma Física Octubre 2026)</span>
                 </div>
@@ -2058,6 +2072,14 @@
 
             <!-- Cuerpo del Drawer (3 Bloques Clave) -->
             <div class="pzero-drawer-body">
+
+              <!-- Alerta de Bloqueo por Cierre Formal de Toma Física -->
+              <div id="drawer-alerta-toma-cerrada" style="display:none; background:#fef2f2; border:1.5px solid #f87171; border-radius:8px; padding:12px 14px; margin-bottom:12px; font-size:0.82rem; color:#991b1b; line-height:1.4;">
+                <div style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                  <span>🔒 TOMA FÍSICA CERRADA Y CONCILIADA</span>
+                </div>
+                El expediente de auditoría física de este período está formalmente sellado. Las cantidades físicas y ajustes se encuentran en <strong>modo de solo lectura</strong> para resguardo legal y fiscal.
+              </div>
 
               <!-- Badge de Estatus de Auditoría -->
               <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px;">
@@ -4225,6 +4247,12 @@
 
       <!-- Modal Body (Documento Formal Imprimible) -->
       <div class="modal-body" id="print-area-acta-oficial" style="padding: 24px; overflow-y: auto; flex: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b;">
+        <!-- Sello de Certificación de Cierre Oficial (Visible cuando está cerrada) -->
+        <div id="acta-sello-cierre-oficial" style="display: none; border: 2.5px double #b45309; background: #fffbeb; color: #92400e; padding: 10px 14px; border-radius: 8px; text-align: center; margin-bottom: 14px;">
+          <div style="font-size: 1.05rem; font-weight: 900; letter-spacing: 0.04em;">🔒 EXPEDIENTE OFICIAL SELLADO Y CONCILIADO</div>
+          <div style="font-size: 0.75rem; font-weight: 700; margin-top: 2px;">TOMA FÍSICA CERTIFICADA • ART. 177 RISLR • SENIAT</div>
+        </div>
+
         <!-- Membrete Corporativo y Ficha Fiscal -->
         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0B2447; padding-bottom: 14px; margin-bottom: 16px;">
           <div style="display: flex; gap: 14px; align-items: center;">
@@ -4449,6 +4477,127 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL FLOTANTE: CIERRE FORMAL Y SELLADO DE TOMA FÍSICA                 -->
+  <!-- Fundamento Legal: Art. 177 RISLR • Art. 27 LISLR                       -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-cierre-toma-fisica" style="display: none; z-index: 1075;">
+    <div class="modal-box" style="max-width: 680px; width: 95%; border-top: 5px solid #b45309; box-shadow: 0 10px 45px rgba(180,83,9,0.35);">
+      <div class="modal-header" style="background: #b45309; color: #FFFFFF; padding: 16px 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🔒</span>
+          <div>
+            <h3 style="color: #FFFFFF; font-size: 1.15rem; font-weight: 800; margin: 0;">Cierre y Certificación de Toma Física</h3>
+            <div style="font-size: 0.72rem; color: #fde68a; font-weight: 700;">SELLADO DE EXPEDIENTE FISCAL • ART. 177 RISLR • SENIAT</div>
+          </div>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF; font-size: 1.5rem;" onclick="closeModal('modal-cierre-toma-fisica')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.82rem; color: #92400e; line-height: 1.45;">
+          <strong>Finalización del Proceso de Auditoría Física:</strong><br>
+          Al cerrar formalmente la Toma Física, el expediente del período quedará <strong>SELLADO y en modo solo lectura</strong> para resguardo legal. Los ajustes en Kardex quedarán consolidados y listos para la conciliación fiscal y emisión de estados contables.
+        </div>
+
+        <form id="form-cierre-toma-fisica" onsubmit="confirmarCierreTomaFisica(event)">
+          <!-- Resumen de items auditados y diferencias -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <div style="text-align: center;">
+              <div style="font-size: 0.70rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Período Fiscal</div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #0B2447;" id="cierre-resumen-periodo">Octubre 2026</div>
+            </div>
+            <div style="text-align: center; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+              <div style="font-size: 0.70rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Items Auditados</div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #059669;" id="cierre-resumen-auditados">0 / 0</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 0.70rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Ajustes / Diferencias</div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #b45309;" id="cierre-resumen-diferencias">0 items</div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">N° de Acta a Sellar *</label>
+              <input type="text" id="cierre-acta-numero" class="form-control font-mono font-bold" style="font-size: 0.95rem; color: #b45309; background: #fffbeb; padding: 8px 10px;" readonly>
+            </div>
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">Fecha y Hora de Cierre *</label>
+              <input type="text" id="cierre-acta-fecha" class="form-control font-bold" style="font-size: 0.85rem; padding: 8px 10px;" readonly>
+            </div>
+          </div>
+
+          <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+            <div style="font-size: 0.74rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; text-transform: uppercase;">
+              ⚖️ Certificación y Responsabilidades Legales:
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #475569; display: block; margin-bottom: 3px;">Ejecutor Conteo Físico (DG 67):</label>
+                <input type="text" id="cierre-acta-auditor-tienda" class="form-control" style="font-size: 0.82rem; padding: 6px 10px;" required>
+              </div>
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #475569; display: block; margin-bottom: 3px;">Gerente General (DG 67):</label>
+                <input type="text" id="cierre-acta-gerente-dg67" class="form-control" style="font-size: 0.82rem; padding: 6px 10px;" required>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Receptor Contable (Unión Contable Global):</label>
+              <div style="background: #ffffff; border: 1px solid #93c5fd; border-radius: 6px; padding: 7px 10px; font-size: 0.82rem; font-weight: 700; color: #1e40af;">
+                Lcda. Liliana Chacón • CPC (Unión Contable Global) - Receptor de Datos de Inventario
+              </div>
+            </div>
+
+            <label style="display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 0.75rem; color: #334155; cursor: pointer;">
+              <input type="checkbox" id="cierre-declaracion-jurada" required style="margin-top: 2px;">
+              <span><strong>Declaración de Conformidad:</strong> Certifico que el conteo físico de existencias ha finalizado y que la información remitida a Unión Contable Global para el ajuste del Kardex y conciliación fiscal es fidedigna y verificada en almacén por Inversiones DG 67, C.A.</span>
+            </label>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-cierre-toma-fisica')" style="font-weight: 600;">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-warning" id="btn-confirmar-cierre-toma" style="font-weight: 800; padding: 9px 20px; background: #b45309; color: #fff; box-shadow: 0 4px 12px rgba(180,83,9,0.25);">
+              🔒 Sellar y Cerrar Toma Física
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: ALERTA DE SEGURIDAD POR INACTIVIDAD                            -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-advertencia-inactividad" style="display: none; z-index: 1099;">
+    <div class="modal-box" style="max-width: 480px; width: 92%; border-top: 5px solid #dc2626; box-shadow: 0 10px 45px rgba(220,38,38,0.35); text-align: center; padding: 24px 22px;">
+      <div style="width: 64px; height: 64px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <span style="font-size: 2rem;">⏱️</span>
+      </div>
+      <h3 style="color: #991b1b; font-size: 1.25rem; font-weight: 800; margin: 0 0 8px;">Sesión a punto de expirar</h3>
+      <div style="font-size: 0.72rem; color: #dc2626; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">
+        POLÍTICA DE SEGURIDAD CORPORATIVA • SISCON-ES DG67
+      </div>
+      <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin-bottom: 16px;">
+        Por resguardo de la información contable y fiscal, su sesión se cerrará automáticamente por inactividad en:
+      </p>
+      <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+        <span id="inactividad-countdown" style="font-size: 2.2rem; font-weight: 900; color: #dc2626; font-family: monospace;">60</span>
+        <span style="display: block; font-size: 0.75rem; color: #991b1b; font-weight: 700;">SEGUNDOS RESTANTES</span>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" class="btn btn-secondary" onclick="cerrarSesionPorInactividad(true)" style="font-weight: 600; padding: 9px 18px;">
+          Cerrar Sesión Ahora
+        </button>
+        <button type="button" class="btn btn-emerald" onclick="continuarSesionInactividad()" style="font-weight: 800; padding: 9px 22px; background: #059669; color: #fff; box-shadow: 0 4px 12px rgba(5,150,105,0.25);">
+          Continuar Trabajando
+        </button>
       </div>
     </div>
   </div>

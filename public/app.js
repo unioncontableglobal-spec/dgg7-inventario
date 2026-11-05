@@ -10,7 +10,10 @@ const state = {
   tasasBcv: [],
   metodoValoracionKardex: 'CPP',
   dashboard: null,
-  activeTab: 'tab-dashboard'
+  activeTab: 'tab-dashboard',
+  modalBcvAbierto: false,
+  tomaFisicaEstatus: 'ABIERTA',
+  tomaFisicaInfo: null
 };
 
 // --------------------------------------------------------------------------
@@ -56,6 +59,101 @@ window.debouncedFiltrarEntradasPendientes = debouncedFiltrarEntradasPendientes;
 // --------------------------------------------------------------------------
 const AUTH_STORAGE_KEY = 'dg67_auth_session';
 
+// --------------------------------------------------------------------------
+// SISTEMA DE SEGURIDAD: CIERRE AUTOMÁTICO DE SESIÓN POR INACTIVIDAD (15 MIN)
+// Política de Seguridad Corporativa para Sistemas Contables y Fiscales
+// --------------------------------------------------------------------------
+const TIEMPO_INACTIVIDAD_TOTAL_MS = 15 * 60 * 1000; // 15 minutos exactos
+const TIEMPO_ADVERTENCIA_MS = 14 * 60 * 1000;       // 14 minutos (advertencia con 60 seg)
+let ultimaActividadTimestamp = Date.now();
+let inactividadIntervalId = null;
+let inactividadModalAbierto = false;
+let throttleActividadTimeout = null;
+
+function registrarActividadUsuario() {
+  if (inactividadModalAbierto) return;
+  if (!throttleActividadTimeout) {
+    ultimaActividadTimestamp = Date.now();
+    throttleActividadTimeout = setTimeout(() => {
+      throttleActividadTimeout = null;
+    }, 2000);
+  }
+}
+
+function iniciarMonitoreoInactividad() {
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+    window.addEventListener(evt, registrarActividadUsuario, { passive: true });
+  });
+
+  if (inactividadIntervalId) clearInterval(inactividadIntervalId);
+  inactividadIntervalId = setInterval(evaluarInactividadSesion, 1000);
+}
+
+function evaluarInactividadSesion() {
+  if (!state.currentUser) return;
+
+  const transcurrido = Date.now() - ultimaActividadTimestamp;
+
+  if (transcurrido >= TIEMPO_INACTIVIDAD_TOTAL_MS) {
+    cerrarSesionPorInactividad(false);
+  } else if (transcurrido >= TIEMPO_ADVERTENCIA_MS) {
+    if (!inactividadModalAbierto) {
+      inactividadModalAbierto = true;
+      const modalAdv = document.getElementById('modal-advertencia-inactividad');
+      if (modalAdv) modalAdv.style.display = 'flex';
+    }
+    const segRestantes = Math.max(0, Math.ceil((TIEMPO_INACTIVIDAD_TOTAL_MS - transcurrido) / 1000));
+    const countEl = document.getElementById('inactividad-countdown');
+    if (countEl) countEl.textContent = segRestantes;
+  } else {
+    if (inactividadModalAbierto) {
+      inactividadModalAbierto = false;
+      const modalAdv = document.getElementById('modal-advertencia-inactividad');
+      if (modalAdv) modalAdv.style.display = 'none';
+    }
+  }
+}
+
+function continuarSesionInactividad() {
+  ultimaActividadTimestamp = Date.now();
+  inactividadModalAbierto = false;
+  const modalAdv = document.getElementById('modal-advertencia-inactividad');
+  if (modalAdv) modalAdv.style.display = 'none';
+  showToast('✅ Sesión activa renovada. Puede continuar trabajando.', 'success');
+}
+
+function cerrarSesionPorInactividad(manual = false) {
+  inactividadModalAbierto = false;
+  const modalAdv = document.getElementById('modal-advertencia-inactividad');
+  if (modalAdv) modalAdv.style.display = 'none';
+
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  state.currentUser = null;
+
+  const pwdEl = document.getElementById('login-password');
+  if (pwdEl) pwdEl.value = '';
+
+  showLogin();
+
+  const alertEl = document.getElementById('login-error-alert');
+  const alertText = document.getElementById('login-error-text');
+  if (alertEl && alertText) {
+    alertEl.style.display = 'flex';
+    if (manual) {
+      alertEl.style.background = '#eff6ff';
+      alertEl.style.border = '1px solid #93c5fd';
+      alertEl.style.color = '#1e40af';
+      alertText.textContent = 'ℹ️ Sesión de trabajo finalizada a petición del usuario.';
+    } else {
+      alertEl.style.background = '#fef2f2';
+      alertEl.style.border = '1.5px solid #f87171';
+      alertEl.style.color = '#991b1b';
+      alertText.innerHTML = '🔒 <strong>Sesión cerrada por inactividad (15 minutos):</strong> Por resguardo de la seguridad contable y fiscal, su sesión fue cerrada automáticamente. Por favor ingrese sus credenciales nuevamente.';
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   checkAuthSession();
 });
@@ -94,6 +192,8 @@ function showApp(user) {
   if (appLayout) appLayout.style.display = 'flex';
 
   state.currentUser = user || null;
+  ultimaActividadTimestamp = Date.now();
+  iniciarMonitoreoInactividad();
 
   // Actualizar Ficha de Usuario en la Barra Lateral
   if (user) {
@@ -141,9 +241,10 @@ function showApp(user) {
     }
 
     // Modal flotante para verificar o confirmar la Tasa Oficial BCV del día
+    // Debe presentarse al entrar en cualquier usuario sin colisionar con la toma física
     setTimeout(() => {
-      verificarAperturaModalTasaBcvDia();
-    }, 350);
+      abrirModalTasaBcvDia();
+    }, 250);
   }
 }
 
@@ -494,8 +595,10 @@ function switchTab(tabId) {
   if (tabId === 'tab-proveedores') loadProveedoresDirectorio();
   if (tabId === 'tab-punto-cero') {
     cargarAuditoriaEnVivo();
+    if (typeof cargarEstatusTomaFisica === 'function') cargarEstatusTomaFisica('2026-10');
     if (typeof actualizarBannerActaActiva === 'function') actualizarBannerActaActiva();
-    if (typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
+    // Apertura secuencial controlada: sólo si el modal de BCV no está abierto y el acta no está aperturada
+    if (!state.modalBcvAbierto && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
       setTimeout(() => {
         abrirModalAperturaActa();
       }, 400);
@@ -2141,6 +2244,17 @@ async function viewMovementDetail(id) {
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.style.display = 'none';
+
+  if (modalId === 'modal-tasa-bcv-dia') {
+    state.modalBcvAbierto = false;
+    // Transición secuencial: al cerrar Tasa BCV, si está en Toma Física y el acta aún no está abierta, abrir modal de apertura de acta
+    if (state.activeTab === 'tab-punto-cero' && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
+      setTimeout(() => {
+        abrirModalAperturaActa();
+      }, 350);
+    }
+  }
+
   if (modalId === 'modal-nueva-compra') {
     const alertBox = document.getElementById('alerta-duplicado-compra');
     if (alertBox) alertBox.style.display = 'none';
@@ -7399,15 +7513,11 @@ async function guardarTasaBcvDiaria(e) {
 // ======================================================================
 
 function verificarAperturaModalTasaBcvDia() {
-  const hoy = new Date().toLocaleDateString('en-CA');
-  const verificada = sessionStorage.getItem('dg67_bcv_verified_session');
-  // Se presenta al iniciar la sesión en cualquiera de los usuarios
-  if (!verificada || verificada !== hoy) {
-    abrirModalTasaBcvDia();
-  }
+  abrirModalTasaBcvDia();
 }
 
 function abrirModalTasaBcvDia() {
+  state.modalBcvAbierto = true;
   const hoy = new Date().toLocaleDateString('en-CA');
   const fInput = document.getElementById('popup-tasa-fecha');
   const tInput = document.getElementById('popup-tasa-valor');
@@ -7899,10 +8009,160 @@ function actualizarBannerActaActiva() {
   const bNro = document.getElementById('banner-acta-nro');
   const bPer = document.getElementById('banner-acta-periodo-texto');
   const bDg67 = document.getElementById('banner-acta-dg67');
+  const bBadge = document.getElementById('banner-acta-badge');
+  const bCont = document.getElementById('pzero-banner-acta-activa');
 
   if (bNro) bNro.textContent = acta.numero;
   if (bPer) bPer.textContent = `(Toma Física ${acta.periodo === '2026-10' ? 'Octubre 2026' : acta.periodo})`;
   if (bDg67) bDg67.textContent = `Inversiones DG 67, C.A. (${acta.auditor_tienda})`;
+
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    if (bBadge) {
+      bBadge.style.background = '#b45309';
+      bBadge.textContent = '🔒 EXPEDIENTE OFICIAL SELLADO Y CERRADO';
+    }
+    if (bCont) {
+      bCont.style.background = '#fffbeb';
+      bCont.style.borderColor = '#fde68a';
+    }
+  } else {
+    if (bBadge) {
+      bBadge.style.background = '#0284c7';
+      bBadge.textContent = 'EXPEDIENTE OFICIAL ACTIVO';
+    }
+    if (bCont) {
+      bCont.style.background = '#f0f9ff';
+      bCont.style.borderColor = '#bae6fd';
+    }
+  }
+}
+
+async function cargarEstatusTomaFisica(periodo = '2026-10') {
+  try {
+    const res = await fetch(`/api/auditoria/toma-fisica/estatus?periodo=${periodo}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.tomaFisicaEstatus = data.estatus || 'ABIERTA';
+    state.tomaFisicaInfo = data;
+
+    const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
+    const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
+
+    if (state.tomaFisicaEstatus === 'CERRADA') {
+      if (btnCerrar) btnCerrar.style.display = 'none';
+      if (btnReabrir) btnReabrir.style.display = 'flex';
+    } else {
+      if (btnCerrar) btnCerrar.style.display = 'flex';
+      if (btnReabrir) btnReabrir.style.display = 'none';
+    }
+
+    actualizarBannerActaActiva();
+  } catch (e) {
+    console.warn('Error cargando estatus de toma física:', e);
+  }
+}
+
+function abrirModalCierreTomaFisica() {
+  const acta = (typeof obtenerActaActiva === 'function' ? obtenerActaActiva() : null) || {
+    numero: 'ACTA-INV-202610-01',
+    periodo: '2026-10',
+    auditor_tienda: 'Personal de Almacén / Auditor DG 67',
+    gerente_dg67: 'Gerencia General DG 67'
+  };
+
+  const total = Array.isArray(pzeroProductos) ? pzeroProductos.length : 0;
+  const auditados = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1).length : 0;
+  const diferencias = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1 && Math.abs(Number(p.diferencia_unidades || 0)) > 0.0001).length : 0;
+
+  const resPer = document.getElementById('cierre-resumen-periodo');
+  const resAud = document.getElementById('cierre-resumen-auditados');
+  const resDif = document.getElementById('cierre-resumen-diferencias');
+  const numActa = document.getElementById('cierre-acta-numero');
+  const fecActa = document.getElementById('cierre-acta-fecha');
+  const audInput = document.getElementById('cierre-acta-auditor-tienda');
+  const gerInput = document.getElementById('cierre-acta-gerente-dg67');
+  const chk = document.getElementById('cierre-declaracion-jurada');
+
+  if (resPer) resPer.textContent = acta.periodo === '2026-10' ? 'Octubre 2026' : (acta.periodo || 'Octubre 2026');
+  if (resAud) resAud.textContent = `${auditados} / ${total}`;
+  if (resDif) resDif.textContent = `${diferencias} artículos`;
+  if (numActa) numActa.value = acta.numero || 'ACTA-INV-202610-01';
+  if (fecActa) fecActa.value = new Date().toLocaleString('es-VE');
+  if (audInput) audInput.value = acta.auditor_tienda || 'Personal de Almacén / Auditor DG 67';
+  if (gerInput) gerInput.value = acta.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.';
+  if (chk) chk.checked = false;
+
+  const m = document.getElementById('modal-cierre-toma-fisica');
+  if (m) m.style.display = 'flex';
+}
+
+async function confirmarCierreTomaFisica(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  const numActa = document.getElementById('cierre-acta-numero')?.value || 'ACTA-INV-202610-01';
+  const aud = document.getElementById('cierre-acta-auditor-tienda')?.value || 'Personal de Almacén DG 67';
+  const ger = document.getElementById('cierre-acta-gerente-dg67')?.value || 'Gerencia General DG 67';
+  const btn = document.getElementById('btn-confirmar-cierre-toma');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sellando expediente...';
+  }
+
+  try {
+    const res = await fetch('/api/auditoria/toma-fisica/cerrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        periodo: '2026-10',
+        numero_acta: numActa,
+        usuario: state.currentUser?.usuario || 'ADMIN_DG67',
+        fecha_cierre: new Date().toISOString(),
+        auditor_tienda: aud,
+        gerente_dg67: ger,
+        contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al sellar y cerrar la toma física');
+
+    state.tomaFisicaEstatus = 'CERRADA';
+    state.tomaFisicaInfo = data;
+    closeModal('modal-cierre-toma-fisica');
+    showToast('🔒 Toma Física de Inventario formalmente cerrada y sellada. Expediente en solo lectura.', 'success');
+    await cargarEstatusTomaFisica('2026-10');
+  } catch (err) {
+    showToast('Error al cerrar toma física: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔒 Sellar y Cerrar Toma Física';
+    }
+  }
+}
+
+async function reabrirTomaFisicaPeriodo() {
+  if (!confirm('¿Está seguro de reabrir la Toma Física del período para realizar ajustes o rectificaciones físicas?')) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/auditoria/toma-fisica/reabrir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        periodo: '2026-10',
+        usuario: state.currentUser?.usuario || 'ADMIN_DG67'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al reabrir la toma física');
+
+    state.tomaFisicaEstatus = 'ABIERTA';
+    showToast('🔓 Toma Física de Inventario reabierta para ajustes y rectificaciones.', 'info');
+    await cargarEstatusTomaFisica('2026-10');
+  } catch (err) {
+    showToast('Error al reabrir toma física: ' + err.message, 'error');
+  }
 }
 
 function actualizarOpcionesDrawerActa(numeroActa) {
@@ -8004,6 +8264,37 @@ function abrirDrawerAuditoria(index) {
     elPrecioSIVABs.value = precioBs.toFixed(2);
   }
   calcularPreciosDrawer('BS_S_IVA');
+
+  // 5. Modo Solo Lectura si la Toma Física está Cerrada
+  const isCerrada = (state.tomaFisicaEstatus === 'CERRADA');
+  const elAlertaCerrada = document.getElementById('drawer-alerta-toma-cerrada');
+  const btnGuardar = document.getElementById('btn-drawer-guardar');
+  const btnGuardarSig = document.getElementById('btn-drawer-guardar-sig');
+
+  if (elAlertaCerrada) elAlertaCerrada.style.display = isCerrada ? 'block' : 'none';
+
+  ['drawer-cant-fisica', 'drawer-costo-s-iva-bs', 'drawer-precio-s-iva-bs', 'drawer-motivo-select', 'drawer-acta-select', 'drawer-justificacion-detalle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (isCerrada) el.setAttribute('disabled', 'disabled');
+      else el.removeAttribute('disabled');
+    }
+  });
+  if (elToggleInactivo) {
+    if (isCerrada) elToggleInactivo.setAttribute('disabled', 'disabled');
+    else elToggleInactivo.removeAttribute('disabled');
+  }
+
+  if (btnGuardar) {
+    btnGuardar.disabled = isCerrada;
+    btnGuardar.style.opacity = isCerrada ? '0.45' : '1';
+    btnGuardar.style.cursor = isCerrada ? 'not-allowed' : 'pointer';
+  }
+  if (btnGuardarSig) {
+    btnGuardarSig.disabled = isCerrada;
+    btnGuardarSig.style.opacity = isCerrada ? '0.45' : '1';
+    btnGuardarSig.style.cursor = isCerrada ? 'not-allowed' : 'pointer';
+  }
 
   // Abrir Drawer
   if (drawer) drawer.classList.add('open');
@@ -8262,6 +8553,10 @@ function onToggleInactivoDrawer(el) {
 
 // Guardar producto auditado (Bloques A, B y C)
 async function guardarProductoAuditoria(avanzarSiguiente = false) {
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    showToast('🔒 La Toma Física del período está CERRADA. Reabra el expediente con autorización para modificar cantidades.', 'warning');
+    return;
+  }
   if (pzeroProductoActualIndex < 0) return;
   const p = pzeroProductos[pzeroProductoActualIndex];
 
@@ -8528,6 +8823,23 @@ async function abrirModalActaOficial() {
     if (document.getElementById('acta-almacen')) document.getElementById('acta-almacen').textContent = actaAlmacenFinal;
     if (document.getElementById('acta-tasa-bcv')) document.getElementById('acta-tasa-bcv').textContent = `Bs. ${fmtBs(tasa_bcv)} / USD`;
 
+    const selloCierre = document.getElementById('acta-sello-cierre-oficial');
+    if (selloCierre) {
+      if (state.tomaFisicaEstatus === 'CERRADA') {
+        selloCierre.style.display = 'block';
+        selloCierre.innerHTML = `
+          <div style="font-size: 1.05rem; font-weight: 900; letter-spacing: 0.04em;">🔒 EXPEDIENTE OFICIAL SELLADO Y CONCILIADO</div>
+          <div style="font-size: 0.75rem; font-weight: 700; margin-top: 2px;">TOMA FÍSICA CERTIFICADA • ART. 177 RISLR • SENIAT</div>
+          <div style="font-size: 0.70rem; color: #78350f; margin-top: 3px;">
+            Fecha de Cierre: <strong>${state.tomaFisicaInfo?.fecha_cierre ? new Date(state.tomaFisicaInfo.fecha_cierre).toLocaleString('es-VE') : new Date().toLocaleString('es-VE')}</strong> • 
+            Responsable Cierre: <strong>${state.tomaFisicaInfo?.usuario_cierre || 'ADMIN_DG67'}</strong>
+          </div>
+        `;
+      } else {
+        selloCierre.style.display = 'none';
+      }
+    }
+
     if (empresa) {
       if (document.getElementById('acta-empresa-nombre')) document.getElementById('acta-empresa-nombre').textContent = empresa.razon_social || 'INVERSIONES DG 67, C.A.';
       if (document.getElementById('acta-empresa-rif')) document.getElementById('acta-empresa-rif').textContent = `RIF: ${empresa.rif || 'J-50700865-7'}`;
@@ -8646,6 +8958,12 @@ function imprimirActaOficial() {
 
 window.abrirModalActaOficial = abrirModalActaOficial;
 window.imprimirActaOficial = imprimirActaOficial;
+window.abrirModalCierreTomaFisica = abrirModalCierreTomaFisica;
+window.confirmarCierreTomaFisica = confirmarCierreTomaFisica;
+window.reabrirTomaFisicaPeriodo = reabrirTomaFisicaPeriodo;
+window.cargarEstatusTomaFisica = cargarEstatusTomaFisica;
+window.continuarSesionInactividad = continuarSesionInactividad;
+window.cerrarSesionPorInactividad = cerrarSesionPorInactividad;
 
 
 

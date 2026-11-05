@@ -83,6 +83,21 @@ localDb.execute("ALTER TABLE movimientos ADD COLUMN tasa_bcv_factura REAL;").cat
 localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN tasa_bcv_activa_dia REAL;").catch(() => { });
 localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN fecha_bcv_activa_dia TEXT;").catch(() => { });
 localDb.execute("ALTER TABLE libro_compras ADD COLUMN fecha_recepcion TEXT;").catch(() => { });
+localDb.execute(`
+  CREATE TABLE IF NOT EXISTS actas_toma_fisica (
+    periodo TEXT PRIMARY KEY,
+    numero_acta TEXT,
+    estatus TEXT DEFAULT 'ABIERTA',
+    fecha_corte TEXT,
+    fecha_cierre TEXT,
+    usuario_cierre TEXT,
+    auditor_tienda TEXT,
+    gerente_dg67 TEXT,
+    contador_ucg TEXT,
+    resumen_items TEXT,
+    updated_at TEXT
+  );
+`).catch(() => { });
 localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => { });
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
@@ -3257,6 +3272,109 @@ app.get('/api/auditoria/acta-oficial', async (req, res) => {
     });
   } catch (error) {
     console.error('Error generando acta oficial de inventario:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.9.3 Estatus, Cierre y Reapertura de Toma Física de Inventario (Art. 177 RISLR)
+app.get('/api/auditoria/toma-fisica/estatus', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const actaRes = await db.execute({
+      sql: "SELECT * FROM actas_toma_fisica WHERE periodo = ? LIMIT 1",
+      args: [periodo]
+    });
+    if (actaRes.rows.length === 0) {
+      return res.json({
+        periodo,
+        estatus: 'ABIERTA',
+        numero_acta: `ACTA-INV-${periodo.replace('-', '')}-01`,
+        fecha_cierre: null,
+        usuario_cierre: null
+      });
+    }
+    const a = actaRes.rows[0];
+    res.json({
+      periodo: a.periodo,
+      estatus: a.estatus || 'ABIERTA',
+      numero_acta: a.numero_acta,
+      fecha_corte: a.fecha_corte,
+      fecha_cierre: a.fecha_cierre,
+      usuario_cierre: a.usuario_cierre,
+      auditor_tienda: a.auditor_tienda,
+      gerente_dg67: a.gerente_dg67,
+      contador_ucg: a.contador_ucg
+    });
+  } catch (error) {
+    console.error('Error obteniendo estatus de toma física:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auditoria/toma-fisica/cerrar', async (req, res) => {
+  try {
+    const {
+      periodo = '2026-10',
+      numero_acta = 'ACTA-INV-202610-01',
+      usuario = 'ADMIN_DG67',
+      fecha_cierre = new Date().toISOString(),
+      auditor_tienda = 'Personal de Almacén DG 67',
+      gerente_dg67 = 'Gerencia General Inversiones DG 67, C.A.',
+      contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+    } = req.body || {};
+
+    await db.execute({
+      sql: `
+        INSERT INTO actas_toma_fisica 
+        (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+        VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        ON CONFLICT(periodo) DO UPDATE SET
+          numero_acta = excluded.numero_acta,
+          estatus = 'CERRADA',
+          fecha_cierre = excluded.fecha_cierre,
+          usuario_cierre = excluded.usuario_cierre,
+          auditor_tienda = excluded.auditor_tienda,
+          gerente_dg67 = excluded.gerente_dg67,
+          contador_ucg = excluded.contador_ucg,
+          updated_at = datetime('now', 'localtime')
+      `,
+      args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg]
+    });
+
+    res.json({
+      success: true,
+      periodo,
+      numero_acta,
+      estatus: 'CERRADA',
+      fecha_cierre,
+      usuario_cierre: usuario,
+      mensaje: `✅ Toma Física del período ${periodo} formalmente cerrada y sellada.`
+    });
+  } catch (error) {
+    console.error('Error cerrando toma física:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auditoria/toma-fisica/reabrir', async (req, res) => {
+  try {
+    const { periodo = '2026-10', usuario = 'ADMIN_DG67' } = req.body || {};
+    await db.execute({
+      sql: `
+        UPDATE actas_toma_fisica 
+        SET estatus = 'ABIERTA', updated_at = datetime('now', 'localtime')
+        WHERE periodo = ?
+      `,
+      args: [periodo]
+    });
+    res.json({
+      success: true,
+      periodo,
+      estatus: 'ABIERTA',
+      mensaje: `🔓 Toma Física del período ${periodo} reabierta para ajustes y rectificaciones.`
+    });
+  } catch (error) {
+    console.error('Error reabriendo toma física:', error);
     res.status(500).json({ error: error.message });
   }
 });
