@@ -1855,46 +1855,50 @@
             </div>
           </div>
 
-          <!-- BARRA EJECUTIVA DE FASES DE AUDITORÍA (TARJETAS / BOTONES DIMENSIONADOS DE ALTA VISIBILIDAD) -->
+          <!-- BARRA EJECUTIVA DE FASES DE AUDITORÍA (TARJETAS / BOTONES DIMENSIONADOS CON CHECKLIST DINÁMICO) -->
           <div class="pzero-fases-grid" id="pzero-fases-toolbar">
             <!-- 1. Tarjeta Azul: Aperturar Acta -->
-            <button type="button" class="pzero-fase-card pzero-fase-azul" id="btn-abrir-apertura-acta" onclick="abrirModalAperturaActa()" title="Fase 1: Apertura y configuración del Acta Oficial de Toma Física">
-              <div class="fase-badge-num">1</div>
+            <button type="button" class="pzero-fase-card pzero-fase-azul" id="btn-abrir-apertura-acta" onclick="abrirModalAperturaActa()" title="Paso 1: Apertura y configuración legal del Acta Oficial de Toma Física">
+              <div class="fase-badge-num" id="fase-badge-1">1</div>
               <div class="fase-content">
-                <span class="fase-sub">PASO 1 • APERTURA LEGAL</span>
-                <strong class="fase-title">Aperturar Acta</strong>
+                <span class="fase-sub" id="fase-sub-1">PASO 1 • APERTURA LEGAL</span>
+                <strong class="fase-title" id="fase-title-1">Aperturar Acta</strong>
+                <span class="fase-checklist-status status-pending" id="fase-status-1">⚪ POR APERTURAR</span>
               </div>
-              <span class="fase-icon">📋</span>
+              <span class="fase-icon" id="fase-icon-1">📋</span>
             </button>
 
             <!-- 2. Tarjeta Verde: Modo Ajuste Rápido -->
-            <button type="button" class="pzero-fase-card pzero-fase-verde" id="btn-modo-rapido-auditoria" onclick="iniciarModoAuditoriaRapida()" title="Fase 2: Conteo continuo y ajuste rápido producto a producto">
-              <div class="fase-badge-num">2</div>
+            <button type="button" class="pzero-fase-card pzero-fase-verde" id="btn-modo-rapido-auditoria" onclick="iniciarModoAuditoriaRapida()" title="Paso 2: Conteo continuo y ajuste rápido producto a producto">
+              <div class="fase-badge-num" id="fase-badge-2">2</div>
               <div class="fase-content">
-                <span class="fase-sub">PASO 2 • CONTEO EN TIENDA</span>
-                <strong class="fase-title">Modo Ajuste Rápido</strong>
+                <span class="fase-sub" id="fase-sub-2">PASO 2 • CONTEO EN TIENDA</span>
+                <strong class="fase-title" id="fase-title-2">Modo Ajuste Rápido</strong>
+                <span class="fase-checklist-status status-pending" id="fase-status-2">⚪ 0 / 733 CONTEO</span>
               </div>
-              <span class="fase-icon">⚡</span>
+              <span class="fase-icon" id="fase-icon-2">⚡</span>
             </button>
 
             <!-- 3. Tarjeta Negra / Navy: Ver / Imprimir Acta -->
-            <button type="button" class="pzero-fase-card pzero-fase-negro" id="btn-generar-acta-oficial" onclick="abrirModalActaOficial()" title="Fase 3: Visualizar e imprimir Acta Oficial compilada con firmas">
-              <div class="fase-badge-num">3</div>
+            <button type="button" class="pzero-fase-card pzero-fase-negro" id="btn-generar-acta-oficial" onclick="abrirModalActaOficial()" title="Paso 3: Visualizar e imprimir Acta Oficial compilada con firmas SENIAT">
+              <div class="fase-badge-num" id="fase-badge-3">3</div>
               <div class="fase-content">
-                <span class="fase-sub">PASO 3 • ACTA SENIAT</span>
-                <strong class="fase-title">Ver / Imprimir Acta</strong>
+                <span class="fase-sub" id="fase-sub-3">PASO 3 • ACTA SENIAT</span>
+                <strong class="fase-title" id="fase-title-3">Ver / Imprimir Acta</strong>
+                <span class="fase-checklist-status status-pending" id="fase-status-3">⚪ POR REVISAR</span>
               </div>
-              <span class="fase-icon">📄</span>
+              <span class="fase-icon" id="fase-icon-3">📄</span>
             </button>
 
             <!-- 4. Tarjeta Naranja: Cerrar Toma Física -->
-            <button type="button" class="pzero-fase-card pzero-fase-naranja" id="btn-cerrar-toma-fisica" onclick="abrirModalCierreTomaFisica()" title="Fase 4: Finalizar y sellar formalmente la Toma Física del período">
-              <div class="fase-badge-num">4</div>
+            <button type="button" class="pzero-fase-card pzero-fase-naranja" id="btn-cerrar-toma-fisica" onclick="abrirModalCierreTomaFisica()" title="Paso 4: Finalizar y sellar formalmente la Toma Física del período">
+              <div class="fase-badge-num" id="fase-badge-4">4</div>
               <div class="fase-content">
-                <span class="fase-sub">PASO 4 • SELLADO FORMAL</span>
-                <strong class="fase-title">Cerrar Toma Física</strong>
+                <span class="fase-sub" id="fase-sub-4">PASO 4 • SELLADO FORMAL</span>
+                <strong class="fase-title" id="fase-title-4">Cerrar Toma Física</strong>
+                <span class="fase-checklist-status status-pending" id="fase-status-4">⚪ POR CERRAR</span>
               </div>
-              <span class="fase-icon">🔒</span>
+              <span class="fase-icon" id="fase-icon-4">🔒</span>
             </button>
 
             <!-- 4b. Tarjeta Reabrir (Estatus Cerrado) -->
@@ -1903,6 +1907,7 @@
               <div class="fase-content">
                 <span class="fase-sub">EXPEDIENTE CERRADO</span>
                 <strong class="fase-title">Reabrir Toma Física</strong>
+                <span class="fase-checklist-status status-done">✓ REAPERTURA DISPONIBLE</span>
               </div>
               <span class="fase-icon">↩️</span>
             </button>
@@ -2030,6 +2035,9 @@
               </button>
               <button type="button" class="pzero-pill" id="pzero-pill-inactivos" onclick="cambiarFiltroPills('INACTIVOS')">
                 🔒 Inactivos (<span id="count-pill-inactivos">0</span>)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-success" id="btn-concluir-conteo-auditor" onclick="marcarConteoFisicoConcluido()" style="font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:20px; display:none; margin-left:6px; border: 1.5px solid #10b981; color: #047857;" title="Marcar o reactivar la fase de conteo en tienda como concluida (Paso 2)">
+                ✓ Marcar Conteo Listo
               </button>
             </div>
 

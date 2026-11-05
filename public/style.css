@@ -3884,13 +3884,13 @@ body {
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
   text-align: left;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  min-height: 58px;
+  min-height: 64px;
   height: auto;
   box-sizing: border-box;
   position: relative;
@@ -3968,6 +3968,54 @@ body {
   flex-shrink: 0;
   opacity: 0.92;
   margin-left: auto;
+}
+
+/* Checklist Badge / Pill para las Fases de Toma Física */
+.fase-checklist-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.60rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1.5px 7px;
+  border-radius: 4px;
+  margin-top: 3px;
+  width: fit-content;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+.fase-checklist-status.status-done {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.45);
+}
+
+.fase-checklist-status.status-progress {
+  background: #f59e0b !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.45);
+}
+
+.fase-checklist-status.status-pending {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pzero-fase-card .fase-badge-num.step-done {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6) !important;
+}
+
+.pzero-fase-card .fase-badge-num.step-progress {
+  background: #f59e0b !important;
+  color: #ffffff !important;
+  border-color: #fcd34d !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6) !important;
 }
 
 /* 1. Tarjeta Azul (Apertura de Acta) */

@@ -681,12 +681,14 @@ function switchTab(tabId) {
     const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
     const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
     const btnConfigActa = document.getElementById('btn-configurar-acta-banner');
+    const btnConcluirConteo = document.getElementById('btn-concluir-conteo-auditor');
 
     if (btnApertura) btnApertura.style.display = isAuditor ? 'flex' : 'none';
     if (btnRapida) btnRapida.style.display = isAuditor ? 'flex' : 'none';
     if (btnCerrar) btnCerrar.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
     if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'flex' : 'none';
     if (btnConfigActa) btnConfigActa.style.display = isAuditor ? 'inline-block' : 'none';
+    if (btnConcluirConteo) btnConcluirConteo.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-block' : 'none';
 
     // Apertura secuencial controlada: EXCLUSIVA para el usuario Auditor de Tienda
     if (isAuditor && !state.modalBcvAbierto && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
@@ -8081,6 +8083,8 @@ function actualizarMetricasAuditoria(stats) {
   if (cAud) cAud.textContent = stats.auditados;
   if (cDif) cDif.textContent = stats.con_diferencia_stock;
   if (cIna) cIna.textContent = stats.inactivos;
+
+  actualizarChecklistFasesTomaFisica();
 }
 
 // Cambiar filtro por Pills
@@ -8262,6 +8266,16 @@ function obtenerActaActiva() {
     const raw = localStorage.getItem('dg67_acta_iniciada_202610');
     if (raw) return JSON.parse(raw);
   } catch (e) { }
+  if (state.actaActiva) return state.actaActiva;
+  if (state.tomaFisicaInfo?.numero_acta) {
+    return {
+      numero: state.tomaFisicaInfo.numero_acta,
+      periodo: state.tomaFisicaInfo.periodo || '2026-10',
+      tasa_bcv: state.tomaFisicaInfo.tasa_bcv || 889.58,
+      auditor_tienda: state.tomaFisicaInfo.auditor_tienda || 'Personal de Almacén / Auditor DG 67',
+      gerente_dg67: state.tomaFisicaInfo.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.'
+    };
+  }
   return null;
 }
 
@@ -8341,6 +8355,7 @@ function guardarAperturaActa(e) {
   pzeroTasaBcv = tasa_bcv;
   localStorage.setItem('dg67_acta_iniciada_202610', JSON.stringify(actaData));
   state.actaActiva = actaData;
+  state.actaAperturada = true;
 
   actualizarBannerActaActiva();
   actualizarOpcionesDrawerActa(numero);
@@ -8404,7 +8419,135 @@ function actualizarBannerActaActiva() {
   const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
   const btnConfig = document.getElementById('btn-configurar-acta-banner');
   if (btnConfig) btnConfig.style.display = isAuditor ? 'inline-block' : 'none';
+
+  actualizarChecklistFasesTomaFisica();
 }
+
+function actualizarChecklistFasesTomaFisica() {
+  const acta = (typeof obtenerActaActiva === 'function') ? obtenerActaActiva() : null;
+  const isCerrada = (state.tomaFisicaEstatus === 'CERRADA');
+
+  const total = Array.isArray(pzeroProductos) && pzeroProductos.length > 0 ? pzeroProductos.length : 733;
+  const auditados = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1).length : 0;
+  const pct = total > 0 ? Number(((auditados / total) * 100).toFixed(1)) : 0;
+
+  // 1. PASO 1: Apertura Legal (Acta Oficial SENIAT)
+  // Se detecta como LISTO si hay un acta con número, o se guardó en localStorage, o ya hay conteo en curso, o el expediente está cerrado
+  const actaAperturada = Boolean((acta && acta.numero) || state.actaAperturada || isCerrada || auditados > 0 || localStorage.getItem('dg67_acta_iniciada_202610'));
+
+  const b1 = document.getElementById('fase-badge-1');
+  const s1 = document.getElementById('fase-sub-1');
+  const t1 = document.getElementById('fase-title-1');
+  const st1 = document.getElementById('fase-status-1');
+  const ic1 = document.getElementById('fase-icon-1');
+
+  if (actaAperturada) {
+    if (b1) { b1.textContent = '✓'; b1.className = 'fase-badge-num step-done'; }
+    if (s1) s1.textContent = 'PASO 1 • ✓ LISTO';
+    if (t1) t1.textContent = acta?.numero || 'Acta Aperturada';
+    if (st1) { st1.className = 'fase-checklist-status status-done'; st1.innerHTML = '✓ LISTO: APERTURADA'; }
+    if (ic1) ic1.textContent = '✅';
+  } else {
+    if (b1) { b1.textContent = '1'; b1.className = 'fase-badge-num'; }
+    if (s1) s1.textContent = 'PASO 1 • APERTURA LEGAL';
+    if (t1) t1.textContent = 'Aperturar Acta';
+    if (st1) { st1.className = 'fase-checklist-status status-pending'; st1.innerHTML = '⚪ POR APERTURAR'; }
+    if (ic1) ic1.textContent = '📋';
+  }
+
+  // 2. PASO 2: Conteo en Tienda (Modo Ajuste Rápido)
+  // Se detecta como LISTO si se auditaron todos los productos, o el expediente está cerrado, o se marcó como listo manualmente
+  const conteoListo = Boolean((auditados === total && total > 0) || isCerrada || (localStorage.getItem('dg67_conteo_listo_202610') === 'true'));
+
+  const b2 = document.getElementById('fase-badge-2');
+  const s2 = document.getElementById('fase-sub-2');
+  const t2 = document.getElementById('fase-title-2');
+  const st2 = document.getElementById('fase-status-2');
+  const ic2 = document.getElementById('fase-icon-2');
+
+  if (conteoListo) {
+    if (b2) { b2.textContent = '✓'; b2.className = 'fase-badge-num step-done'; }
+    if (s2) s2.textContent = 'PASO 2 • ✓ LISTO';
+    if (t2) t2.textContent = `${total} / ${total} Concluido`;
+    if (st2) { st2.className = 'fase-checklist-status status-done'; st2.innerHTML = `✓ LISTO (${auditados}/${total})`; }
+    if (ic2) ic2.textContent = '✅';
+  } else if (auditados > 0) {
+    if (b2) { b2.textContent = '2'; b2.className = 'fase-badge-num step-progress'; }
+    if (s2) s2.textContent = `PASO 2 • ⏳ EN AVANCE (${pct}%)`;
+    if (t2) t2.textContent = `${auditados} de ${total} Auditados`;
+    if (st2) { st2.className = 'fase-checklist-status status-progress'; st2.innerHTML = `⏳ ${auditados} / ${total} CONTEO`; }
+    if (ic2) ic2.textContent = '⚡';
+  } else {
+    if (b2) { b2.textContent = '2'; b2.className = 'fase-badge-num'; }
+    if (s2) s2.textContent = 'PASO 2 • CONTEO EN TIENDA';
+    if (t2) t2.textContent = 'Modo Ajuste Rápido';
+    if (st2) { st2.className = 'fase-checklist-status status-pending'; st2.innerHTML = `⚪ 0 / ${total} CONTEO`; }
+    if (ic2) ic2.textContent = '⚡';
+  }
+
+  // 3. PASO 3: Acta SENIAT (Ver / Imprimir Acta)
+  // Se detecta como LISTO si fue visualizada/impresa o si el expediente ya fue cerrado
+  const actaRevisada = Boolean(state.actaRevisada || isCerrada || (localStorage.getItem('dg67_acta_revisada_202610') === 'true'));
+
+  const b3 = document.getElementById('fase-badge-3');
+  const s3 = document.getElementById('fase-sub-3');
+  const t3 = document.getElementById('fase-title-3');
+  const st3 = document.getElementById('fase-status-3');
+  const ic3 = document.getElementById('fase-icon-3');
+
+  if (actaRevisada) {
+    if (b3) { b3.textContent = '✓'; b3.className = 'fase-badge-num step-done'; }
+    if (s3) s3.textContent = 'PASO 3 • ✓ LISTO';
+    if (t3) t3.textContent = 'Ver / Imprimir Acta';
+    if (st3) { st3.className = 'fase-checklist-status status-done'; st3.innerHTML = '✓ LISTO: GENERADA'; }
+    if (ic3) ic3.textContent = '📑';
+  } else {
+    if (b3) { b3.textContent = '3'; b3.className = 'fase-badge-num'; }
+    if (s3) s3.textContent = 'PASO 3 • ACTA SENIAT';
+    if (t3) t3.textContent = 'Ver / Imprimir Acta';
+    if (st3) { st3.className = 'fase-checklist-status status-pending'; st3.innerHTML = '⚪ POR REVISAR'; }
+    if (ic3) ic3.textContent = '📄';
+  }
+
+  // 4. PASO 4: Sellado Formal (Cerrar Toma Física)
+  // Se detecta como LISTO si el estatus oficial es CERRADA
+  const b4 = document.getElementById('fase-badge-4');
+  const s4 = document.getElementById('fase-sub-4');
+  const t4 = document.getElementById('fase-title-4');
+  const st4 = document.getElementById('fase-status-4');
+  const ic4 = document.getElementById('fase-icon-4');
+
+  if (isCerrada) {
+    if (b4) { b4.textContent = '✓'; b4.className = 'fase-badge-num step-done'; }
+    if (s4) s4.textContent = 'PASO 4 • ✓ LISTO';
+    if (t4) t4.textContent = 'Toma Física Sellada';
+    if (st4) { st4.className = 'fase-checklist-status status-done'; st4.innerHTML = '✓ LISTO: SELLADA'; }
+    if (ic4) ic4.textContent = '🔒';
+  } else {
+    if (b4) { b4.textContent = '4'; b4.className = 'fase-badge-num'; }
+    if (s4) s4.textContent = 'PASO 4 • SELLADO FORMAL';
+    if (t4) t4.textContent = 'Cerrar Toma Física';
+    if (st4) { st4.className = 'fase-checklist-status status-pending'; st4.innerHTML = '⚪ PENDIENTE DE CIERRE'; }
+    if (ic4) ic4.textContent = '🔒';
+  }
+}
+
+function marcarConteoFisicoConcluido() {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede modificar el estado de avance del conteo.', 'warning');
+    return;
+  }
+  const yaListo = localStorage.getItem('dg67_conteo_listo_202610') === 'true';
+  if (yaListo) {
+    localStorage.removeItem('dg67_conteo_listo_202610');
+    showToast('🔓 Modo Conteo reactivado para ajustes y revisiones continuas.', 'info');
+  } else {
+    localStorage.setItem('dg67_conteo_listo_202610', 'true');
+    showToast('✅ Paso 2 marcado como LISTO (Conteo Físico en Tienda Concluido).', 'success');
+  }
+  actualizarChecklistFasesTomaFisica();
+}
+window.marcarConteoFisicoConcluido = marcarConteoFisicoConcluido;
 
 async function cargarEstatusTomaFisica(periodo = '2026-10') {
   try {
@@ -9199,6 +9342,10 @@ window.reabrirDeclaracionPeriodo = reabrirDeclaracionPeriodo;
 // ==========================================================================
 
 async function abrirModalActaOficial() {
+  state.actaRevisada = true;
+  try { localStorage.setItem('dg67_acta_revisada_202610', 'true'); } catch (e) {}
+  if (typeof actualizarChecklistFasesTomaFisica === 'function') actualizarChecklistFasesTomaFisica();
+
   const modal = document.getElementById('modal-acta-oficial');
   if (!modal) return;
   modal.style.display = 'flex';
@@ -9323,6 +9470,10 @@ async function abrirModalActaOficial() {
 }
 
 function imprimirActaOficial() {
+  state.actaRevisada = true;
+  try { localStorage.setItem('dg67_acta_revisada_202610', 'true'); } catch (e) {}
+  if (typeof actualizarChecklistFasesTomaFisica === 'function') actualizarChecklistFasesTomaFisica();
+
   const printArea = document.getElementById('print-area-acta-oficial');
   if (!printArea) return;
 
