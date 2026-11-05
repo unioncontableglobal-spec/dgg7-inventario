@@ -2338,6 +2338,24 @@ app.get('/api/fiscal/cruce-ventas-salidas', async (req, res) => {
   }
 });
 
+// Helper: Verifica si un período fiscal está declarado y cerrado ante el SENIAT
+async function isPeriodoDeclarado(periodo, db) {
+  if (!periodo) return false;
+  if (periodo <= '2026-09') return true;
+  try {
+    const res = await db.execute({
+      sql: "SELECT estatus FROM declaraciones_iva WHERE periodo = ? LIMIT 1",
+      args: [periodo]
+    });
+    if (res.rows && res.rows.length > 0) {
+      return res.rows[0].estatus === 'DECLARADO';
+    }
+  } catch (e) {
+    console.error('Error verificando estatus de período declarado en server:', e);
+  }
+  return false;
+}
+
 // Helper: Recalcula la Declaración Forma 30 para un período fiscal
 async function recalculateDeclaracionIva(periodo) {
   try {
@@ -2429,6 +2447,12 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
       return res.status(400).json({ error: 'Faltan campos obligatorios (Período, Fecha de Factura, RIF, Proveedor, Nro Factura)' });
+    }
+
+    if (await isPeriodoDeclarado(periodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${periodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite registrar compras en un período cerrado.`
+      });
     }
 
     const cleanRif = String(rif).trim().toUpperCase();
@@ -2555,6 +2579,12 @@ app.delete('/api/fiscal/libro-compras/:id', async (req, res) => {
     }
     const periodo = rowRes.rows[0].periodo;
 
+    if (await isPeriodoDeclarado(periodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${periodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite eliminar facturas de un período cerrado.`
+      });
+    }
+
     await db.execute({ sql: "DELETE FROM libro_compras WHERE id = ?", args: [id] });
     await recalculateDeclaracionIva(periodo);
 
@@ -2576,6 +2606,12 @@ app.post('/api/fiscal/libro-ventas', async (req, res) => {
 
     if (!periodo || !fecha) {
       return res.status(400).json({ error: 'El período fiscal y la fecha son obligatorios.' });
+    }
+
+    if (await isPeriodoDeclarado(periodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${periodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite registrar ventas en un período cerrado.`
+      });
     }
     const numZ = String(req.body.numero_reporte_z || '').trim();
     if (!numZ) {
@@ -2656,6 +2692,14 @@ app.post('/api/fiscal/libro-ventas', async (req, res) => {
 app.put('/api/fiscal/libro-ventas/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const existingZ = await db.execute({ sql: "SELECT periodo FROM libro_ventas WHERE id = ?", args: [id] });
+    const targetPeriodo = req.body.periodo || existingZ.rows[0]?.periodo;
+    if (await isPeriodoDeclarado(targetPeriodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
+      });
+    }
+
     const {
       periodo, fecha, factura_desde, factura_hasta, total_bs, total_divisa,
       exento_bs, exento_divisa, base_imponible_bs, base_imponible_divisa,
@@ -2746,11 +2790,290 @@ app.delete('/api/fiscal/libro-ventas/:id', async (req, res) => {
     }
     const periodo = rowRes.rows[0].periodo;
 
+    if (await isPeriodoDeclarado(periodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${periodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite eliminar registros de un período cerrado.`
+      });
+    }
+
     await db.execute({ sql: "DELETE FROM libro_ventas WHERE id = ?", args: [id] });
     await recalculateDeclaracionIva(periodo);
 
     res.json({ success: true, message: 'Registro eliminado del Libro de Ventas' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.9.1 Cambiar Estatus y Cerrar Declaración Forma 30 ante el SENIAT
+app.put('/api/fiscal/declaraciones/:periodo/estatus', async (req, res) => {
+  try {
+    const { periodo } = req.params;
+    const nuevoEstatus = String(req.body?.estatus || 'DECLARADO').toUpperCase();
+
+    if (!['DECLARADO', 'EN_PROCESO'].includes(nuevoEstatus)) {
+      return res.status(400).json({ error: 'Estatus inválido. Debe ser DECLARADO o EN_PROCESO' });
+    }
+
+    const [ventasRes, comprasRes, declPrev] = await Promise.all([
+      db.execute({
+        sql: `SELECT 
+                COALESCE(SUM(base_imponible_bs), 0) as ventas_base,
+                COALESCE(SUM(iva_bs), 0) as debito_fiscal,
+                COUNT(DISTINCT fecha) as dias_ventas
+              FROM libro_ventas WHERE periodo = ?`,
+        args: [periodo]
+      }),
+      db.execute({
+        sql: `SELECT 
+                COALESCE(SUM(base_imponible_bs), 0) as compras_base,
+                COALESCE(SUM(iva_bs), 0) as credito_fiscal,
+                COALESCE(SUM(iva_retenido_bs), 0) as iva_retenido,
+                COUNT(*) as total_facturas
+              FROM libro_compras WHERE periodo = ?`,
+        args: [periodo]
+      }),
+      db.execute({
+        sql: `SELECT excedente_siguiente_bs FROM declaraciones_iva WHERE periodo < ? ORDER BY periodo DESC LIMIT 1`,
+        args: [periodo]
+      })
+    ]);
+
+    const vBase = Number(ventasRes.rows[0]?.ventas_base || 0);
+    const vDeb = Number(ventasRes.rows[0]?.debito_fiscal || 0);
+    const cBase = Number(comprasRes.rows[0]?.compras_base || 0);
+    const cCred = Number(comprasRes.rows[0]?.credito_fiscal || 0);
+    const cRet = Number(comprasRes.rows[0]?.iva_retenido || 0);
+    const totalFac = Number(comprasRes.rows[0]?.total_facturas || 0);
+    const totalDias = Number(ventasRes.rows[0]?.dias_ventas || 0);
+
+    const excAnt = Number(declPrev.rows[0]?.excedente_siguiente_bs || 0);
+    const totCred = cCred + excAnt + cRet;
+    const saldo = vDeb - totCred;
+    const aPagar = saldo > 0 ? Number(saldo.toFixed(2)) : 0;
+    const excSig = saldo < 0 ? Number(Math.abs(saldo).toFixed(2)) : 0;
+
+    await db.execute({
+      sql: `UPDATE declaraciones_iva 
+            SET estatus = ?,
+                ventas_base_bs = ?,
+                debito_fiscal_bs = ?,
+                compras_base_bs = ?,
+                credito_fiscal_bs = ?,
+                iva_retenido_bs = ?,
+                excedente_anterior_bs = ?,
+                excedente_siguiente_bs = ?,
+                total_a_pagar_bs = ?,
+                total_compras_facturas = ?,
+                total_ventas_dias = ?
+            WHERE periodo = ?`,
+      args: [
+        nuevoEstatus,
+        vBase,
+        vDeb,
+        cBase,
+        cCred,
+        cRet,
+        excAnt,
+        excSig,
+        aPagar,
+        totalFac,
+        totalDias,
+        periodo
+      ]
+    });
+
+    res.json({
+      success: true,
+      periodo,
+      estatus: nuevoEstatus,
+      mensaje: nuevoEstatus === 'DECLARADO'
+        ? `Período fiscal ${periodo} marcado exitosamente como DECLARADO y CERRADO ante el SENIAT. Libros bloqueados en modo de sólo lectura.`
+        : `Período fiscal ${periodo} reabierto en estado EN_PROCESO.`
+    });
+  } catch (error) {
+    console.error('Error cambiando estatus de declaración:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.9.2 Generar Reporte de Acta Oficial de Inventario y Ajustes (SENIAT Art. 177 RISLR / Art. 27 LISLR)
+app.get('/api/auditoria/acta-oficial', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+
+    const [empRes, tasasRes, prodRes, movsRes] = await Promise.all([
+      db.execute("SELECT * FROM empresas WHERE id = 1"),
+      db.execute({
+        sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ? LIMIT 1",
+        args: [periodo]
+      }),
+      db.execute(`
+        SELECT 
+          p.id, p.codigo, p.descripcion, 
+          COALESCE(p.unidad_medida, 'UND') as unidad_medida,
+          COALESCE(a.nombre, 'PRINCIPAL') as almacen,
+          COALESCE(v.stock_actual, 0) as stock_teorico,
+          COALESCE(p.conteo_fisico_cierre, p.stock_auditado_fisico, v.stock_actual, 0) as stock_fisico,
+          COALESCE(p.costo_referencial_usd, 0) as costo_usd,
+          COALESCE(p.precio_venta_usd, 0) as precio_usd,
+          p.auditado,
+          p.observacion_auditoria,
+          p.fecha_auditoria
+        FROM productos p
+        LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id
+        LEFT JOIN almacenes a ON p.almacen_id = a.id
+        WHERE p.auditado = 1 OR p.conteo_fisico_cierre IS NOT NULL
+        ORDER BY p.codigo ASC
+      `),
+      db.execute({
+        sql: `
+          SELECT 
+            m.id as movimiento_id,
+            m.tipo,
+            m.subtipo,
+            m.fecha,
+            m.numero_documento,
+            m.observaciones,
+            m.tasa_bcv,
+            d.producto_id,
+            p.codigo,
+            p.descripcion,
+            d.cantidad,
+            d.costo_unitario_usd,
+            d.costo_unitario_ves,
+            d.total_linea_bs,
+            d.total_linea_divisa
+          FROM movimientos m
+          JOIN movimiento_detalles d ON m.id = d.movimiento_id
+          JOIN productos p ON d.producto_id = p.id
+          WHERE m.tipo IN ('ENTRADA_AJUSTE', 'SALIDA_AJUSTE')
+            AND strftime('%Y-%m', m.fecha) = ?
+          ORDER BY m.fecha ASC, p.codigo ASC
+        `,
+        args: [periodo]
+      })
+    ]);
+
+    const empresa = empRes.rows[0] || {
+      razon_social: 'INVERSIONES DG 67, C.A.',
+      rif: 'J-50700865-7',
+      direccion_fiscal: 'Av. Sur 11 entre Bolívar y Miranda, Casa 112, San Agustín del Norte, Caracas',
+      gerencia_regional: 'Gerencia Regional Libertador - SENIAT'
+    };
+
+    const tasaBcv = Number(tasasRes.rows[0]?.tasa_bcv || 889.58);
+    const fechaCierre = tasasRes.rows[0]?.fecha_cierre || `${periodo}-31`;
+
+    const itemsAjustados = [];
+    let totalBajasQty = 0;
+    let totalBajasBs = 0;
+    let totalBajasUsd = 0;
+    let totalAltasQty = 0;
+    let totalAltasBs = 0;
+    let totalAltasUsd = 0;
+
+    if (movsRes.rows && movsRes.rows.length > 0) {
+      for (const m of movsRes.rows) {
+        const isBaja = m.tipo === 'SALIDA_AJUSTE';
+        const qty = Number(m.cantidad || 0);
+        const cUsd = Number(m.costo_unitario_usd || 0);
+        const cBs = Number(m.costo_unitario_ves || (cUsd * tasaBcv));
+        const totBs = Number(m.total_linea_bs || (qty * cBs));
+        const totUsd = Number(m.total_linea_divisa || (qty * cUsd));
+
+        if (isBaja) {
+          totalBajasQty += qty;
+          totalBajasBs += totBs;
+          totalBajasUsd += totUsd;
+        } else {
+          totalAltasQty += qty;
+          totalAltasBs += totBs;
+          totalAltasUsd += totUsd;
+        }
+
+        itemsAjustados.push({
+          id: m.movimiento_id,
+          tipo_movimiento: m.tipo,
+          codigo: m.codigo,
+          descripcion: m.descripcion,
+          unidad_medida: 'UND',
+          diferencia: isBaja ? -qty : qty,
+          causa_legal: m.subtipo || (isBaja ? 'MERMA_DANO' : 'SOBRANTE_AUDITORIA'),
+          observaciones: m.observaciones || '',
+          fecha: m.fecha,
+          costo_unitario_usd: cUsd,
+          costo_unitario_bs: cBs,
+          total_bs: totBs,
+          total_usd: totUsd
+        });
+      }
+    } else {
+      for (const p of prodRes.rows) {
+        const teorico = Number(p.stock_teorico || 0);
+        const fisico = Number(p.stock_fisico || 0);
+        const diff = Number((fisico - teorico).toFixed(2));
+        if (diff !== 0) {
+          const isBaja = diff < 0;
+          const diffAbs = Math.abs(diff);
+          const cUsd = Number(p.costo_usd || 0);
+          const cBs = Number((cUsd * tasaBcv).toFixed(2));
+          const totBs = Number((diffAbs * cBs).toFixed(2));
+          const totUsd = Number((diffAbs * cUsd).toFixed(2));
+
+          if (isBaja) {
+            totalBajasQty += diffAbs;
+            totalBajasBs += totBs;
+            totalBajasUsd += totUsd;
+          } else {
+            totalAltasQty += diffAbs;
+            totalAltasBs += totBs;
+            totalAltasUsd += totUsd;
+          }
+
+          itemsAjustados.push({
+            producto_id: p.id,
+            codigo: p.codigo,
+            descripcion: p.descripcion,
+            unidad_medida: p.unidad_medida,
+            stock_teorico: teorico,
+            stock_fisico: fisico,
+            diferencia: diff,
+            causa_legal: isBaja ? 'EXTRAVIO_FALTANTE' : 'SOBRANTE_AUDITORIA',
+            observaciones: p.observacion_auditoria || '',
+            fecha: p.fecha_auditoria || fechaCierre,
+            costo_unitario_usd: cUsd,
+            costo_unitario_bs: cBs,
+            total_bs: totBs,
+            total_usd: totUsd
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      acta_numero: `ACTA-INV-${periodo.replace('-', '')}-01`,
+      periodo,
+      fecha_acta: fechaCierre,
+      tasa_bcv: tasaBcv,
+      empresa,
+      resumen: {
+        total_productos_auditados: prodRes.rows.length,
+        total_items_ajustados: itemsAjustados.length,
+        total_bajas_unidades: Number(totalBajasQty.toFixed(2)),
+        total_bajas_bs: Number(totalBajasBs.toFixed(2)),
+        total_bajas_usd: Number(totalBajasUsd.toFixed(2)),
+        total_altas_unidades: Number(totalAltasQty.toFixed(2)),
+        total_altas_bs: Number(totalAltasBs.toFixed(2)),
+        total_altas_usd: Number(totalAltasUsd.toFixed(2)),
+        impacto_neto_bs: Number((totalAltasBs - totalBajasBs).toFixed(2)),
+        impacto_neto_usd: Number((totalAltasUsd - totalBajasUsd).toFixed(2))
+      },
+      items: itemsAjustados
+    });
+  } catch (error) {
+    console.error('Error generando acta oficial de inventario:', error);
     res.status(500).json({ error: error.message });
   }
 });

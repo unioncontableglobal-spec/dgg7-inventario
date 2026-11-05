@@ -214,6 +214,10 @@
                 <span class="chip-role">OPERADOR</span>
                 <span class="chip-user">operador</span>
               </button>
+              <button type="button" class="quick-chip" onclick="fillQuickLogin('auditor', 'Auditoria2026*')">
+                <span class="chip-role" style="background:#10b981; color:#ffffff;">TOMA FÍSICA</span>
+                <span class="chip-user">auditor</span>
+              </button>
             </div>
           </div>
 
@@ -1829,6 +1833,16 @@
               <p class="subtitle">Conciliación de existencias físicas en tiempo real, ajustes de Kardex (Octubre 2026) y actualización de costos y precios de venta.</p>
             </div>
             <div class="header-buttons">
+              <button class="btn btn-navy" id="btn-generar-acta-oficial" onclick="abrirModalActaOficial()" style="display:flex; align-items:center; gap:8px; font-weight:800; background:#0B2447; color:#fff; box-shadow:0 2px 8px rgba(11,36,71,0.25);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>📄 Generar Acta Oficial de Toma Física (SENIAT)</span>
+              </button>
               <button class="btn btn-emerald" id="btn-modo-rapido-auditoria" onclick="iniciarModoAuditoriaRapida()" style="display:flex; align-items:center; gap:8px; font-weight:800; box-shadow:0 2px 8px rgba(16,185,129,0.3);">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -1844,6 +1858,18 @@
                 <span>Exportar Matriz (.XLSX)</span>
               </button>
             </div>
+          </div>
+
+          <!-- Banner Informativo para Rol Exclusivo de Auditor de Toma Física -->
+          <div id="pzero-banner-auditor-rol" style="display:none; background:#ecfdf5; border:1.5px solid #10b981; border-radius:10px; padding:12px 18px; margin-bottom:16px; align-items:center; justify-content:space-between; gap:12px; box-shadow:0 2px 6px rgba(16,185,129,0.1);">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:1.4rem;">👤</span>
+              <div>
+                <strong style="color:#065f46; font-size:0.9rem; display:block;">Sesión de Trabajo: Auditor de Toma Física y Conteo Real</strong>
+                <span style="color:#047857; font-size:0.76rem;">Usuario asignado exclusivamente a la verificación física de stock en tienda y levantamiento de diferencias para el Acta Oficial SENIAT.</span>
+              </div>
+            </div>
+            <span class="badge" style="background:#10b981; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 12px; border-radius:12px;">ACCESO AUTORIZADO</span>
           </div>
 
           <!-- 1. TARJETA DE PROGRESO GENERAL Y SEGUIMIENTO EN TIEMPO REAL -->
@@ -2206,6 +2232,15 @@
             </div>
           </div>
 
+          <!-- Banner Informativo de Período Declarado y Cerrado -->
+          <div id="banner-compras-declarado" style="display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:12px 16px; margin-bottom:16px; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+            <span style="font-size:1.4rem;">🔒</span>
+            <div>
+              <strong style="color:#166534; font-size:0.88rem; display:block;">Período Fiscal Declarado y Cerrado ante el SENIAT</strong>
+              <span style="color:#15803d; font-size:0.75rem;">Este período tributario ya fue declarado formalmente mediante la Forma 30. El Libro de Compras se encuentra protegido en modo de sólo lectura para salvaguardar la inmutabilidad fiscal.</span>
+            </div>
+          </div>
+
           <!-- KPI Summary Cards -->
           <div class="kpi-grid">
             <div class="kpi-card card-cyan">
@@ -2372,6 +2407,15 @@
                 </svg>
                 Exportar Excel
               </button>
+            </div>
+          </div>
+
+          <!-- Banner Informativo de Período Declarado y Cerrado -->
+          <div id="banner-ventas-declarado" style="display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:12px 16px; margin-bottom:16px; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+            <span style="font-size:1.4rem;">🔒</span>
+            <div>
+              <strong style="color:#166534; font-size:0.88rem; display:block;">Período Fiscal Declarado y Cerrado ante el SENIAT</strong>
+              <span style="color:#15803d; font-size:0.75rem;">Este período tributario ya fue declarado formalmente mediante la Forma 30. El Libro de Ventas se encuentra protegido en modo de sólo lectura para salvaguardar la inmutabilidad fiscal.</span>
             </div>
           </div>
 
@@ -2564,7 +2608,8 @@
                   style="padding: 6px 14px; font-size: 0.82rem; background: #dbeafe; color: #1e40af;">EN PROCESO</span>
               </div>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+              <div id="f30-accion-cierre-container"></div>
               <button class="btn btn-sm btn-secondary" onclick="irALibroDesdeForma30('compras')">
                 📥 Ver Libro de Compras de este Mes
               </button>
@@ -4099,6 +4144,170 @@
       </div>
       <div class="modal-footer btn-print-hide">
         <button class="btn btn-secondary" onclick="closeModal('modal-impresion-fiscal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ACTA OFICIAL DE CONSTATACIÓN FÍSICA Y AJUSTE DE INVENTARIO (SENIAT)
+       Fundamento: Art. 177 RISLR, Art. 27 LISLR y PA SNAT/2026/00093
+       ========================================================================== -->
+  <div class="modal-overlay" id="modal-acta-oficial" style="display: none;">
+    <div class="modal-box" style="max-width: 980px; width: 95%; max-height: 92vh; display: flex; flex-direction: column; padding: 0; background: #ffffff;">
+      <!-- Modal Header (Botones de Acción y Cierre) -->
+      <div class="modal-header no-print" style="padding: 14px 20px; border-bottom: 1.5px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.3rem;">📄</span>
+          <div>
+            <h3 style="margin: 0; color: #0B2447; font-size: 1.05rem; font-weight: 800;">Acta Oficial de Toma Física y Ajustes de Inventario</h3>
+            <span style="font-size: 0.74rem; color: #64748b;">Instrumento probatorio oficial conforme al Art. 177 RISLR y Providencia SENIAT SNAT/2026/00093</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" class="btn btn-navy" onclick="imprimirActaOficial()" style="display:flex; align-items:center; gap:6px; font-weight:800; background:#0B2447; color:#fff; padding:6px 14px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            <span>🖨️ Imprimir Acta Oficial</span>
+          </button>
+          <button type="button" class="modal-close" onclick="closeModal('modal-acta-oficial')" style="font-size: 1.5rem; line-height: 1;">&times;</button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Documento Formal Imprimible) -->
+      <div class="modal-body" id="print-area-acta-oficial" style="padding: 24px; overflow-y: auto; flex: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b;">
+        <!-- Membrete Corporativo y Ficha Fiscal -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0B2447; padding-bottom: 14px; margin-bottom: 16px;">
+          <div style="display: flex; gap: 14px; align-items: center;">
+            <img src="LOGOUCG.png" alt="Logo UCG" style="height: 52px; object-fit: contain;">
+            <div>
+              <div style="font-size: 0.68rem; font-weight: 800; color: #64748b; letter-spacing: 0.05em;">FIRMA ASESORA CONTABLE & AUDITORÍA TRIBUTARIA</div>
+              <strong style="font-size: 1.1rem; color: #0B2447; display: block;">UNIÓN CONTABLE GLOBAL</strong>
+              <div style="font-size: 0.72rem; color: #475569;">Caracas, República Bolivariana de Venezuela</div>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.7rem; font-weight: 800; color: #0369a1; background: #e0f2fe; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 4px;">CONTRIBUYENTE EMISOR</div>
+            <div style="font-weight: 800; font-size: 0.95rem; color: #0B2447;" id="acta-empresa-nombre">INVERSIONES DG 67, C.A.</div>
+            <div style="font-family: monospace; font-size: 0.82rem; font-weight: 700; color: #1e40af;" id="acta-empresa-rif">RIF: J-50700865-7</div>
+            <div style="font-size: 0.72rem; color: #64748b;" id="acta-empresa-dir">San Agustín del Norte, Caracas D.C.</div>
+          </div>
+        </div>
+
+        <!-- Título Formal del Acta Legal -->
+        <div style="text-align: center; margin-bottom: 16px;">
+          <h2 style="margin: 0; color: #0B2447; font-size: 1.15rem; font-weight: 900; letter-spacing: 0.02em;">
+            ACTA OFICIAL DE CONSTATACIÓN FÍSICA Y AJUSTE DE INVENTARIO
+          </h2>
+          <div style="font-size: 0.76rem; font-weight: 700; color: #475569; margin-top: 4px;">
+            Fundamento Legal: Art. 177 Reglamento ISLR (Decreto 1.808) • Art. 27 Numeral 2 LISLR • Providencia SENIAT PA SNAT/2026/00093
+          </div>
+        </div>
+
+        <!-- Ficha de Datos del Acta -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.78rem;">
+          <div>
+            <span style="color: #64748b; display: block; font-size: 0.7rem;">N° de Acta:</span>
+            <strong id="acta-numero" style="font-family: monospace; color: #0B2447; font-size: 0.85rem;">ACTA-INV-202610-01</strong>
+          </div>
+          <div>
+            <span style="color: #64748b; display: block; font-size: 0.7rem;">Fecha de Conteo / Corte:</span>
+            <strong id="acta-fecha" style="color: #0B2447;">31/10/2026</strong>
+          </div>
+          <div>
+            <span style="color: #64748b; display: block; font-size: 0.7rem;">Almacén / Tienda:</span>
+            <strong id="acta-almacen" style="color: #0B2447;">Almacén Principal DG 67</strong>
+          </div>
+          <div>
+            <span style="color: #64748b; display: block; font-size: 0.7rem;">Tasa Oficial BCV:</span>
+            <strong id="acta-tasa-bcv" style="color: #0369a1; font-family: monospace;">Bs. 889,58 / USD</strong>
+          </div>
+        </div>
+
+        <!-- Declaración Preliminar de Hechos -->
+        <div style="font-size: 0.8rem; line-height: 1.5; color: #334155; text-align: justify; margin-bottom: 16px; background: #fff; border-left: 3px solid #0B2447; padding-left: 12px;">
+          En la ciudad de Caracas, a los <strong id="acta-fecha-texto">31 días del mes de octubre de 2026</strong>, se reunieron en las instalaciones de la empresa <strong>INVERSIONES DG 67, C.A.</strong> los ciudadanos abajo firmantes en su carácter de Responsable de Toma Física en Almacén, Representante Legal y Contador Público Colegiado (Auditor Fiscal), con el propósito de practicar la toma física, constatación directa y conciliación de existencias en anaqueles y depósito. Se procedió al contraste del saldo teórico arrojado por el Kardex contra las cantidades físicas reales constatadas, determinándose las diferencias cuantitativas y justificándose legalmente conforme a la normativa tributaria vigente.
+        </div>
+
+        <!-- 4 Cuadros Ejecutivos de Resumen Bimonetario (SENIAT PA SNAT/2026/00093) -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;">
+          <div style="border: 1px solid #93c5fd; background: #eff6ff; border-radius: 8px; padding: 10px;">
+            <div style="font-size: 0.7rem; font-weight: 700; color: #1e40af;">ITEMS AUDITADOS</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #0B2447;" id="acta-res-auditados">0</div>
+            <div style="font-size: 0.68rem; color: #3b82f6;" id="acta-res-con-dif">0 con diferencias</div>
+          </div>
+          <div style="border: 1px solid #fca5a5; background: #fef2f2; border-radius: 8px; padding: 10px;">
+            <div style="font-size: 0.7rem; font-weight: 700; color: #991b1b;">TOTAL BAJAS (MERMAS/DAÑO)</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #b91c1c;" id="acta-res-bajas-qty">0.00 und</div>
+            <div style="font-size: 0.72rem; font-weight: 700; color: #991b1b;" id="acta-res-bajas-bs">Bs. 0,00 ($0.00 USD)</div>
+          </div>
+          <div style="border: 1px solid #86efac; background: #f0fdf4; border-radius: 8px; padding: 10px;">
+            <div style="font-size: 0.7rem; font-weight: 700; color: #166534;">TOTAL ALTAS (SOBRANTES)</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #15803d;" id="acta-res-altas-qty">0.00 und</div>
+            <div style="font-size: 0.72rem; font-weight: 700; color: #166534;" id="acta-res-altas-bs">Bs. 0,00 ($0.00 USD)</div>
+          </div>
+          <div style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 10px;">
+            <div style="font-size: 0.7rem; font-weight: 700; color: #475569;">IMPACTO NETO EN COSTO</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #0B2447;" id="acta-res-neto-bs">Bs. 0,00</div>
+            <div style="font-size: 0.72rem; color: #0369a1; font-weight: 700;" id="acta-res-neto-usd">$0.00 USD</div>
+          </div>
+        </div>
+
+        <!-- Tabla Discriminada de Mercancía Ajustada -->
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 0.8rem; font-weight: 800; color: #0B2447; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span>DISCRIMINACIÓN DE REPUESTOS Y JUSTIFICACIÓN LEGAL (ART. 177 RISLR):</span>
+            <span id="acta-tabla-total-items" style="font-size: 0.72rem; color: #64748b;">0 ítems con ajuste</span>
+          </div>
+          <div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.74rem;">
+              <thead>
+                <tr style="background: #0B2447; color: #ffffff; text-align: left;">
+                  <th style="padding: 6px 8px;">CÓDIGO</th>
+                  <th style="padding: 6px 8px;">DESCRIPCIÓN DEL REPUESTO</th>
+                  <th style="padding: 6px 8px; text-align: center;">DIF.</th>
+                  <th style="padding: 6px 8px;">CAUSA JUSTIFICADA (LEY)</th>
+                  <th style="padding: 6px 8px; text-align: right;">COSTO UNIT. (Bs.)</th>
+                  <th style="padding: 6px 8px; text-align: right;">TOTAL AJUSTE (Bs. / USD)</th>
+                </tr>
+              </thead>
+              <tbody id="acta-tbody-items">
+                <tr><td colspan="6" style="text-align: center; padding: 16px; color: #64748b;">No hay diferencias registradas en el período.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Certificación Jurada y Dictamen Técnico -->
+        <div style="border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 28px; background: #fdfdfd; font-size: 0.76rem; line-height: 1.45; color: #334155; text-align: justify;">
+          <strong>CERTIFICACIÓN Y FE DE JURAMENTO:</strong> Quienes suscriben certifican bajo fe de juramento que las cantidades físicas asentadas en esta acta corresponden con absoluta fidelidad a las existencias reales inspeccionadas al cierre mensual. Asimismo, se hace constar que los faltantes por avería, rotura, merma normal y desincorporación fueron inspeccionados in situ, autorizándose su correspondiente asiento de descargo en el Kardex y en la contabilidad fiscal de conformidad con el Art. 27 de la Ley de Impuesto Sobre la Renta y Art. 177 de su Reglamento.
+        </div>
+
+        <!-- Bloque de 3 Firmas Reglamentarias -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center; margin-top: 10px;">
+          <div style="border-top: 1.5px solid #0B2447; padding-top: 8px;">
+            <strong style="display: block; font-size: 0.82rem; color: #0B2447;">AUDITOR DE ALMACÉN</strong>
+            <span style="font-size: 0.72rem; color: #475569; display: block;">Responsable Toma Física en Tienda</span>
+            <span style="font-size: 0.68rem; color: #64748b;">Inversiones DG 67, C.A.</span>
+          </div>
+          <div style="border-top: 1.5px solid #0B2447; padding-top: 8px;">
+            <strong style="display: block; font-size: 0.82rem; color: #0B2447;">REPRESENTANTE LEGAL</strong>
+            <span style="font-size: 0.72rem; color: #475569; display: block;">Gerencia General</span>
+            <span style="font-size: 0.68rem; color: #64748b;">Inversiones DG 67, C.A.</span>
+          </div>
+          <div style="border-top: 1.5px solid #0B2447; padding-top: 8px;">
+            <strong style="display: block; font-size: 0.82rem; color: #0B2447;">CONTADOR PÚBLICO COLEGIADO</strong>
+            <span style="font-size: 0.72rem; color: #475569; display: block;">Auditor Fiscal y Tributario</span>
+            <span style="font-size: 0.68rem; color: #64748b;">Unión Contable Global • CPC</span>
+          </div>
+        </div>
+
+        <!-- Pie de Página Institucional -->
+        <div style="margin-top: 24px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 0.68rem; color: #94a3b8;">
+          Documento probatorio para fines fiscales ante el SENIAT y auditoría externa. Generado automáticamente por el Sistema SISCON-ES DG67.
+        </div>
       </div>
     </div>
   </div>

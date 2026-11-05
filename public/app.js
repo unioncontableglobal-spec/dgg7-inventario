@@ -93,14 +93,16 @@ function showApp(user) {
   if (loginScreen) loginScreen.style.display = 'none';
   if (appLayout) appLayout.style.display = 'flex';
 
+  state.currentUser = user || null;
+
   // Actualizar Ficha de Usuario en la Barra Lateral
   if (user) {
     const nameEl = document.getElementById('user-name-display');
     const roleEl = document.getElementById('user-role-display');
     const avatarEl = document.getElementById('user-avatar');
-    
+
     if (nameEl) nameEl.textContent = user.nombre || user.usuario;
-    if (roleEl) roleEl.textContent = (user.rol || 'USUARIO').toUpperCase();
+    if (roleEl) roleEl.textContent = (user.rol === 'TOMA_FISICA' ? 'TOMA FÍSICA' : (user.rol || 'USUARIO')).toUpperCase();
     if (avatarEl) {
       const initials = (user.nombre || user.usuario || 'DG')
         .split(' ')
@@ -110,12 +112,39 @@ function showApp(user) {
         .toUpperCase();
       avatarEl.textContent = initials || 'DG';
     }
+
+    // Restricción Estricta de Rol: TOMA_FISICA (Solo acceso a Toma Física y Ajuste)
+    const isAuditorTomaFisica = (user.rol === 'TOMA_FISICA');
+    document.querySelectorAll('#main-nav .nav-tab').forEach(tab => {
+      if (isAuditorTomaFisica) {
+        if (tab.dataset.tab === 'tab-punto-cero') {
+          tab.style.display = 'flex';
+        } else {
+          tab.style.display = 'none';
+        }
+      } else {
+        tab.style.display = 'flex';
+      }
+    });
+
+    document.querySelectorAll('#main-nav .nav-section-title').forEach(sec => {
+      sec.style.display = isAuditorTomaFisica ? 'none' : 'block';
+    });
+
+    const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
+    if (bannerAuditor) {
+      bannerAuditor.style.display = isAuditorTomaFisica ? 'flex' : 'none';
+    }
+
+    if (isAuditorTomaFisica) {
+      setTimeout(() => switchTab('tab-punto-cero'), 100);
+    }
   }
 }
 
 async function handleLoginSubmit(event) {
   if (event) event.preventDefault();
-  
+
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
   const alertEl = document.getElementById('login-error-alert');
@@ -228,7 +257,7 @@ async function initApp() {
   appInitialized = true;
   setupNavigation();
   setupEventListeners();
-  
+
   // Set default dates to today
   const today = new Date().toISOString().split('T')[0];
   ['ent-fecha', 'ent-fecha-factura', 'sal-fecha', 'ent-fecha-tasa', 'sal-fecha-tasa'].forEach(id => {
@@ -244,15 +273,32 @@ async function initApp() {
   await Promise.all([
     checkHealth(),
     loadTasasBcvPeriodo(),
+    loadDeclaracionesCache(),
     loadDashboard(),
     loadCatalogs(),
     loadProducts(),
     loadCruceDobleVia('2026-10')
   ]);
 
+  if (state.currentUser?.rol === 'TOMA_FISICA') {
+    switchTab('tab-punto-cero');
+  }
+
   // Add initial rows in forms
   addEntryRow();
   addExitRow();
+}
+
+async function loadDeclaracionesCache() {
+  try {
+    const res = await fetch('/api/fiscal/declaraciones-iva');
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      cacheDeclaracionesIva = data;
+    }
+  } catch (e) {
+    console.warn('Error cargando cache de declaraciones:', e);
+  }
 }
 
 async function loadTasasBcvPeriodo() {
@@ -381,8 +427,14 @@ function setupNavigation() {
 }
 
 function switchTab(tabId) {
+  // Enforzar restricción estricta para rol TOMA_FISICA
+  if (state.currentUser?.rol === 'TOMA_FISICA' && tabId !== 'tab-punto-cero') {
+    showToast('⚠️ Acceso restringido: Su usuario está autorizado exclusivamente para la Toma Física y Ajuste de Inventario.', 'warning');
+    tabId = 'tab-punto-cero';
+  }
+
   state.activeTab = tabId;
-  
+
   // Close mobile sidebar and backdrop if open
   document.getElementById('app-sidebar')?.classList.remove('sidebar-open');
   document.getElementById('sidebar-backdrop')?.classList.remove('active');
@@ -766,7 +818,7 @@ async function loadDashboard() {
     if (tbodyRecent && data.recientes) {
       tbodyRecent.innerHTML = data.recientes.map(m => {
         const isEntrada = m.tipo === 'ENTRADA_COMPRA' || m.tipo === 'INVENTARIO_INICIAL';
-        const typeBadge = isEntrada 
+        const typeBadge = isEntrada
           ? `<span class="badge-status badge-suficiente">📥 ${m.tipo === 'INVENTARIO_INICIAL' ? 'Inicial' : 'Compra'}</span>`
           : `<span class="badge-status badge-solicitar">📤 Venta</span>`;
         return `
@@ -883,7 +935,7 @@ async function loadProducts() {
       const statusBadge = isLow
         ? `<span class="badge-status badge-solicitar">⚠️ Solicitar</span>`
         : `<span class="badge-status badge-suficiente">✅ Suficiente</span>`;
-      
+
       const stockColor = isLow ? 'color: #fb7185; font-weight: 800;' : 'font-weight: 700;';
       const costoUsd = Number(p.costo_referencial_usd || 0);
       const valUsd = Number(p.valor_total_usd || 0);
@@ -931,7 +983,7 @@ function addEntryRow() {
   const tr = document.createElement('tr');
   tr.id = rowId;
 
-  const productOptions = state.products.map(p => 
+  const productOptions = state.products.map(p =>
     `<option value="${p.producto_id}" data-cost="${p.costo_referencial_usd}" data-desc="${p.descripcion}">${p.codigo} - ${p.descripcion}</option>`
   ).join('');
 
@@ -971,7 +1023,7 @@ function onEntryProductChange(rowId) {
   const costInput = tr.querySelector('.ent-cost-input');
   const costBsInput = tr.querySelector('.ent-cost-bs-input');
   const tasa = parseFloat(document.getElementById('ent-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo();
-  
+
   if (selectedOpt && selectedOpt.dataset.cost) {
     const cUsd = parseFloat(selectedOpt.dataset.cost) || 0;
     costInput.value = cUsd.toFixed(2);
@@ -1214,7 +1266,7 @@ function seleccionarFacturaCompraParaDetallar(compraId) {
   // 3. Seleccionar proveedor coincidente en select
   const selProv = document.getElementById('ent-proveedor');
   if (selProv && state.suppliers) {
-    const provMatch = state.suppliers.find(p => 
+    const provMatch = state.suppliers.find(p =>
       (compra.rif && p.rif && p.rif.toLowerCase().replace(/[^a-z0-9]/g, '') === compra.rif.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
       (compra.razon_social && p.razon_social && p.razon_social.toLowerCase() === compra.razon_social.toLowerCase())
     );
@@ -1401,7 +1453,7 @@ function validateExitRow(rowId) {
   const selectedOpt = select.options[select.selectedIndex];
   const qtyInput = tr.querySelector('.sal-qty-input');
   const stockElem = tr.querySelector('.sal-stock-disp');
-  
+
   if (selectedOpt && selectedOpt.dataset.stock !== undefined) {
     const stock = parseFloat(selectedOpt.dataset.stock);
     const qty = parseFloat(qtyInput.value || 0);
@@ -1735,7 +1787,7 @@ async function executeKardexSearch(codeOverride) {
     }
     document.getElementById('kardex-stock').textContent = `${data.producto.stock_actual} ${data.producto.unidad_medida}`;
     document.getElementById('kardex-cost').textContent = `Bs. ${cppVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ($${cppUsd.toFixed(2)})`;
-    
+
     const isLow = data.producto.estado_stock === 'SOLICITAR MATERIAL';
     const statusElem = document.getElementById('kardex-status');
     statusElem.textContent = isLow ? '⚠️ Solicitar Material' : '✅ Hay Suficiente';
@@ -2114,17 +2166,17 @@ async function loadMonthlyReport() {
 
     tbody.innerHTML = data.map(m => {
       const isInitial = m.periodo === '2025-12';
-      const nameBadge = isInitial 
+      const nameBadge = isInitial
         ? `<strong style="color: #0284c7;">🏁 ${m.nombre}</strong>`
         : `<strong>📅 ${m.nombre}</strong>`;
 
-      const comprasText = isInitial 
-        ? `<span class="badge-code" style="background: rgba(16, 185, 129, 0.15); color: #059669;">${m.entradasInicial} und (Inicial)</span>` 
+      const comprasText = isInitial
+        ? `<span class="badge-code" style="background: rgba(16, 185, 129, 0.15); color: #059669;">${m.entradasInicial} und (Inicial)</span>`
         : (m.compras > 0 ? `+${m.compras} und` : '-');
 
       const tasaCierre = Number(m.tasa_bcv_cierre || 68.50);
-      const comprasUsdText = isInitial 
-        ? `$${Number(m.comprasUsd || m.inicialUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Inicial)` 
+      const comprasUsdText = isInitial
+        ? `$${Number(m.comprasUsd || m.inicialUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Inicial)`
         : (m.comprasUsd > 0 ? `$${Number(m.comprasUsd).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-');
       const comprasBsText = isInitial
         ? `Bs. ${Number(m.comprasBs || m.inicialBs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} (Inicial)`
@@ -2433,7 +2485,7 @@ function switchFiscalSubtab(subtabId) {
 async function loadProveedoresFiscal() {
   const tbody = document.getElementById('tbody-proveedores-fiscal');
   if (!tbody) return;
-  
+
   try {
     const res = await fetch('/api/proveedores');
     const provs = await res.json();
@@ -2594,8 +2646,8 @@ function filterComprasFiscalTable() {
 
   const filtered = fiscalState.compras.filter(c => {
     return (c.razon_social || '').toLowerCase().includes(search) ||
-           (c.rif || '').toLowerCase().includes(search) ||
-           (c.nro_factura || '').toLowerCase().includes(search);
+      (c.rif || '').toLowerCase().includes(search) ||
+      (c.nro_factura || '').toLowerCase().includes(search);
   });
   renderComprasFiscal(filtered);
 }
@@ -2855,6 +2907,16 @@ function actualizarBannerSalidaPendientes(facturasPendientes) {
 // SUBMÓDULOS DE CONTROL FISCAL SENIAT (LIBRO COMPRAS, VENTAS, FORMA 30 Y PROV)
 // ==========================================================================
 
+let cacheDeclaracionesIva = [];
+
+function isPeriodoFiscalDeclarado(periodo) {
+  if (!periodo || periodo === 'TODOS') return false;
+  if (periodo <= '2026-09') return true;
+  const match = cacheDeclaracionesIva.find(d => d.periodo === periodo);
+  if (match) return match.estatus === 'DECLARADO';
+  return false;
+}
+
 const fiscalStateNew = {
   compras: [],
   ventas: [],
@@ -2898,6 +2960,16 @@ async function loadLibroCompras() {
   const periodo = document.getElementById('compras-periodo-select')?.value || '2026-09';
   const tipo = document.getElementById('compras-tipo-select')?.value || 'TODOS';
   syncMonthPills('pills-compras-bar', periodo);
+
+  const isCerrado = isPeriodoFiscalDeclarado(periodo);
+  const bannerComprasDeclarado = document.getElementById('banner-compras-declarado');
+  if (bannerComprasDeclarado) bannerComprasDeclarado.style.display = isCerrado ? 'flex' : 'none';
+  const btnNuevaCompra = document.querySelector('#tab-libro-compras .btn-navy');
+  const btnFacturaManual = document.querySelector('#tab-libro-compras button[onclick*="openModalNuevaCompra(\'MERCANCIA\')"]');
+  const btnLlamarMerc = document.querySelector('#tab-libro-compras button[onclick*="openModalImportarEntradaTienda"]');
+  if (btnNuevaCompra) btnNuevaCompra.style.display = isCerrado ? 'none' : 'inline-flex';
+  if (btnFacturaManual) btnFacturaManual.style.display = isCerrado ? 'none' : 'inline-flex';
+  if (btnLlamarMerc) btnLlamarMerc.style.display = isCerrado ? 'none' : 'inline-flex';
 
   document.getElementById('kpi-compras-periodo-sub').textContent = periodo === 'TODOS' ? 'Histórico Consolidado 2026' : `Período Fiscal: ${periodo}`;
 
@@ -2961,11 +3033,21 @@ function renderLibroCompras(compras) {
     const isGastos = c.aplica_inventario === 0;
     const isConciliado = c.estatus_conciliacion === 'CONCILIADO' || Boolean(c.movimiento_id);
     const tipoStr = String(c.tipo_servicio || 'MERCANCIA_REPUESTOS').replace(/_/g, ' ');
-    const tipoBadge = isGastos 
+    const tipoBadge = isGastos
       ? `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:10px;">📑 ${tipoStr}</span>`
-      : (isConciliado 
-          ? `<span class="badge" style="background:#dcfce7; color:#166534; font-size:10px;">✅ INV. CRUZADO (TIENDA)</span>`
-          : `<span class="badge" style="background:#e0f2fe; color:#0369a1; font-size:10px;">📦 REPUESTOS / MERCANCÍA</span>`);
+      : (isConciliado
+        ? `<span class="badge" style="background:#dcfce7; color:#166534; font-size:10px;">✅ INV. CRUZADO (TIENDA)</span>`
+        : `<span class="badge" style="background:#e0f2fe; color:#0369a1; font-size:10px;">📦 REPUESTOS / MERCANCÍA</span>`);
+
+    const isRowCerrada = isPeriodoFiscalDeclarado(c.periodo);
+    const actionsCol = isRowCerrada
+      ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10.5px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;">🔒 Declarado</span>`
+      : `<button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; background:#0B2447; color:#19A7CE; font-weight:800; margin-right:3px;">
+           🧾 Ret. ISLR
+         </button>
+         <button class="btn btn-sm btn-secondary" title="Eliminar Factura" onclick="eliminarFacturaCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
+           ✕
+         </button>`;
 
     return `
       <tr>
@@ -2997,12 +3079,7 @@ function renderLibroCompras(compras) {
         </td>
         <td>${tipoBadge}</td>
         <td class="text-center" style="white-space:nowrap;">
-          <button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; background:#0B2447; color:#19A7CE; font-weight:800; margin-right:3px;">
-            🧾 Ret. ISLR
-          </button>
-          <button class="btn btn-sm btn-secondary" title="Eliminar Factura" onclick="eliminarFacturaCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
-            ✕
-          </button>
+          ${actionsCol}
         </td>
       </tr>
     `;
@@ -3027,8 +3104,8 @@ function filterLibroComprasLocal() {
   }
   const filtered = fiscalStateNew.compras.filter(c => {
     return (c.razon_social || '').toLowerCase().includes(search) ||
-           (c.rif || '').toLowerCase().includes(search) ||
-           (c.nro_factura || '').toLowerCase().includes(search);
+      (c.rif || '').toLowerCase().includes(search) ||
+      (c.nro_factura || '').toLowerCase().includes(search);
   });
   renderLibroCompras(filtered);
 }
@@ -3047,10 +3124,10 @@ function openModalNuevaCompra(modo = 'MERCANCIA') {
   const periodoActivo = document.getElementById('compras-periodo-select')?.value;
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-comp-periodo').value = targetPeriodo;
-  
+
   const today = new Date().toISOString().slice(0, 10);
   const targetFecha = (targetPeriodo === '2026-10') ? '2026-10-15' : (targetPeriodo ? `${targetPeriodo}-15` : today);
-  
+
   document.getElementById('m-comp-fecha').value = targetFecha;
   if (document.getElementById('m-comp-fecha-recepcion')) {
     document.getElementById('m-comp-fecha-recepcion').value = targetFecha;
@@ -4032,6 +4109,15 @@ async function loadLibroVentas() {
 
   const periodo = document.getElementById('ventas-periodo-select')?.value || '2026-09';
   syncMonthPills('pills-ventas-bar', periodo);
+
+  const isCerrado = isPeriodoFiscalDeclarado(periodo);
+  const bannerVentasDeclarado = document.getElementById('banner-ventas-declarado');
+  if (bannerVentasDeclarado) bannerVentasDeclarado.style.display = isCerrado ? 'flex' : 'none';
+  const btnNuevaVenta = document.querySelector('#tab-libro-ventas .btn-navy');
+  if (btnNuevaVenta) btnNuevaVenta.style.display = isCerrado ? 'none' : 'inline-flex';
+  const btnLlamarSalida = document.querySelector('#tab-libro-ventas button[onclick*="openModalImportarSalidaTienda"]');
+  if (btnLlamarSalida) btnLlamarSalida.style.display = isCerrado ? 'none' : 'inline-flex';
+
   document.getElementById('kpi-ventas-periodo-sub').textContent = periodo === 'TODOS' ? 'Histórico Consolidado 2026' : `Período Fiscal: ${periodo}`;
 
   try {
@@ -4091,6 +4177,16 @@ function renderLibroVentas(ventas) {
     totIva += ivaBs; totIvaUsd += ivaUsd;
     totTotal += totalBs; totTotalUsd += totalUsd;
 
+    const isRowCerrada = isPeriodoFiscalDeclarado(v.periodo);
+    const actionsCol = isRowCerrada
+      ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10.5px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;">🔒 Declarado</span>`
+      : `<button class="btn btn-sm btn-navy" title="Editar / Completar Reporte Z" onclick="editarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; margin-right: 4px; font-weight:700;">
+           ✏️ Editar
+         </button>
+         <button class="btn btn-sm btn-secondary" title="Eliminar Registro" onclick="eliminarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
+           ✕
+         </button>`;
+
     return `
       <tr>
         <td class="text-center font-bold">${index + 1}</td>
@@ -4119,12 +4215,7 @@ function renderLibroVentas(ventas) {
           <div style="font-size:0.72rem; color:#059669;">($${totalUsd.toFixed(2)})</div>
         </td>
         <td class="text-center" style="white-space:nowrap;">
-          <button class="btn btn-sm btn-navy" title="Editar / Completar Reporte Z" onclick="editarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; margin-right: 4px; font-weight:700;">
-            ✏️ Editar
-          </button>
-          <button class="btn btn-sm btn-secondary" title="Eliminar Registro" onclick="eliminarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
-            ✕
-          </button>
+          ${actionsCol}
         </td>
       </tr>
     `;
@@ -5310,47 +5401,76 @@ async function loadDeclaracionDetalle() {
     const totCredDeducible = cCred + excAnt;
 
     // Débitos
-    document.getElementById('f30-ventas-base').textContent = `Bs. ${vBase.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
-    document.getElementById('f30-ventas-debito').textContent = `Bs. ${vDeb.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+    document.getElementById('f30-ventas-base').textContent = `Bs. ${vBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-ventas-debito').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
     document.getElementById('f30-ventas-exento').textContent = `0,00 Bs.`;
     document.getElementById('f30-ventas-dias').textContent = `${vDias} días facturados`;
-    document.getElementById('f30-total-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+    document.getElementById('f30-total-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
 
     // Créditos
-    document.getElementById('f30-compras-base').textContent = `Bs. ${cBase.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
-    document.getElementById('f30-compras-credito').textContent = `Bs. ${cCred.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
-    document.getElementById('f30-excedente-anterior').textContent = `Bs. ${excAnt.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+    document.getElementById('f30-compras-base').textContent = `Bs. ${cBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-compras-credito').textContent = `Bs. ${cCred.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-excedente-anterior').textContent = `Bs. ${excAnt.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
     document.getElementById('f30-compras-facs').textContent = `${cFacs} facturas`;
-    document.getElementById('f30-total-creditos').textContent = `Bs. ${totCredDeducible.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+    document.getElementById('f30-total-creditos').textContent = `Bs. ${totCredDeducible.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
 
     // Resultado
-    document.getElementById('f30-res-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
-    document.getElementById('f30-res-creditos').textContent = `- Bs. ${totCredDeducible.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
-    document.getElementById('f30-res-retenciones').textContent = `- Bs. ${cRet.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+    document.getElementById('f30-res-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-res-creditos').textContent = `- Bs. ${totCredDeducible.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-res-retenciones').textContent = `- Bs. ${cRet.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
 
     const badge = document.getElementById('decl-status-badge');
     const resBox = document.getElementById('f30-box-resultado');
     const resLbl = document.getElementById('f30-lbl-resultado');
     const resVal = document.getElementById('f30-val-resultado');
 
-    if (periodo === '2026-10') {
+    cacheDeclaracionesIva = historyData;
+
+    const declActual = historyData.find(item => item.periodo === periodo) || d;
+    const isDeclarado = (declActual && declActual.estatus === 'DECLARADO') || (periodo <= '2026-09');
+
+    if (isDeclarado) {
+      badge.textContent = 'DECLARADO ANTE SENIAT (CERRADO)';
+      badge.style.background = '#dcfce7';
+      badge.style.color = '#15803d';
+    } else {
       badge.textContent = 'MES ACTUAL EN PREPARACIÓN';
       badge.style.background = '#dbeafe';
       badge.style.color = '#1e40af';
-    } else {
-      badge.textContent = 'DECLARADO ANTE SENIAT';
-      badge.style.background = '#dcfce7';
-      badge.style.color = '#15803d';
+    }
+
+    const accionCierreContainer = document.getElementById('f30-accion-cierre-container');
+    if (accionCierreContainer) {
+      if (!isDeclarado) {
+        accionCierreContainer.innerHTML = `
+          <button type="button" class="btn btn-navy" onclick="cerrarDeclaracionPeriodo('${periodo}')" 
+            style="background:#0B2447; color:#fff; font-weight:800; padding:6px 14px; font-size:0.78rem; box-shadow:0 2px 6px rgba(11,36,71,0.25);">
+            🔒 Finalizar y Cerrar Declaración ${periodo} (SENIAT)
+          </button>
+        `;
+      } else {
+        accionCierreContainer.innerHTML = `
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span class="badge" style="background:#dcfce7; color:#15803d; font-weight:800; font-size:0.75rem; padding:6px 12px; border:1px solid #86efac;">
+              ✅ PERÍODO CERRADO (LIBROS BLOQUEADOS)
+            </span>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="reabrirDeclaracionPeriodo('${periodo}')" 
+              style="font-size:0.72rem; padding:4px 8px;" title="Reapertura excepcional para rectificativa fiscal">
+              🔓 Reabrir
+            </button>
+          </div>
+        `;
+      }
     }
 
     if (aPagar > 0) {
       resBox.className = 'highlight-box-pagar';
       resLbl.textContent = 'TOTAL IMPUESTO A PAGAR AL SENIAT:';
-      resVal.textContent = `Bs. ${aPagar.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+      resVal.textContent = `Bs. ${aPagar.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
     } else {
       resBox.className = 'highlight-box-favor';
       resLbl.textContent = 'EXCEDENTE DE CRÉDITO PARA EL MES SIGUIENTE:';
-      resVal.textContent = `Bs. ${excSig.toLocaleString('es-VE', {minimumFractionDigits:2})}`;
+      resVal.textContent = `Bs. ${excSig.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
     }
 
     // Render Historical Table
@@ -5422,14 +5542,14 @@ function renderDeclaracionesHistorico(declaraciones) {
     return `
       <tr style="cursor: pointer; ${isSelected ? 'background: #eff6ff; border-left: 3px solid #0A5CF5;' : ''}" onclick="seleccionarPeriodoDeclaracion('${d.periodo}')" title="Haz clic para ver el detalle de Forma 30 de ${d.periodo}">
         <td class="font-bold" style="color: var(--ucg-navy); white-space: nowrap;">${nombresMes[d.periodo] || d.periodo}</td>
-        <td class="text-right font-mono">Bs. ${Number(d.ventas_base_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
-        <td class="text-right font-mono font-bold" style="color: #0A5CF5;">Bs. ${Number(d.debito_fiscal_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
-        <td class="text-right font-mono">Bs. ${Number(d.compras_base_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
-        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${Number(d.credito_fiscal_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
-        <td class="text-right font-mono" style="color: #0284c7;">Bs. ${Number(d.excedente_anterior_bs || 0).toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
-        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${excSigNum.toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
+        <td class="text-right font-mono">Bs. ${Number(d.ventas_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #0A5CF5;">Bs. ${Number(d.debito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono">Bs. ${Number(d.compras_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${Number(d.credito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono" style="color: #0284c7;">Bs. ${Number(d.excedente_anterior_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${excSigNum.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
         <td class="text-right font-mono font-bold" style="color: ${aPagarNum > 0 ? '#be123c' : '#64748b'};">
-          ${aPagarNum > 0 ? `Bs. ${aPagarNum.toLocaleString('es-VE', {minimumFractionDigits:2})}` : '0,00 Bs.'}
+          ${aPagarNum > 0 ? `Bs. ${aPagarNum.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '0,00 Bs.'}
         </td>
         <td class="text-center">${statusPill}</td>
         <td class="text-center" style="white-space: nowrap;" onclick="event.stopPropagation();">
@@ -5788,7 +5908,7 @@ function filterProveedoresPanel() {
   if (search) {
     filtered = filtered.filter(p => {
       return (p.razon_social || '').toLowerCase().includes(search) ||
-             (p.rif || '').toLowerCase().includes(search);
+        (p.rif || '').toLowerCase().includes(search);
     });
   }
   renderProveedoresDirectorio(filtered);
@@ -7884,6 +8004,223 @@ async function descargarMatrizAuditoria() {
     showToast(err.message, 'error');
   }
 }
+
+// ==========================================================================
+// CIERRE Y BLOQUEO DE DECLARACIÓN FORMA 30 Y LIBROS FISCALES
+// ==========================================================================
+
+async function cerrarDeclaracionPeriodo(periodoParam) {
+  const periodo = periodoParam || document.getElementById('decl-periodo-select')?.value || '2026-10';
+
+  const confirmMsg = `¿Está seguro de finalizar y cerrar formalmente la Declaración Forma 30 de ${periodo} ante el SENIAT?\n\nAl marcar como DECLARADO:\n1. Los Libros de Compras y Ventas de ${periodo} quedarán cerrados y bloqueados en modo de sólo lectura.\n2. Los montos de la Forma 30 quedarán consolidados permanentemente.`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    showToast(`Finalizando y cerrando período fiscal ${periodo}...`, 'info');
+    const res = await fetch(`/api/fiscal/declaraciones/${periodo}/estatus`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estatus: 'DECLARADO' })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cerrar declaración');
+
+    showToast(`✅ Período fiscal ${periodo} cerrado formalmente. Libros protegidos contra modificaciones.`, 'success');
+
+    // Actualizar cache y recargar vistas
+    await Promise.all([
+      loadDeclaracionDetalle(),
+      loadLibroCompras(),
+      loadLibroVentas()
+    ]);
+  } catch (err) {
+    console.error('Error cerrando declaración:', err);
+    showToast(err.message, 'error');
+  }
+}
+
+async function reabrirDeclaracionPeriodo(periodoParam) {
+  const periodo = periodoParam || document.getElementById('decl-periodo-select')?.value || '2026-10';
+
+  const confirmMsg = `¿Desea reabrir excepcionalmente el período fiscal ${periodo} para aplicar una rectificativa fiscal o corrección de comprobantes?`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    showToast(`Reabriendo período fiscal ${periodo}...`, 'info');
+    const res = await fetch(`/api/fiscal/declaraciones/${periodo}/estatus`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estatus: 'EN_PROCESO' })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al reabrir declaración');
+
+    showToast(`🔓 Período fiscal ${periodo} reabierto en estado EN PROCESO.`, 'info');
+
+    await Promise.all([
+      loadDeclaracionDetalle(),
+      loadLibroCompras(),
+      loadLibroVentas()
+    ]);
+  } catch (err) {
+    console.error('Error reabriendo declaración:', err);
+    showToast(err.message, 'error');
+  }
+}
+
+window.cerrarDeclaracionPeriodo = cerrarDeclaracionPeriodo;
+window.reabrirDeclaracionPeriodo = reabrirDeclaracionPeriodo;
+
+// ==========================================================================
+// ACTA OFICIAL DE CONSTATACIÓN FÍSICA Y AJUSTE DE INVENTARIO (Art. 177 RISLR)
+// ==========================================================================
+
+async function abrirModalActaOficial() {
+  const modal = document.getElementById('modal-acta-oficial');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  const tbody = document.getElementById('acta-tbody-items');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Generando Acta Oficial y calculando diferencias de inventario...</td></tr>`;
+
+  try {
+    const res = await fetch('/api/auditoria/acta-oficial?periodo=2026-10');
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Error al obtener datos del Acta Oficial');
+    }
+
+    const { empresa, resumen, items, acta_numero, fecha_acta, tasa_bcv } = data;
+
+    // Poblar Encabezado
+    if (document.getElementById('acta-numero')) document.getElementById('acta-numero').textContent = acta_numero;
+    if (document.getElementById('acta-fecha')) document.getElementById('acta-fecha').textContent = fecha_acta;
+    if (document.getElementById('acta-fecha-texto')) document.getElementById('acta-fecha-texto').textContent = `31 días del mes de octubre de 2026`;
+    if (document.getElementById('acta-almacen')) document.getElementById('acta-almacen').textContent = `Almacén Principal DG 67 (Tienda y Depósito)`;
+    if (document.getElementById('acta-tasa-bcv')) document.getElementById('acta-tasa-bcv').textContent = `Bs. ${fmtBs(tasa_bcv)} / USD`;
+
+    if (empresa) {
+      if (document.getElementById('acta-empresa-nombre')) document.getElementById('acta-empresa-nombre').textContent = empresa.razon_social || 'INVERSIONES DG 67, C.A.';
+      if (document.getElementById('acta-empresa-rif')) document.getElementById('acta-empresa-rif').textContent = `RIF: ${empresa.rif || 'J-50700865-7'}`;
+      if (document.getElementById('acta-empresa-dir')) document.getElementById('acta-empresa-dir').textContent = empresa.direccion_fiscal || 'San Agustín del Norte, Caracas D.C.';
+    }
+
+    // Poblar Resumen Cuantitativo Bimonetario
+    if (document.getElementById('acta-res-auditados')) document.getElementById('acta-res-auditados').textContent = resumen.total_productos_auditados;
+    if (document.getElementById('acta-res-con-dif')) document.getElementById('acta-res-con-dif').textContent = `${resumen.total_items_ajustados} con diferencias`;
+
+    if (document.getElementById('acta-res-bajas-qty')) document.getElementById('acta-res-bajas-qty').textContent = `${Number(resumen.total_bajas_unidades).toFixed(2)} und`;
+    if (document.getElementById('acta-res-bajas-bs')) document.getElementById('acta-res-bajas-bs').textContent = `Bs. ${fmtBs(resumen.total_bajas_bs)} ($${fmtUsd(resumen.total_bajas_usd)} USD)`;
+
+    if (document.getElementById('acta-res-altas-qty')) document.getElementById('acta-res-altas-qty').textContent = `${Number(resumen.total_altas_unidades).toFixed(2)} und`;
+    if (document.getElementById('acta-res-altas-bs')) document.getElementById('acta-res-altas-bs').textContent = `Bs. ${fmtBs(resumen.total_altas_bs)} ($${fmtUsd(resumen.total_altas_usd)} USD)`;
+
+    if (document.getElementById('acta-res-neto-bs')) document.getElementById('acta-res-neto-bs').textContent = `Bs. ${fmtBs(resumen.impacto_neto_bs)}`;
+    if (document.getElementById('acta-res-neto-usd')) document.getElementById('acta-res-neto-usd').textContent = `$${fmtUsd(resumen.impacto_neto_usd)} USD`;
+
+    if (document.getElementById('acta-tabla-total-items')) {
+      document.getElementById('acta-tabla-total-items').textContent = `${items.length} ítems con ajuste de stock`;
+    }
+
+    // Nombres legibles de causas legales
+    const causasLegalesDict = {
+      'MERCANCIA_DANADA': '💥 Mercancía Dañada / Deterioro / Avería',
+      'MERMA_OPERATIVA': '📉 Merma / Desgaste Operativo Normal',
+      'OBSOLESCENCIA': '📦 Obsolescencia / Repuesto Descontinuado',
+      'EXTRAVIO_FALTANTE': '🔍 Faltante en Toma Física (Auditoría)',
+      'SOBRANTE_AUDITORIA': '🔍 Sobrante Físico en Almacén',
+      'OMISION_COMPRA': '📥 Omisión Histórica de Factura Compra',
+      'ERROR_CONTEO_PREVIO': '✏️ Corrección de Conteo Administrativo',
+      'RETIRO_AUTOCONSUMO': '👤 Retiro / Autoconsumo (Art. 4 LIVA)',
+      'DEVOLUCION_CLIENTE': '🔄 Reingreso por Garantía / Devolución'
+    };
+
+    // Renderizar Tabla
+    if (!items || items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:18px; color:#166534; font-weight:700;">✅ No existen diferencias de inventario pendientes de ajuste. Existencias teóricas y físicas cuadradas al 100%.</td></tr>`;
+    } else {
+      tbody.innerHTML = items.map((it, idx) => {
+        const isBaja = it.diferencia < 0;
+        const diffColor = isBaja ? '#b91c1c' : '#15803d';
+        const diffSign = it.diferencia > 0 ? `+${it.diferencia.toFixed(2)}` : `${it.diferencia.toFixed(2)}`;
+        const causaLabel = causasLegalesDict[it.causa_legal] || it.causa_legal || 'Ajuste de Existencias';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 0 ? 'background:#fcfcfc;' : 'background:#ffffff;'}">
+            <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: #0B2447;">${it.codigo}</td>
+            <td style="padding: 6px 8px;">
+              <strong style="color: #1e293b;">${it.descripcion}</strong>
+              ${it.observaciones ? `<div style="font-size: 0.68rem; color: #64748b;">${it.observaciones}</div>` : ''}
+            </td>
+            <td style="padding: 6px 8px; text-align: center; font-weight: 800; font-family: monospace; color: ${diffColor};">
+              ${diffSign}
+            </td>
+            <td style="padding: 6px 8px; font-size: 0.72rem; color: #475569;">
+              ${causaLabel}
+            </td>
+            <td style="padding: 6px 8px; text-align: right; font-family: monospace;">
+              <div>Bs. ${fmtBs(it.costo_unitario_bs)}</div>
+              <div style="font-size: 0.65rem; color: #64748b;">($${fmtUsd(it.costo_unitario_usd)})</div>
+            </td>
+            <td style="padding: 6px 8px; text-align: right; font-family: monospace; font-weight: 700; color: ${diffColor};">
+              <div>Bs. ${fmtBs(it.total_bs)}</div>
+              <div style="font-size: 0.68rem; color: #0369a1;">($${fmtUsd(it.total_usd)} USD)</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+  } catch (error) {
+    console.error('Error cargando acta:', error);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:#b91c1c;">Error generando el Acta Oficial: ${error.message}</td></tr>`;
+    showToast(error.message, 'error');
+  }
+}
+
+function imprimirActaOficial() {
+  const printArea = document.getElementById('print-area-acta-oficial');
+  if (!printArea) return;
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Acta Oficial de Constatación Física y Ajuste de Inventario - DG67</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; font-size: 11px; color: #1e293b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
+        th { background: #0B2447; color: #ffffff; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        @media print {
+          body { margin: 0; padding: 10px; }
+          .no-print { display: none !important; }
+        }
+      </style>
+    </head>
+    <body>
+      ${printArea.innerHTML}
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.close();
+  }, 400);
+}
+
+window.abrirModalActaOficial = abrirModalActaOficial;
+window.imprimirActaOficial = imprimirActaOficial;
+
 
 
 
