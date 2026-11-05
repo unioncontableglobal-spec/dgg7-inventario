@@ -411,6 +411,84 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, id: ins.rows[0]?.id, message: 'Proveedor creado' });
     }
 
+    if (path.startsWith('/api/proveedores/') && path.endsWith('/clasificacion') && method === 'PATCH') {
+      const id = path.replace('/api/proveedores/', '').replace('/clasificacion', '');
+      const b = await request.json();
+      const { tipo_servicio, aplica_inventario } = b;
+      const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
+
+      await db.execute({
+        sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ? WHERE id = ?`,
+        args: [tipo_servicio, aplicaInvInt, id]
+      });
+
+      const nuevoEstatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
+      await db.execute({
+        sql: `
+          UPDATE libro_compras 
+          SET tipo_servicio = ?, 
+              aplica_inventario = ?,
+              estatus_conciliacion = CASE WHEN estatus_conciliacion = 'CONCILIADO' THEN 'CONCILIADO' ELSE ? END,
+              observaciones_cruce = CASE 
+                WHEN ? = 0 THEN 'Clasificado como Gasto/Servicio - No afecta inventario físico'
+                ELSE 'Clasificado como Proveedor de Mercancía - Requiere cuadre con entrada'
+              END
+          WHERE proveedor_id = ?
+        `,
+        args: [tipo_servicio, aplicaInvInt, nuevoEstatus, aplicaInvInt, id]
+      });
+
+      return jsonResponse({
+        success: true,
+        message: `Proveedor ID #${id} clasificado como ${aplicaInvInt ? 'Proveedor de Mercancía' : 'Gasto/Servicio'}`
+      });
+    }
+
+    if (path.startsWith('/api/proveedores/') && !path.endsWith('/clasificacion') && method === 'PUT') {
+      const id = path.replace('/api/proveedores/', '');
+      const b = await request.json();
+      const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr } = b;
+      const cleanRif = rif ? String(rif).trim().toUpperCase() : null;
+      const cleanRazon = razon_social ? String(razon_social).trim() : null;
+      const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
+      const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
+      const retencionNum = Number(porcentaje_retencion) || 75.0;
+
+      await db.execute({
+        sql: `UPDATE proveedores 
+              SET rif = COALESCE(?, rif),
+                  razon_social = COALESCE(?, razon_social),
+                  tipo_servicio = ?,
+                  aplica_inventario = ?,
+                  porcentaje_retencion = ?,
+                  telefono = ?,
+                  email = ?,
+                  tipo_persona = COALESCE(?, tipo_persona),
+                  direccion_fiscal = COALESCE(?, direccion_fiscal),
+                  codigo_concepto_islr = COALESCE(?, codigo_concepto_islr)
+              WHERE id = ?`,
+        args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, tipo_persona || null, direccion_fiscal !== undefined ? direccion_fiscal : null, codigo_concepto_islr || null, id]
+      });
+
+      const nuevoEstatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
+      await db.execute({
+        sql: `
+          UPDATE libro_compras 
+          SET tipo_servicio = ?, 
+              aplica_inventario = ?,
+              estatus_conciliacion = CASE WHEN estatus_conciliacion = 'CONCILIADO' THEN 'CONCILIADO' ELSE ? END,
+              observaciones_cruce = CASE 
+                WHEN ? = 0 THEN 'Clasificado como Gasto/Servicio - No afecta inventario físico'
+                ELSE 'Clasificado como Proveedor de Mercancía - Requiere cuadre con entrada'
+              END
+          WHERE proveedor_id = ?
+        `,
+        args: [cleanTipo, aplicaInvInt, nuevoEstatus, aplicaInvInt, id]
+      });
+
+      return jsonResponse({ success: true, message: 'Proveedor actualizado' });
+    }
+
     // ----------------------------------------------------
     // PRODUCTOS & KARDEX
     // ----------------------------------------------------
@@ -566,6 +644,173 @@ export async function onRequest(context) {
       });
 
       return jsonResponse(enriched);
+    }
+
+    if (path.startsWith('/api/kardex/') && method === 'GET') {
+      const codigo = decodeURIComponent(path.replace('/api/kardex/', ''));
+      const metodoQuery = String(url.searchParams.get('metodo') || '').toUpperCase();
+
+      const [prodRes, cfgRes] = await Promise.all([
+        db.execute({
+          sql: `SELECT * FROM vista_inventario_actual WHERE UPPER(codigo) = UPPER(?)`,
+          args: [codigo]
+        }),
+        db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+      ]);
+
+      if (prodRes.rows.length === 0) {
+        return jsonResponse({ error: 'Producto no encontrado' }, 404);
+      }
+
+      const metodoActivo = (metodoQuery === 'PEPS' || metodoQuery === 'FIFO')
+        ? 'PEPS'
+        : (metodoQuery === 'CPP' ? 'CPP' : (cfgRes.rows[0]?.metodo_valoracion_kardex || 'CPP'));
+
+      const prod = prodRes.rows[0];
+      const refUsd = Number(prod.costo_referencial_usd || 0);
+
+      const movsRes = await db.execute({
+        sql: `
+          SELECT 
+            m.id as movimiento_id,
+            m.fecha,
+            m.tipo,
+            COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) as subtipo,
+            m.numero_documento,
+            COALESCE(m.nro_control, '-') as nro_control,
+            COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
+            COALESCE(NULLIF(md.tasa_bcv_operacion, 0), m.tasa_bcv, 68.50) as tasa_bcv,
+            COALESCE(m.fecha_tasa_bcv, m.fecha) as fecha_tasa_bcv,
+            COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as tercero,
+            COALESCE(pr.rif, '-') as tercero_rif,
+            md.cantidad,
+            COALESCE(NULLIF(md.costo_unitario_divisa, 0), md.costo_unitario_usd) as costo_unitario_usd,
+            COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_ves) as costo_unitario_ves,
+            CASE WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as entrada,
+            CASE WHEN m.tipo = 'SALIDA_VENTA' OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') NOT LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as salida
+          FROM movimiento_detalles md
+          JOIN movimientos m ON md.movimiento_id = m.id
+          LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
+          WHERE md.producto_id = ?
+          ORDER BY m.fecha ASC, m.id ASC
+        `,
+        args: [prod.producto_id]
+      });
+
+      let balance = 0;
+      let cppUsd = refUsd;
+      let cppVes = Number((refUsd * 52.02).toFixed(2));
+      let valTotalUsd = 0;
+      let valTotalVes = 0;
+      const fifoQueue = [];
+
+      const history = movsRes.rows.map(row => {
+        const ent = Number(row.entrada || 0);
+        const sal = Number(row.salida || 0);
+        const tasa = Number(row.tasa_bcv || 68.50);
+        const unitUsd = Number(row.costo_unitario_usd || 0) > 0 ? Number(row.costo_unitario_usd) : (cppUsd > 0 ? cppUsd : refUsd);
+        const unitVes = Number(row.costo_unitario_ves || 0) > 0 ? Number(row.costo_unitario_ves) : Number((unitUsd * tasa).toFixed(2));
+
+        let movCostoUnitVes = cppVes;
+        let movCostoTotalVes = 0;
+        let movCostoUnitUsd = cppUsd;
+        let movCostoTotalUsd = 0;
+
+        if (ent > 0) {
+          movCostoUnitUsd = unitUsd;
+          movCostoTotalUsd = ent * unitUsd;
+          movCostoUnitVes = unitVes;
+          movCostoTotalVes = ent * unitVes;
+
+          fifoQueue.push({ qty: ent, unitUsd, unitVes });
+
+          const newStock = balance + ent;
+          if (metodoActivo === 'PEPS') {
+            balance = newStock;
+            valTotalUsd = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitUsd, 0);
+            valTotalVes = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitVes, 0);
+            cppUsd = balance > 0 ? valTotalUsd / balance : unitUsd;
+            cppVes = balance > 0 ? valTotalVes / balance : unitVes;
+          } else {
+            if (newStock > 0) {
+              cppUsd = (valTotalUsd + movCostoTotalUsd) / newStock;
+              cppVes = (valTotalVes + movCostoTotalVes) / newStock;
+            }
+            balance = newStock;
+            valTotalUsd = balance * cppUsd;
+            valTotalVes = balance * cppVes;
+          }
+        } else if (sal > 0) {
+          if (metodoActivo === 'PEPS') {
+            let rem = sal;
+            let costUsdAcc = 0;
+            let costVesAcc = 0;
+            while (rem > 0 && fifoQueue.length > 0) {
+              const lot = fifoQueue[0];
+              const take = Math.min(rem, lot.qty);
+              costUsdAcc += take * lot.unitUsd;
+              costVesAcc += take * lot.unitVes;
+              lot.qty -= take;
+              rem -= take;
+              if (lot.qty <= 0.0001) fifoQueue.shift();
+            }
+            if (rem > 0) {
+              costUsdAcc += rem * cppUsd;
+              costVesAcc += rem * cppVes;
+            }
+            movCostoTotalUsd = costUsdAcc;
+            movCostoTotalVes = costVesAcc;
+            movCostoUnitUsd = sal > 0 ? costUsdAcc / sal : cppUsd;
+            movCostoUnitVes = sal > 0 ? costVesAcc / sal : cppVes;
+            balance = Math.max(0, balance - sal);
+            valTotalUsd = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitUsd, 0);
+            valTotalVes = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitVes, 0);
+            if (balance > 0) {
+              cppUsd = valTotalUsd / balance;
+              cppVes = valTotalVes / balance;
+            }
+          } else {
+            movCostoUnitUsd = cppUsd;
+            movCostoTotalUsd = sal * cppUsd;
+            movCostoUnitVes = cppVes;
+            movCostoTotalVes = sal * cppVes;
+
+            balance = Math.max(0, balance - sal);
+            valTotalUsd = balance * cppUsd;
+            valTotalVes = balance * cppVes;
+          }
+        }
+
+        return {
+          ...row,
+          metodo_valoracion: metodoActivo,
+          costo_unitario_divisa: Number(unitUsd.toFixed(2)),
+          tasa_bcv_operacion: Number(tasa.toFixed(2)),
+          costo_unitario_bs: Number(unitVes.toFixed(2)),
+          costo_operacion_usd: Number(movCostoUnitUsd.toFixed(2)),
+          monto_operacion_usd: Number(movCostoTotalUsd.toFixed(2)),
+          costo_operacion_ves: Number(movCostoUnitVes.toFixed(2)),
+          monto_operacion_ves: Number(movCostoTotalVes.toFixed(2)),
+          cpp_resultante_usd: Number(cppUsd.toFixed(2)),
+          cpp_resultante_ves: Number(cppVes.toFixed(2)),
+          saldo: Number(balance.toFixed(2)),
+          valor_saldo_usd: Number(valTotalUsd.toFixed(2)),
+          valor_saldo_ves: Number(valTotalVes.toFixed(2))
+        };
+      });
+
+      return jsonResponse({
+        metodo_valoracion: metodoActivo,
+        producto: {
+          ...prod,
+          metodo_valoracion: metodoActivo,
+          cpp_actual_usd: Number(cppUsd.toFixed(2)),
+          cpp_actual_ves: Number(cppVes.toFixed(2)),
+          valor_total_usd_kardex: Number(valTotalUsd.toFixed(2)),
+          valor_total_ves: Number(valTotalVes.toFixed(2))
+        },
+        historial: history
+      });
     }
 
     // ----------------------------------------------------
@@ -1165,6 +1410,72 @@ export async function onRequest(context) {
       return jsonResponse({
         fecha: fechaQuery,
         historico: histRes.rows || []
+      });
+    }
+
+    if (path === '/api/tasas-bcv/revalorizar-cierre' && method === 'PUT') {
+      const b = await request.json();
+      const { tasas = [], metodo_valoracion_kardex } = b;
+
+      if (metodo_valoracion_kardex && ['CPP', 'PEPS'].includes(metodo_valoracion_kardex)) {
+        await db.execute({
+          sql: "UPDATE config_fiscal_islr SET metodo_valoracion_kardex = ? WHERE id = 1",
+          args: [metodo_valoracion_kardex]
+        });
+      }
+
+      if (Array.isArray(tasas) && tasas.length > 0) {
+        for (const t of tasas) {
+          if (!t.periodo || !(Number(t.tasa_bcv) > 0)) continue;
+          await db.execute({
+            sql: `INSERT OR REPLACE INTO tasas_bcv_periodo (periodo, tasa_bcv, fecha_cierre, moneda, fuente)
+                  VALUES (?, ?, ?, ?, ?)`,
+            args: [
+              t.periodo,
+              Number(t.tasa_bcv),
+              t.fecha_cierre || `${t.periodo}-28`,
+              t.moneda || 'USD',
+              t.fuente || `Tasa Oficial BCV al Cierre del Período ${t.periodo}`
+            ]
+          });
+        }
+      }
+
+      await db.execute(`
+        UPDATE movimientos
+        SET tasa_bcv = COALESCE(
+              (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
+              movimientos.tasa_bcv,
+              889.58
+            ),
+            fecha_tasa_bcv = COALESCE(
+              (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
+              movimientos.fecha_tasa_bcv,
+              movimientos.fecha
+            )
+      `);
+
+      await db.execute(`
+        UPDATE libro_compras
+        SET tasa_bcv = COALESCE(
+              (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
+              libro_compras.tasa_bcv,
+              889.58
+            )
+      `);
+
+      await db.execute(`
+        UPDATE libro_ventas
+        SET tasa_bcv = COALESCE(
+              (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
+              libro_ventas.tasa_bcv,
+              889.58
+            )
+      `);
+
+      return jsonResponse({
+        success: true,
+        message: 'Revalorización de cierres ejecutada exitosamente con doble expresión monetaria (Bs./USD).'
       });
     }
 
@@ -2210,6 +2521,142 @@ export async function onRequest(context) {
         ORDER BY periodo ASC
       `);
       return jsonResponse(rawMovs.rows);
+    }
+
+    // ----------------------------------------------------
+    // EXPORTACIONES COMPATIBLES (EXCEL / CSV OFICIAL SENIAT)
+    // ----------------------------------------------------
+    if (path === '/api/export/libro-compras' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      let sql = `
+        SELECT 
+          nro_operacion as "N_OP",
+          fecha as "FECHA",
+          rif as "RIF",
+          razon_social as "PROVEEDOR",
+          nro_factura as "FACTURA",
+          COALESCE(nro_control, '') as "CONTROL",
+          tipo_transaccion as "TIPO",
+          total_bs as "TOTAL_BS",
+          0.0 as "EXENTO_BS",
+          base_imponible_bs as "BASE_BS",
+          (alicuota * 100) || '%' as "ALICUOTA",
+          iva_bs as "IVA_BS",
+          iva_retenido_bs as "IVA_RETENIDO_BS",
+          tipo_servicio as "CLASIFICACION"
+        FROM libro_compras
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` WHERE periodo = ?`;
+        args.push(periodo);
+      }
+      sql += ` ORDER BY periodo ASC, fecha ASC, nro_operacion ASC`;
+      const result = await db.execute({ sql, args });
+
+      const headers = Object.keys(result.rows[0] || {});
+      const csvRows = [headers.join(';')];
+      for (const r of result.rows) {
+        csvRows.push(headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'));
+      }
+      const csvContent = '\uFEFF' + csvRows.join('\r\n');
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="LIBRO_COMPRAS_DG67_${periodo || 'HISTORICO'}.csv"`,
+          ...corsHeaders
+        }
+      });
+    }
+
+    if (path === '/api/export/libro-ventas' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      let sql = `
+        SELECT 
+          id as "N_OP",
+          fecha as "FECHA",
+          COALESCE(factura_desde, '') as "DESDE",
+          COALESCE(factura_hasta, '') as "HASTA",
+          cantidad_comprobantes as "CANT_COMPROBANTES",
+          total_bs as "TOTAL_BS",
+          exento_bs as "EXENTO_BS",
+          base_imponible_bs as "BASE_BS",
+          (alicuota * 100) || '%' as "ALICUOTA",
+          iva_bs as "DEBITO_BS"
+        FROM libro_ventas
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` WHERE periodo = ?`;
+        args.push(periodo);
+      }
+      sql += ` ORDER BY periodo ASC, fecha ASC`;
+      const result = await db.execute({ sql, args });
+
+      const headers = Object.keys(result.rows[0] || {});
+      const csvRows = [headers.join(';')];
+      for (const r of result.rows) {
+        csvRows.push(headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'));
+      }
+      const csvContent = '\uFEFF' + csvRows.join('\r\n');
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="LIBRO_VENTAS_DG67_${periodo || 'HISTORICO'}.csv"`,
+          ...corsHeaders
+        }
+      });
+    }
+
+    if (path === '/api/export/excel' && method === 'GET') {
+      const fecha_corte = url.searchParams.get('fecha_corte');
+      const targetPeriodo = fecha_corte ? String(fecha_corte).slice(0, 7) : '2026-10';
+      const tasaRes = await db.execute({
+        sql: "SELECT tasa_bcv FROM tasas_bcv_periodo WHERE periodo = ?",
+        args: [targetPeriodo]
+      });
+      const tasaCorte = Number(tasaRes.rows[0]?.tasa_bcv || 889.58);
+
+      const result = await db.execute(`
+        SELECT 
+          p.codigo as "CODIGO",
+          p.descripcion as "DESCRIPCION",
+          p.unidad_medida as "UND",
+          COALESCE(c.nombre, 'GENERAL') as "CATEGORIA",
+          COALESCE(a.nombre, 'PRINCIPAL') as "ALMACEN",
+          p.stock_minimo as "STOCK_MIN",
+          ROUND(COALESCE(SUM(CASE 
+            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%')) 
+                 THEN md.cantidad 
+            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%')) 
+                 THEN -md.cantidad 
+            ELSE 0 
+          END), 0), 2) as "STOCK_ACTUAL",
+          p.costo_referencial_usd as "COSTO_REF_USD"
+        FROM productos p
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN almacenes a ON p.almacen_id = a.id
+        LEFT JOIN movimiento_detalles md ON p.id = md.producto_id
+        LEFT JOIN movimientos m ON md.movimiento_id = m.id
+        GROUP BY p.id
+        ORDER BY p.codigo ASC
+      `);
+
+      const headers = Object.keys(result.rows[0] || {});
+      const csvRows = [headers.join(';')];
+      for (const r of result.rows) {
+        csvRows.push(headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'));
+      }
+      const csvContent = '\uFEFF' + csvRows.join('\r\n');
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="INVENTARIO_DG67_${fecha_corte || 'OCTUBRE_2026'}.csv"`,
+          ...corsHeaders
+        }
+      });
     }
 
     // Default Fallback

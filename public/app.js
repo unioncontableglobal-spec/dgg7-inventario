@@ -1022,8 +1022,14 @@ async function loadProducts() {
     const excelUrl = `/api/export/excel${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`;
     const pdfUrl = `/reporte-seniat.html${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`;
 
-    if (exportExcelBtn) exportExcelBtn.href = excelUrl;
-    if (tabExportExcelBtn) tabExportExcelBtn.href = excelUrl;
+    if (exportExcelBtn) {
+      exportExcelBtn.href = 'javascript:void(0)';
+      exportExcelBtn.onclick = exportarInventarioExcel;
+    }
+    if (tabExportExcelBtn) {
+      tabExportExcelBtn.href = 'javascript:void(0)';
+      tabExportExcelBtn.onclick = exportarInventarioExcel;
+    }
     if (exportPdfBtn) exportPdfBtn.href = pdfUrl;
     if (tabExportPdfBtn) tabExportPdfBtn.href = pdfUrl;
 
@@ -1131,6 +1137,66 @@ async function loadProducts() {
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="11" class="text-center" style="color: #dc2626; padding: 16px;">Error al cargar inventario: ${err.message}</td></tr>`;
     }
+  }
+}
+
+async function exportarInventarioExcel(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  showToast('Generando Inventario Valorizado en Excel (Art. 177 RISLR)...', 'info');
+
+  try {
+    const fechaCorte = document.getElementById('inv-fecha-corte')?.value || '';
+    let url = `/api/productos`;
+    if (fechaCorte) url += `?fecha_corte=${encodeURIComponent(fechaCorte)}`;
+    const res = await fetch(url);
+    const products = await res.json();
+    if (!res.ok || !Array.isArray(products) || products.length === 0) {
+      showToast('No se encontraron productos para exportar.', 'warning');
+      return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+      window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`, '_blank');
+      return;
+    }
+
+    const tasaActiva = pzeroTasaBcv || 889.58;
+    const rows = products.map(p => {
+      const stock = Number(p.stock_actual || 0);
+      const costoUsd = Number(p.costo_referencial_usd || 0);
+      const costoBs = Number((costoUsd * tasaActiva).toFixed(2));
+      const totalCostoBs = Number((stock * costoBs).toFixed(2));
+      const totalCostoUsd = Number((stock * costoUsd).toFixed(2));
+      const precioUsd = Number(p.precio_venta_usd || 0);
+      const precioBs = Number((precioUsd * tasaActiva).toFixed(2));
+
+      return {
+        "CÓDIGO": p.codigo || '',
+        "DESCRIPCIÓN": p.descripcion || '',
+        "UND": p.unidad_medida || 'UND',
+        "CATEGORÍA": p.categoria || 'GENERAL',
+        "ALMACÉN": p.almacen || 'PRINCIPAL',
+        "STOCK ACTUAL": stock,
+        "COSTO UNIT S/IVA (BS)": costoBs,
+        "COSTO UNIT REF ($ USD)": costoUsd,
+        "TOTAL VALORIZADO (BS)": totalCostoBs,
+        "TOTAL VALORIZADO ($ USD)": totalCostoUsd,
+        "PRECIO VENTA S/IVA (BS)": precioBs,
+        "PRECIO VENTA REF ($ USD)": precioUsd,
+        "TASA BCV APLICADA": tasaActiva,
+        "ESTATUS": stock <= 0 ? 'AGOTADO' : (stock <= Number(p.stock_minimo || 2) ? 'CRÍTICO' : 'DISPONIBLE')
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'INVENTARIO_DG67');
+    const fileName = `INVENTARIO_DG67_${fechaCorte || 'OCTUBRE_2026'}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast(`✅ Inventario exportado exitosamente (${rows.length} repuestos).`, 'success');
+  } catch (err) {
+    console.error('Error exportando Inventario:', err);
+    window.open(`/api/export/excel`, '_blank');
   }
 }
 
@@ -4178,9 +4244,56 @@ async function eliminarFacturaCompra(id) {
   }
 }
 
-function exportarLibroComprasExcel() {
+async function exportarLibroComprasExcel() {
   const periodo = document.getElementById('compras-periodo-select')?.value || '2026-10';
-  window.open(`/api/export/libro-compras?periodo=${periodo}`, '_blank');
+  showToast('Generando Libro de Compras en Excel (Formato Oficial SENIAT)...', 'info');
+
+  try {
+    let url = `/api/fiscal/libro-compras?`;
+    if (periodo !== 'TODOS') url += `periodo=${periodo}&`;
+    const res = await fetch(url);
+    const compras = await res.json();
+    if (!res.ok || !Array.isArray(compras) || compras.length === 0) {
+      showToast('No hay datos en el Libro de Compras para exportar.', 'warning');
+      return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+      window.open(`/api/export/libro-compras?periodo=${periodo}`, '_blank');
+      return;
+    }
+
+    const rows = compras.map((c, idx) => ({
+      "N° OP": c.nro_operacion || (idx + 1),
+      "FECHA": c.fecha || '',
+      "RIF": c.rif || '',
+      "PROVEEDOR / RAZÓN SOCIAL": c.razon_social || '',
+      "N° FACTURA": c.nro_factura || '',
+      "N° CONTROL": c.nro_control || '',
+      "TIPO TRANS.": c.tipo_transaccion || '01-REG',
+      "TOTAL FACTURA (BS)": Number(c.total_bs || 0),
+      "TOTAL REF ($ USD)": Number(c.total_divisa || (c.tasa_bcv > 0 ? c.total_bs / c.tasa_bcv : 0)),
+      "EXENTO (BS)": Number(c.exento_bs || 0),
+      "BASE IMPONIBLE (BS)": Number(c.base_imponible_bs || 0),
+      "BASE REF ($ USD)": Number(c.base_imponible_divisa || 0),
+      "ALÍCUOTA": `${((c.alicuota || 0.16) * 100).toFixed(0)}%`,
+      "IVA CRÉDITO (BS)": Number(c.iva_bs || 0),
+      "IVA RETENIDO (BS)": Number(c.iva_retenido_bs || 0),
+      "TASA BCV": Number(c.tasa_bcv || 889.58),
+      "CLASIFICACIÓN": c.tipo_servicio || 'MERCANCIA_REPUESTOS'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    const sheetName = periodo ? `COMPRAS_${periodo}` : 'LIBRO_COMPRAS';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const fileName = `LIBRO_COMPRAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast(`✅ Libro de Compras descargado exitosamente (${rows.length} comprobantes).`, 'success');
+  } catch (err) {
+    console.error('Error exportando Libro de Compras:', err);
+    window.open(`/api/export/libro-compras?periodo=${periodo}`, '_blank');
+  }
 }
 
 function getNombrePeriodoFormal(periodo) {
@@ -5478,9 +5591,55 @@ async function eliminarVenta(id) {
   }
 }
 
-function exportarLibroVentasExcel() {
+async function exportarLibroVentasExcel() {
   const periodo = document.getElementById('ventas-periodo-select')?.value || '2026-10';
-  window.open(`/api/export/libro-ventas?periodo=${periodo}`, '_blank');
+  showToast('Generando Libro de Ventas en Excel (Formato Oficial SENIAT)...', 'info');
+
+  try {
+    let url = `/api/fiscal/libro-ventas?`;
+    if (periodo !== 'TODOS') url += `periodo=${periodo}&`;
+    const res = await fetch(url);
+    const ventas = await res.json();
+    if (!res.ok || !Array.isArray(ventas) || ventas.length === 0) {
+      showToast('No hay datos en el Libro de Ventas para exportar.', 'warning');
+      return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+      window.open(`/api/export/libro-ventas?periodo=${periodo}`, '_blank');
+      return;
+    }
+
+    const rows = ventas.map((v, idx) => ({
+      "N° OP": idx + 1,
+      "FECHA REPORTE": v.fecha || '',
+      "N° REPORTE Z": v.numero_reporte_z || '',
+      "SERIAL MÁQUINA": v.serial_impresora || 'Z0A0000176',
+      "DESDE FACTURA": v.factura_desde || '',
+      "HASTA FACTURA": v.factura_hasta || '',
+      "CANT. COMPROBANTES": Number(v.cantidad_comprobantes || 1),
+      "TOTAL VENTAS (BS)": Number(v.total_bs || 0),
+      "TOTAL REF ($ USD)": Number(v.total_divisa || 0),
+      "EXENTO (BS)": Number(v.exento_bs || 0),
+      "BASE IMPONIBLE (BS)": Number(v.base_imponible_bs || 0),
+      "BASE REF ($ USD)": Number(v.base_imponible_divisa || 0),
+      "ALÍCUOTA": `${((v.alicuota || 0.16) * 100).toFixed(0)}%`,
+      "DÉBITO FISCAL (BS)": Number(v.iva_bs || 0),
+      "DÉBITO REF ($ USD)": Number(v.monto_iva_divisa || 0),
+      "TASA BCV": Number(v.tasa_bcv || 889.58)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    const sheetName = periodo ? `VENTAS_${periodo}` : 'LIBRO_VENTAS';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const fileName = `LIBRO_VENTAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast(`✅ Libro de Ventas descargado exitosamente (${rows.length} comprobantes).`, 'success');
+  } catch (err) {
+    console.error('Error exportando Libro de Ventas:', err);
+    window.open(`/api/export/libro-ventas?periodo=${periodo}`, '_blank');
+  }
 }
 
 function imprimirLibroVentas() {
