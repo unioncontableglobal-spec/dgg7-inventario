@@ -8,10 +8,10 @@ import compression from 'compression';
 import { createClient } from '@libsql/client';
 import xlsxPkg from 'xlsx';
 const XLSX = xlsxPkg.utils ? xlsxPkg : (xlsxPkg.default || xlsxPkg);
-import { 
-  conciliarReporteZ, 
-  conciliarTodosReportesZ, 
-  conciliarVentaIndividual, 
+import {
+  conciliarReporteZ,
+  conciliarTodosReportesZ,
+  conciliarVentaIndividual,
   getResumenCruceDobleVia,
   getProximaFacturaZ,
   getCruceComprasEntradas,
@@ -20,9 +20,9 @@ import {
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
 } from './lib/cruce_engine.js';
-import { 
-  getMatrizAuditoriaProductos, 
-  generarExcelMatrizAuditoria, 
+import {
+  getMatrizAuditoriaProductos,
+  generarExcelMatrizAuditoria,
   procesarMatrizAuditada,
   getListadoAuditoriaEnVivo,
   actualizarProductoAuditoria,
@@ -76,14 +76,14 @@ const localDb = createClient({
 });
 
 // Inicializar optimizaciones en memoria de SQLite (64MB Cache RAM + Temp Store en Memoria)
-localDb.execute("PRAGMA cache_size = -64000;").catch(() => {});
-localDb.execute("PRAGMA temp_store = MEMORY;").catch(() => {});
-localDb.execute("ALTER TABLE movimientos ADD COLUMN fecha_factura TEXT;").catch(() => {});
-localDb.execute("ALTER TABLE movimientos ADD COLUMN tasa_bcv_factura REAL;").catch(() => {});
-localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN tasa_bcv_activa_dia REAL;").catch(() => {});
-localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN fecha_bcv_activa_dia TEXT;").catch(() => {});
-localDb.execute("ALTER TABLE libro_compras ADD COLUMN fecha_recepcion TEXT;").catch(() => {});
-localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => {});
+localDb.execute("PRAGMA cache_size = -64000;").catch(() => { });
+localDb.execute("PRAGMA temp_store = MEMORY;").catch(() => { });
+localDb.execute("ALTER TABLE movimientos ADD COLUMN fecha_factura TEXT;").catch(() => { });
+localDb.execute("ALTER TABLE movimientos ADD COLUMN tasa_bcv_factura REAL;").catch(() => { });
+localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN tasa_bcv_activa_dia REAL;").catch(() => { });
+localDb.execute("ALTER TABLE config_fiscal_islr ADD COLUMN fecha_bcv_activa_dia TEXT;").catch(() => { });
+localDb.execute("ALTER TABLE libro_compras ADD COLUMN fecha_recepcion TEXT;").catch(() => { });
+localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => { });
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -101,7 +101,7 @@ const db = {
     if (remoteDb) {
       const sqlStr = (typeof stmt === 'string' ? stmt : stmt.sql || '').trim().toUpperCase();
       if (sqlStr.startsWith('INSERT') || sqlStr.startsWith('UPDATE') || sqlStr.startsWith('DELETE')) {
-        remoteDb.execute(stmt).catch(() => {});
+        remoteDb.execute(stmt).catch(() => { });
       }
     }
     return res;
@@ -109,7 +109,7 @@ const db = {
   async batch(stmts, mode) {
     const res = await localDb.batch(stmts, mode);
     if (remoteDb) {
-      remoteDb.batch(stmts, mode).catch(() => {});
+      remoteDb.batch(stmts, mode).catch(() => { });
     }
     return res;
   }
@@ -468,7 +468,7 @@ app.get('/api/dashboard', async (req, res) => {
 app.get('/api/productos', async (req, res) => {
   try {
     const { q, categoria, almacen, estado, fecha_corte, limit = 1000 } = req.query;
-    
+
     let sql;
     const args = [];
 
@@ -576,7 +576,7 @@ app.get('/api/productos', async (req, res) => {
       }
       sql += ` ORDER BY codigo ASC LIMIT ?`;
     }
-    
+
     args.push(parseInt(limit, 10));
 
     // Obtener la tasa oficial BCV correspondiente al período de corte (ej. 2025-12 -> 52.02) o la del mes activo (2026-10)
@@ -1315,7 +1315,7 @@ app.patch('/api/proveedores/:id/clasificacion', async (req, res) => {
     const { id } = req.params;
     const { tipo_servicio, aplica_inventario } = req.body;
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-    
+
     await db.execute({
       sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ? WHERE id = ?`,
       args: [tipo_servicio, aplicaInvInt, id]
@@ -3780,19 +3780,19 @@ app.get('/api/tasas-bcv', async (req, res) => {
     // Priorizar la tasa diaria activa si está configurada; de lo contrario, la última de cierre
     const tasaActiva = (cfg.tasa_bcv_activa_dia && Number(cfg.tasa_bcv_activa_dia) > 0)
       ? {
-          tasa_bcv: Number(cfg.tasa_bcv_activa_dia),
-          fecha: cfg.fecha_bcv_activa_dia || new Date().toISOString().split('T')[0],
-          periodo: (cfg.fecha_bcv_activa_dia || new Date().toISOString()).slice(0, 7),
-          moneda: 'USD',
-          origen: 'DIARIA_ACTIVA'
-        }
+        tasa_bcv: Number(cfg.tasa_bcv_activa_dia),
+        fecha: cfg.fecha_bcv_activa_dia || new Date().toISOString().split('T')[0],
+        periodo: (cfg.fecha_bcv_activa_dia || new Date().toISOString()).slice(0, 7),
+        moneda: 'USD',
+        origen: 'DIARIA_ACTIVA'
+      }
       : (latestTasa ? {
-          tasa_bcv: latestTasa.tasa_bcv,
-          fecha: latestTasa.fecha_cierre,
-          periodo: latestTasa.periodo,
-          moneda: latestTasa.moneda || 'USD',
-          origen: 'CIERRE_MES'
-        } : { tasa_bcv: 889.58, fecha: '2026-10-30', periodo: '2026-10', moneda: 'USD', origen: 'DEFAULT' });
+        tasa_bcv: latestTasa.tasa_bcv,
+        fecha: latestTasa.fecha_cierre,
+        periodo: latestTasa.periodo,
+        moneda: latestTasa.moneda || 'USD',
+        origen: 'CIERRE_MES'
+      } : { tasa_bcv: 889.58, fecha: '2026-10-30', periodo: '2026-10', moneda: 'USD', origen: 'DEFAULT' });
 
     res.json({
       metodo_valoracion_kardex: cfg.metodo_valoracion_kardex || 'CPP',

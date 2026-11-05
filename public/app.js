@@ -269,15 +269,13 @@ async function initApp() {
   if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
   if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
 
-  // Initial Data Loads
+  // Carga inicial ultraligera y modular (Evita congelamiento de navegador y saturación de memoria)
   await Promise.all([
     checkHealth(),
     loadTasasBcvPeriodo(),
     loadDeclaracionesCache(),
-    loadDashboard(),
     loadCatalogs(),
-    loadProducts(),
-    loadCruceDobleVia('2026-10')
+    loadDashboard()
   ]);
 
   if (state.currentUser?.rol === 'TOMA_FISICA') {
@@ -4276,13 +4274,7 @@ async function onCambioFechaVentaZ() {
       }
     }
 
-    // Si el usuario aún no ha colocado una factura desde, sugerir el próximo correlativo consecutivo
-    if (desdeInput && (!desdeInput.value || desdeInput.dataset.autoSugerido === 'true')) {
-      desdeInput.value = data.proxima_factura || '00000001';
-      desdeInput.dataset.autoSugerido = 'true';
-    }
-
-    // Verificar si DG67 ya registró salidas en esa fecha
+    // Si DG67 ya registró salidas en esa fecha, sugerir el rango exacto de comprobantes de tienda
     if (data.sugerencia_salidas && data.sugerencia_salidas.tiene_salidas) {
       ultimaSugerenciaSalidasZ = data.sugerencia_salidas;
       if (bannerSug) {
@@ -4294,13 +4286,25 @@ async function onCambioFechaVentaZ() {
           subSug.textContent = `Despachos en tienda: ${data.sugerencia_salidas.total_repuestos} repuestos. Base: Bs. ${fmtBs(data.sugerencia_salidas.base_imponible_bs)} | IVA: Bs. ${fmtBs(data.sugerencia_salidas.iva_bs)}`;
         }
       }
+      if (desdeInput && (!desdeInput.value || desdeInput.dataset.autoSugerido === 'true')) {
+        desdeInput.value = data.sugerencia_salidas.factura_desde;
+        desdeInput.dataset.autoSugerido = 'true';
+      }
       if (hastaInput && (!hastaInput.value || hastaInput.dataset.autoSugerido === 'true')) {
         hastaInput.value = data.sugerencia_salidas.factura_hasta;
         hastaInput.dataset.autoSugerido = 'true';
       }
+      if (cantInput && (!cantInput.value || cantInput.dataset.autoSugerido === 'true')) {
+        cantInput.value = data.sugerencia_salidas.cantidad_facturas;
+        cantInput.dataset.autoSugerido = 'true';
+      }
     } else {
       ultimaSugerenciaSalidasZ = null;
       if (bannerSug) bannerSug.style.display = 'none';
+      if (desdeInput && (!desdeInput.value || desdeInput.dataset.autoSugerido === 'true')) {
+        desdeInput.value = data.proxima_factura || '00000001';
+        desdeInput.dataset.autoSugerido = 'true';
+      }
     }
 
     calcularCantidadFacturasZ();
@@ -4760,7 +4764,7 @@ async function cargarTablaSalidasTiendaModal() {
     tbody.innerHTML = salidasTiendaCache.map((r, idx) => {
       const yaEnLibro = Boolean(r.libro_venta_id);
       const statusBadge = yaEnLibro
-        ? `<span class="badge" style="background:#dcfce7; color:#166534;">✅ En Libro Ventas</span>`
+        ? `<span class="badge" style="background:#dcfce7; color:#166534;">✅ En Libro Ventas ${r.numero_reporte_z ? `(Z: ${r.numero_reporte_z})` : ''}</span>`
         : `<span class="badge" style="background:#fef3c7; color:#92400e;">⏳ Pendiente en Libro</span>`;
 
       return `

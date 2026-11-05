@@ -25,16 +25,16 @@ export async function conciliarReporteZ(reporteZId, db) {
     esperados.push(n);
   }
 
-  // Buscar salidas cargadas por DG67
+  // Buscar salidas cargadas por DG67 estrictamente para la fecha fiscal del Reporte Z
   const movsRes = await db.execute({
     sql: `SELECT m.id, m.numero_documento, m.numero_factura_numerico, m.fecha,
                  COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs), 0) AS total_bs
           FROM movimientos m
           LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
           WHERE m.tipo = 'SALIDA_VENTA' 
-            AND (m.numero_factura_numerico BETWEEN ? AND ? OR m.fecha = ?)
+            AND m.fecha = ?
           GROUP BY m.id`,
-    args: [desdeNum, hastaNum, z.fecha]
+    args: [z.fecha]
   });
 
   const cargadosNums = new Set();
@@ -96,7 +96,22 @@ export async function conciliarReporteZ(reporteZId, db) {
     args: [estatus, faltantesStr, cargadosNums.size, totalCargadoBs, diffBs, obs, z.id]
   });
 
-  // Actualizar movimientos vinculados
+  // Desvincular cualquier movimiento previo que apuntara a este Reporte Z pero ya no corresponda a su fecha o rango
+  if (movIds.length > 0) {
+    const placeholders = movIds.map(() => '?').join(',');
+    await db.execute({
+      sql: `UPDATE movimientos SET libro_ventas_id = NULL, estatus_conciliacion = 'PENDIENTE_UCG' 
+            WHERE libro_ventas_id = ? AND (fecha != ? OR id NOT IN (${placeholders}))`,
+      args: [z.id, z.fecha, ...movIds]
+    });
+  } else {
+    await db.execute({
+      sql: `UPDATE movimientos SET libro_ventas_id = NULL, estatus_conciliacion = 'PENDIENTE_UCG' WHERE libro_ventas_id = ?`,
+      args: [z.id]
+    });
+  }
+
+  // Actualizar movimientos vinculados estrictamente a este Reporte Z
   if (movIds.length > 0) {
     const movEstatus = estatus === 'CONCILIADO' ? 'CONCILIADO' : 'PARCIAL';
     for (const id of movIds) {
@@ -192,10 +207,7 @@ export async function conciliarVentaIndividual(movimientoId, db) {
 }
 
 export async function getResumenCruceDobleVia(periodo, db) {
-  // Asegurar conciliación de los Reportes Z del período
-  await conciliarTodosReportesZ(periodo, db);
-
-  // 1. Reportes Z con estatus
+  // 1. Reportes Z con estatus (Lectura directa optimizada de alta velocidad)
   let zSql = `
     SELECT 
       id, periodo, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
@@ -795,11 +807,25 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
 
   const res = await db.execute({ sql, args });
 
+  // 1. Obtener los Reportes Z fiscales del período para contrastar y mapear cada día estrictamente por su fecha fiscal
+  let lvSql = "SELECT id, fecha, numero_reporte_z, factura_desde, factura_hasta, estatus_conciliacion FROM libro_ventas WHERE 1=1";
+  const lvArgs = [];
+  if (periodo && periodo !== 'TODOS') {
+    lvSql += " AND (periodo = ? OR strftime('%Y-%m', fecha) = ?)";
+    lvArgs.push(periodo, periodo);
+  }
+  const lvRes = await db.execute({ sql: lvSql, args: lvArgs });
+  const zPorFecha = {};
+  for (const z of lvRes.rows) {
+    if (z.fecha) zPorFecha[z.fecha] = z;
+  }
+
   // Agrupar en subgrupos por día
   const diasMap = {};
   for (const r of res.rows) {
     const f = r.fecha;
     if (!diasMap[f]) {
+      const zDelDia = zPorFecha[f];
       diasMap[f] = {
         fecha: f,
         periodo: r.periodo,
@@ -810,7 +836,9 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
         factura_desde: null,
         factura_hasta: null,
         facturas_nums: [],
-        libro_venta_id: r.libro_ventas_id,
+        libro_venta_id: zDelDia ? zDelDia.id : null,
+        numero_reporte_z: zDelDia ? zDelDia.numero_reporte_z : null,
+        estatus_conciliacion: zDelDia ? zDelDia.estatus_conciliacion : 'PENDIENTE_EN_LIBRO',
         facturas: []
       };
     }
@@ -819,7 +847,6 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
     dia.total_unidades_despachadas += Number(r.unidades_cant || 0);
     dia.total_bs += Number(r.total_bs || 0);
     dia.total_usd += Number(r.total_usd || 0);
-    if (r.libro_ventas_id) dia.libro_venta_id = r.libro_ventas_id;
 
     // Normalizar número de factura limpio
     let num = r.numero_factura_numerico;
@@ -844,8 +871,13 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
     });
   }
 
-  // Finalizar cálculos por día
+  // Finalizar cálculos por día asegurando vinculación exacta
   const listaDias = Object.values(diasMap).map(d => {
+    const zDelDia = zPorFecha[d.fecha];
+    d.libro_venta_id = zDelDia ? zDelDia.id : null;
+    d.numero_reporte_z = zDelDia ? zDelDia.numero_reporte_z : null;
+    d.estatus_conciliacion = zDelDia ? zDelDia.estatus_conciliacion : 'PENDIENTE_EN_LIBRO';
+
     if (d.facturas_nums.length > 0) {
       d.factura_desde = String(Math.min(...d.facturas_nums)).padStart(8, '0');
       d.factura_hasta = String(Math.max(...d.facturas_nums)).padStart(8, '0');
