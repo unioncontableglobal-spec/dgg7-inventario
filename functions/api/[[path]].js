@@ -1581,6 +1581,12 @@ export async function onRequest(context) {
       const usuarioNorm = (usuario_responsable && String(usuario_responsable).trim()) || 'CAJA_DG67';
       const periodoMov = String(fecha).slice(0, 7);
 
+      if (await isPeriodoDeclarado(periodoMov, db)) {
+        return jsonResponse({
+          error: `⛔ Bloqueo Fiscal de Seguridad: El período ${periodoMov} ya ha sido DECLARADO formalmente ante el SENIAT. No se permiten nuevos asientos ni alteraciones en períodos fiscales cerrados.`
+        }, 403);
+      }
+
       const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodoMov] });
       const tasaDefaultMes = Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const tasaNum = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : tasaDefaultMes;

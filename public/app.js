@@ -163,7 +163,7 @@ function checkAuthSession() {
   if (sessionData) {
     try {
       const session = JSON.parse(sessionData);
-      if (session && session.usuario) {
+      if (session && session.usuario && session.token) {
         showApp(session.usuario);
         initApp();
         return;
@@ -181,8 +181,17 @@ function showLogin() {
   const appLayout = document.getElementById('app-layout');
   if (loginScreen) loginScreen.style.display = 'flex';
   if (appLayout) appLayout.style.display = 'none';
+
+  // Cerrar cualquier modal residual que pudiera estar abierto
+  document.querySelectorAll('.modal-overlay').forEach(m => {
+    m.style.display = 'none';
+  });
+
   const userInput = document.getElementById('login-username');
-  if (userInput) userInput.focus();
+  if (userInput) {
+    userInput.focus();
+    userInput.select();
+  }
 }
 
 function showApp(user) {
@@ -294,7 +303,7 @@ async function handleLoginSubmit(event) {
     }
 
     // Guardar sesión si el checkbox está activo
-    const remember = document.getElementById('login-remember')?.checked !== false;
+    const remember = document.getElementById('login-remember')?.checked === true;
     if (remember) {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
     } else {
@@ -321,15 +330,54 @@ async function handleLoginSubmit(event) {
 }
 
 function logoutSession() {
-  if (!confirm('¿Desea cerrar la sesión de trabajo segura?')) return;
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  // 1. Limpieza total e irrevocable de credenciales y tokens en storage
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.clear();
+  } catch (e) {
+    console.warn('Error clearing storage:', e);
+  }
+
+  // 2. Resetear estados de memoria de la sesión
   appInitialized = false;
   state.currentUser = null;
+  inactividadModalAbierto = false;
+  if (inactividadIntervalId) {
+    clearInterval(inactividadIntervalId);
+    inactividadIntervalId = null;
+  }
+
+  // 3. Limpiar inputs del formulario de acceso para evitar autofill residual
+  const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
+  if (userEl) userEl.value = '';
   if (pwdEl) pwdEl.value = '';
+
+  // 4. Cerrar de forma forzada todos los modales, banners y paneles laterales
+  document.querySelectorAll('.modal-overlay').forEach(m => {
+    m.style.display = 'none';
+  });
+  const drawer = document.getElementById('pzero-drawer');
+  const drawerBackdrop = document.getElementById('pzero-drawer-backdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (drawerBackdrop) drawerBackdrop.classList.remove('active');
+
+  // 5. Presentar pantalla de login
   showLogin();
-  showToast('Sesión finalizada correctamente', 'info');
+
+  // 6. Alerta visual de confirmación de salida segura
+  const alertEl = document.getElementById('login-error-alert');
+  const alertText = document.getElementById('login-error-text');
+  if (alertEl && alertText) {
+    alertEl.style.display = 'flex';
+    alertEl.style.background = '#eff6ff';
+    alertEl.style.border = '1px solid #93c5fd';
+    alertEl.style.color = '#1e40af';
+    alertText.textContent = '🔒 Sesión finalizada correctamente por seguridad. Ingrese sus credenciales para acceder.';
+  }
+
+  showToast('🔒 Sesión cerrada con éxito', 'info');
 }
 
 function togglePasswordVisibility() {
