@@ -15,6 +15,8 @@ import {
   getResumenCruceDobleVia,
   getProximaFacturaZ,
   getCruceComprasEntradas,
+  getCruceVentasSalidas,
+  getSalidasTiendaAgrupadas,
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
 } from './lib/cruce_engine.js';
@@ -1535,7 +1537,16 @@ app.post('/api/movimientos', async (req, res) => {
 
     let resultadoCruce = null;
     if (tipo === 'SALIDA_VENTA') {
-      resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+      const zId = req.body.libro_ventas_id ? parseInt(req.body.libro_ventas_id, 10) : null;
+      if (zId) {
+        await db.execute({
+          sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
+          args: [zId, movimientoId]
+        });
+        resultadoCruce = await conciliarReporteZ(zId, db);
+      } else {
+        resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+      }
     } else if (tipo === 'ENTRADA_COMPRA') {
       let lcId = req.body.libro_compras_id || null;
       const matchNum = String(numero_documento).match(/(\d+)/);
@@ -2300,63 +2311,26 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
   }
 });
 
-// 10.5.2 Buscar Salidas / Ventas de Tienda (Cargadas por el Asistente) para Cruzar con Libro de Ventas
+// 10.5.2 Buscar Salidas / Ventas de Tienda (Cargadas por el Asistente) para Cruzar con Libro de Ventas (Subgrupos por Día)
 app.get('/api/fiscal/salidas-tienda', async (req, res) => {
   try {
     const { periodo, fecha, q } = req.query;
-    let sql = `
-      SELECT 
-        m.fecha,
-        strftime('%Y-%m', m.fecha) as periodo,
-        COUNT(DISTINCT m.id) as cantidad_movimientos,
-        COUNT(DISTINCT CASE 
-          WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones 
-          ELSE m.numero_documento 
-        END) as cantidad_comprobantes,
-        MIN(CASE 
-          WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
-          WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
-          ELSE m.observaciones
-        END) as factura_desde,
-        MAX(CASE 
-          WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
-          WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
-          ELSE m.observaciones
-        END) as factura_hasta,
-        GROUP_CONCAT(DISTINCT CASE 
-          WHEN m.observaciones != '' THEN m.observaciones 
-          ELSE m.numero_documento 
-        END) as lista_facturas,
-        COALESCE(SUM(md.cantidad), 0) as total_unidades_despachadas,
-        COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd, 0)), 0) as valor_referencial_usd,
-        (SELECT lv.id FROM libro_ventas lv WHERE lv.fecha = m.fecha LIMIT 1) as libro_venta_id
-      FROM movimientos m
-      LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-      LEFT JOIN productos p ON md.producto_id = p.id
-      WHERE m.tipo = 'SALIDA_VENTA'
-    `;
-    const args = [];
-    if (periodo && periodo !== 'TODOS') {
-      sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
-      args.push(periodo);
-    }
-    if (fecha) {
-      sql += ` AND m.fecha = ?`;
-      args.push(fecha);
-    }
-    if (q) {
-      sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ?)`;
-      args.push(`%${q}%`, `%${q}%`);
-    }
-    sql += `
-      GROUP BY m.fecha
-      ORDER BY m.fecha DESC
-      LIMIT 150
-    `;
-    const result = await db.execute({ sql, args });
-    res.json(result.rows);
+    const result = await getSalidasTiendaAgrupadas(periodo, fecha, q, db);
+    res.json(result);
   } catch (error) {
     console.error('Error en /api/fiscal/salidas-tienda:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10.5.3 Estado de Conciliación de Ventas / Salidas (Reportes Z Fiscales UCG ↔ Salidas Físicas Almacén DG67)
+app.get('/api/fiscal/cruce-ventas-salidas', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const cruce = await getCruceVentasSalidas(periodo, db);
+    res.json(cruce);
+  } catch (error) {
+    console.error('Error en /api/fiscal/cruce-ventas-salidas:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2627,20 +2601,21 @@ app.post('/api/fiscal/libro-ventas', async (req, res) => {
     const serial = String(req.body.serial_impresora || 'Z0A0000176').trim();
     const cantAnul = Number(req.body.cantidad_anuladas) || 0;
     const totAnulBs = Number(req.body.total_anulaciones_bs) || 0.0;
+    const facturasAnuladasLista = String(req.body.facturas_anuladas_lista || '').trim();
 
     const insertResult = await db.execute({
       sql: `INSERT INTO libro_ventas 
             (periodo, archivo_origen, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
              total_bs, exento_bs, base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
-             cantidad_anuladas, total_anulaciones_bs,
+             cantidad_anuladas, total_anulaciones_bs, facturas_anuladas_lista,
              tasa_bcv, fecha_tasa_bcv, moneda_divisa, exento_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa,
              estatus_conciliacion)
-            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
+            VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
             RETURNING id`,
       args: [
         periodo, fecha, numZ, serial, factura_desde || null, factura_hasta || null,
         totalCalc, exBs, baseBs, ali, ivaCalc, cant,
-        cantAnul, totAnulBs,
+        cantAnul, totAnulBs, facturasAnuladasLista,
         tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc
       ]
     });

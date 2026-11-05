@@ -55,7 +55,14 @@ export async function conciliarReporteZ(reporteZId, db) {
     }
   }
 
-  const faltantes = esperados.filter(num => !cargadosNums.has(num));
+  // Parsear facturas anuladas para excluirlas de faltantes
+  const anuladasSet = new Set();
+  if (z.facturas_anuladas_lista) {
+    const anulNums = String(z.facturas_anuladas_lista).match(/\d+/g) || [];
+    anulNums.forEach(n => anuladasSet.add(parseInt(n, 10)));
+  }
+
+  const faltantes = esperados.filter(num => !cargadosNums.has(num) && !anuladasSet.has(num));
   const diffBs = Number(((Number(z.total_bs) || 0) - totalCargadoBs).toFixed(2));
 
   let estatus = 'PENDIENTE_DG67';
@@ -662,6 +669,198 @@ export async function getCruceComprasEntradas(periodo, db) {
     compras_conciliadas: conciliadas,
     entradas_sin_factura_fiscal: entradasSinFiscal
   };
+}
+
+/**
+ * Consulta el estado de conciliación de ventas y salidas (Reportes Z Fiscales ↔ Salidas de Almacén)
+ */
+export async function getCruceVentasSalidas(periodo, db) {
+  const targetPeriodo = periodo || '2026-10';
+
+  // 1. Reportes Z
+  let zSql = `
+    SELECT 
+      id, periodo, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
+      cantidad_comprobantes, cantidad_anuladas, total_anulaciones_bs, facturas_anuladas_lista,
+      base_imponible_bs, iva_bs, total_bs, total_divisa, tasa_bcv,
+      estatus_conciliacion, facturas_faltantes, cantidad_facturas_cargadas,
+      total_facturas_cargadas_bs, diferencia_bs, observaciones_cruce
+    FROM libro_ventas
+    WHERE 1=1
+  `;
+  const zArgs = [];
+  if (targetPeriodo !== 'TODOS') {
+    zSql += " AND periodo = ?";
+    zArgs.push(targetPeriodo);
+  }
+  zSql += " ORDER BY fecha DESC, id DESC";
+  const zRes = await db.execute({ sql: zSql, args: zArgs });
+
+  const pendientesSalida = [];
+  const conciliados = [];
+
+  for (const z of zRes.rows) {
+    if (z.estatus_conciliacion === 'CONCILIADO') {
+      conciliados.push(z);
+    }
+    if (z.facturas_faltantes && z.estatus_conciliacion !== 'CONCILIADO') {
+      const nums = z.facturas_faltantes.split(',').map(s => s.trim()).filter(Boolean);
+      for (const num of nums) {
+        pendientesSalida.push({
+          reporte_z_id: z.id,
+          periodo: z.periodo,
+          fecha: z.fecha,
+          numero_reporte_z: z.numero_reporte_z || ('Z-' + z.id),
+          serial_impresora: z.serial_impresora || 'Z0A0000176',
+          factura_numero: num,
+          tasa_bcv: z.tasa_bcv
+        });
+      }
+    }
+  }
+
+  // 2. Salidas huérfanas sin Reporte Z
+  let movOrfSql = `
+    SELECT 
+      m.id, m.fecha, m.numero_documento, m.numero_factura_numerico, m.estatus_conciliacion, m.observaciones,
+      COUNT(md.id) AS total_items,
+      COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs), 0) AS total_bs,
+      COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) AS total_usd
+    FROM movimientos m
+    LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+    WHERE m.tipo = 'SALIDA_VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
+  `;
+  const movOrfArgs = [];
+  if (targetPeriodo !== 'TODOS') {
+    movOrfSql += " AND strftime('%Y-%m', m.fecha) = ?";
+    movOrfArgs.push(targetPeriodo);
+  }
+  movOrfSql += " GROUP BY m.id ORDER BY m.fecha DESC, m.id DESC";
+  const movOrfRes = await db.execute({ sql: movOrfSql, args: movOrfArgs });
+
+  return {
+    periodo: targetPeriodo,
+    kpis: {
+      total_reportes_z: zRes.rows.length,
+      reportes_z_cerrados: conciliados.length,
+      pendientes_salida_cant: pendientesSalida.length,
+      salidas_huerfanas_cant: movOrfRes.rows.length,
+      porcentaje_cierre: zRes.rows.length > 0 ? Number(((conciliados.length / zRes.rows.length) * 100).toFixed(1)) : 0
+    },
+    facturas_pendientes_salida: pendientesSalida,
+    reportes_z_conciliados: conciliados,
+    salidas_sin_reporte_z: movOrfRes.rows
+  };
+}
+
+/**
+ * Consulta las salidas de DG67 agrupadas en subgrupos por día, con desglose de comprobantes
+ */
+export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
+  let sql = `
+    SELECT 
+      m.id,
+      m.fecha,
+      strftime('%Y-%m', m.fecha) as periodo,
+      m.numero_documento,
+      m.numero_factura_numerico,
+      m.observaciones,
+      m.estatus_conciliacion,
+      m.tasa_bcv,
+      m.libro_ventas_id,
+      COUNT(md.id) as items_cant,
+      COALESCE(SUM(md.cantidad), 0) as unidades_cant,
+      COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs), 0) as total_bs,
+      COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) as total_usd,
+      GROUP_CONCAT(COALESCE(p.descripcion, p.codigo), ' • ') as resumen_productos
+    FROM movimientos m
+    LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
+    LEFT JOIN productos p ON md.producto_id = p.id
+    WHERE m.tipo = 'SALIDA_VENTA'
+  `;
+  const args = [];
+  if (periodo && periodo !== 'TODOS') {
+    sql += " AND strftime('%Y-%m', m.fecha) = ?";
+    args.push(periodo);
+  }
+  if (fecha) {
+    sql += " AND m.fecha = ?";
+    args.push(fecha);
+  }
+  if (q) {
+    sql += " AND (m.numero_documento LIKE ? OR m.observaciones LIKE ?)";
+    args.push(`%${q}%`, `%${q}%`);
+  }
+  sql += " GROUP BY m.id ORDER BY m.fecha DESC, m.numero_factura_numerico ASC, m.id ASC";
+
+  const res = await db.execute({ sql, args });
+
+  // Agrupar en subgrupos por día
+  const diasMap = {};
+  for (const r of res.rows) {
+    const f = r.fecha;
+    if (!diasMap[f]) {
+      diasMap[f] = {
+        fecha: f,
+        periodo: r.periodo,
+        cantidad_comprobantes: 0,
+        total_unidades_despachadas: 0,
+        total_bs: 0,
+        total_usd: 0,
+        factura_desde: null,
+        factura_hasta: null,
+        facturas_nums: [],
+        libro_venta_id: r.libro_ventas_id,
+        facturas: []
+      };
+    }
+    const dia = diasMap[f];
+    dia.cantidad_comprobantes++;
+    dia.total_unidades_despachadas += Number(r.unidades_cant || 0);
+    dia.total_bs += Number(r.total_bs || 0);
+    dia.total_usd += Number(r.total_usd || 0);
+    if (r.libro_ventas_id) dia.libro_venta_id = r.libro_ventas_id;
+
+    // Normalizar número de factura limpio
+    let num = r.numero_factura_numerico;
+    if (!num) {
+      const match = String(r.numero_documento).match(/(\d+)/) || String(r.observaciones).match(/(\d+)/);
+      if (match) num = parseInt(match[1], 10);
+    }
+    if (num) dia.facturas_nums.push(num);
+    const numPad = num ? String(num).padStart(8, '0') : (r.numero_documento || 'S/N');
+
+    dia.facturas.push({
+      movimiento_id: r.id,
+      numero_documento: r.numero_documento,
+      numero_factura: numPad,
+      numero_factura_numerico: num,
+      items_cant: r.items_cant,
+      unidades_cant: r.unidades_cant,
+      total_bs: Number(Number(r.total_bs || 0).toFixed(2)),
+      total_usd: Number(Number(r.total_usd || 0).toFixed(2)),
+      resumen_productos: r.resumen_productos || '',
+      estatus_conciliacion: r.estatus_conciliacion
+    });
+  }
+
+  // Finalizar cálculos por día
+  const listaDias = Object.values(diasMap).map(d => {
+    if (d.facturas_nums.length > 0) {
+      d.factura_desde = String(Math.min(...d.facturas_nums)).padStart(8, '0');
+      d.factura_hasta = String(Math.max(...d.facturas_nums)).padStart(8, '0');
+    } else {
+      d.factura_desde = '00000001';
+      d.factura_hasta = '00000001';
+    }
+    d.total_bs = Number(d.total_bs.toFixed(2));
+    d.total_usd = Number(d.total_usd.toFixed(2));
+    d.base_imponible_bs = Number((d.total_bs / 1.16).toFixed(2));
+    d.iva_bs = Number((d.total_bs - d.base_imponible_bs).toFixed(2));
+    return d;
+  });
+
+  return listaDias;
 }
 
 

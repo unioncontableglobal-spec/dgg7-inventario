@@ -1295,25 +1295,22 @@
             </div>
           </div>
 
-          <!-- Banner Interactivo de Facturas Faltantes por Detallar (Cruce de Doble Vía con UCG) -->
-          <div id="banner-salida-pendientes" style="display:none; margin-bottom:16px; background:#fffdfa; border:2px solid #ea580c; border-radius:10px; padding:14px 18px; box-shadow:0 3px 10px rgba(234,88,12,0.15);">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-              <div>
-                <strong style="color:#9a3412; font-size:0.92rem; display:flex; align-items:center; gap:6px;">
-                  🚨 Facturas Pendientes por Detallar (Reportes Z cargados por UCG):
-                </strong>
-                <p style="margin:4px 0 0; font-size:0.78rem; color:#b45309;">
-                  UCG ya registró los Reportes Z de la máquina fiscal. Haz clic en cualquiera de las siguientes facturas para autocompletar el formulario y cargar sus repuestos:
-                </p>
-              </div>
-              <div id="pills-facturas-pendientes-salida" style="display:flex; flex-wrap:wrap; gap:8px;">
-                <!-- Botones rápidos inyectados por JS -->
-              </div>
-            </div>
-          </div>
-
           <div class="form-container">
             <form id="form-salida" class="movement-form">
+              <input type="hidden" id="sal-libro-ventas-id" value="">
+
+              <!-- Banner de Factura Fiscal Vinculada desde Reporte Z -->
+              <div id="banner-salida-vinculada-z" style="display:none; margin-bottom:14px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px; padding:10px 14px; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:1.1rem;">🔗</span>
+                  <div>
+                    <strong id="banner-salida-vinculada-texto" style="color:#1e40af; font-size:0.84rem;">Factura Fiscal Vinculada</strong>
+                    <div style="font-size:0.75rem; color:#3b82f6;">Detalla a continuación los productos/repuestos que componen esta factura de venta.</div>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="desvincularSalidaLibroVentas()" style="font-size:0.75rem;">✕ Desvincular</button>
+              </div>
+
               <!-- Document Header -->
               <div class="form-section">
                 <div
@@ -1453,6 +1450,133 @@
                 </button>
               </div>
             </form>
+          </div>
+
+          <!-- PANEL INTERACTIVO DEDICADO: CONCILIACIÓN DE FACTURAS FISCALES (REPORTES Z) VS SALIDAS DE ALMACÉN -->
+          <div id="panel-conciliacion-salidas" class="panel-card" style="margin-top: 24px; border: 1.5px solid #cbd5e1; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); background: #ffffff; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 14px;">
+              <div>
+                <h3 style="margin: 0; color: var(--ucg-navy); font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                  📋 Conciliación Fiscal de Salidas: Reportes Z (UCG) vs Almacén (DG67)
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 0.8rem; color: #64748b;">
+                  Control cruzado de facturas emitidas por máquina fiscal contra salidas físicas registradas. La lista de facturas pendientes se limpia automáticamente al cargar la salida.
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">Período Fiscal:</label>
+                <select id="cruce-salidas-filtro-periodo" class="form-control" style="width: auto; font-size: 0.82rem; font-weight: 700; padding: 6px 12px;" onchange="cargarPanelCruceSalidas()">
+                  <option value="2026-10" selected>10 - Octubre 2026</option>
+                  <option value="2026-11">11 - Noviembre 2026</option>
+                  <option value="2026-12">12 - Diciembre 2026</option>
+                  <option value="2026-09">09 - Septiembre 2026</option>
+                  <option value="2026-08">08 - Agosto 2026</option>
+                  <option value="TODOS">📅 Todos los Períodos</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="cargarPanelCruceSalidas()" style="font-weight: 700;">
+                  🔄 Actualizar
+                </button>
+              </div>
+            </div>
+
+            <!-- Mini KPIs de Cierre de Ventas / Salidas -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;">
+              <div class="kpi-card" style="padding: 12px 14px; border-left: 4px solid #0284c7; background: #f0f9ff;">
+                <span class="kpi-label" style="font-size: 0.72rem;">Reportes Z Registrados</span>
+                <span class="kpi-value" id="cruce-salidas-kpi-total-z" style="font-size: 1.25rem; color: #0369a1;">0</span>
+              </div>
+              <div class="kpi-card" style="padding: 12px 14px; border-left: 4px solid #ea580c; background: #fff7ed;">
+                <span class="kpi-label" style="font-size: 0.72rem;">Facturas Pendientes en Tienda</span>
+                <span class="kpi-value" id="cruce-salidas-kpi-pendientes" style="font-size: 1.25rem; color: #c2410c;">0</span>
+              </div>
+              <div class="kpi-card" style="padding: 12px 14px; border-left: 4px solid #16a34a; background: #f0fdf4;">
+                <span class="kpi-label" style="font-size: 0.72rem;">Reportes Z Cuadrados (100%)</span>
+                <span class="kpi-value" id="cruce-salidas-kpi-cerrados" style="font-size: 1.25rem; color: #15803d;">0</span>
+              </div>
+              <div class="kpi-card" style="padding: 12px 14px; border-left: 4px solid #64748b; background: #f8fafc;">
+                <span class="kpi-label" style="font-size: 0.72rem;">Salidas sin Reporte Fiscal</span>
+                <span class="kpi-value" id="cruce-salidas-kpi-huerfanas" style="font-size: 1.25rem; color: #334155;">0</span>
+              </div>
+            </div>
+
+            <!-- Segmented Tabs Navigation -->
+            <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px;">
+              <button type="button" class="tab-btn-cruce active" id="tab-btn-cruce-pendientes" onclick="cambiarTabCruceSalidas('pendientes')" style="padding: 8px 16px; font-size: 0.82rem; font-weight: 700; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid var(--ucg-navy); color: var(--ucg-navy);">
+                ⏳ Facturas Pendientes por Detallar Salida <span id="cruce-salidas-badge-pendientes" class="badge" style="background: #ea580c; color: #fff; margin-left: 6px;">0</span>
+              </button>
+              <button type="button" class="tab-btn-cruce" id="tab-btn-cruce-conciliados" onclick="cambiarTabCruceSalidas('conciliados')" style="padding: 8px 16px; font-size: 0.82rem; font-weight: 700; border: none; background: transparent; cursor: pointer; color: #64748b;">
+                ✅ Reportes Z Conciliados <span id="cruce-salidas-badge-conciliados" class="badge" style="background: #16a34a; color: #fff; margin-left: 6px;">0</span>
+              </button>
+              <button type="button" class="tab-btn-cruce" id="tab-btn-cruce-huerfanas" onclick="cambiarTabCruceSalidas('huerfanas')" style="padding: 8px 16px; font-size: 0.82rem; font-weight: 700; border: none; background: transparent; cursor: pointer; color: #64748b;">
+                ⚠️ Salidas Registradas sin Fiscal <span id="cruce-salidas-badge-huerfanas" class="badge" style="background: #64748b; color: #fff; margin-left: 6px;">0</span>
+              </button>
+            </div>
+
+            <!-- Tab 1: Tabla de Facturas Pendientes -->
+            <div id="cruce-salidas-vista-pendientes">
+              <div style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; font-size: 0.82rem;">
+                  <thead>
+                    <tr style="background: #f8fafc;">
+                      <th>Fecha Z</th>
+                      <th>N° Reporte Z</th>
+                      <th>Serial Impresora</th>
+                      <th style="color: #c2410c;">N° Factura Fiscal Requerida</th>
+                      <th>Tasa BCV</th>
+                      <th>Estatus</th>
+                      <th style="text-align: center;">Acción en Almacén</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-salidas-pendientes">
+                    <tr><td colspan="7" class="text-center" style="padding: 16px; color: #64748b;">Cargando facturas pendientes de cruce...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab 2: Tabla de Reportes Z Conciliados -->
+            <div id="cruce-salidas-vista-conciliados" style="display: none;">
+              <div style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; font-size: 0.82rem;">
+                  <thead>
+                    <tr style="background: #f8fafc;">
+                      <th>Fecha</th>
+                      <th>N° Reporte Z</th>
+                      <th>Rango Facturas</th>
+                      <th>Facturas Anuladas</th>
+                      <th style="text-align: right;">Total Ventas (Bs.)</th>
+                      <th style="text-align: right;">Ref. ($ USD)</th>
+                      <th style="text-align: center;">Estatus Conciliación</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-salidas-conciliados">
+                    <tr><td colspan="7" class="text-center" style="padding: 16px; color: #64748b;">No hay reportes Z conciliados en este período.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab 3: Salidas Registradas sin Fiscal (Huérfanas) -->
+            <div id="cruce-salidas-vista-huerfanas" style="display: none;">
+              <div style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; font-size: 0.82rem;">
+                  <thead>
+                    <tr style="background: #f8fafc;">
+                      <th>Fecha</th>
+                      <th>N° Documento</th>
+                      <th>Ítems</th>
+                      <th style="text-align: right;">Monto (Bs.)</th>
+                      <th style="text-align: right;">Monto ($ USD)</th>
+                      <th>Observaciones</th>
+                      <th style="text-align: center;">Estatus</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-cruce-salidas-huerfanas">
+                    <tr><td colspan="7" class="text-center" style="padding: 16px; color: #64748b;">No hay salidas huérfanas en este período.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -3644,188 +3768,221 @@
 
   <!-- Modal: Registrar Venta / Reporte Z en Libro de Ventas -->
   <div class="modal-overlay" id="modal-nueva-venta" style="display: none;">
-    <div class="modal-box" style="max-width: 620px;">
+    <div class="modal-box" style="max-width: 740px;">
       <div class="modal-header">
-        <h3 style="color: var(--ucg-navy); font-weight: 800;">📤 Registrar Venta Diaria / Reporte Z</h3>
+        <h3 style="color: var(--ucg-navy); font-weight: 800; display:flex; align-items:center; gap:8px;">
+          📤 Registrar Venta Diaria / Reporte Z <span class="badge badge-navy" style="font-size:0.7rem;">SENIAT PA SNAT/2026/00093</span>
+        </h3>
         <button class="modal-close" onclick="closeModal('modal-nueva-venta')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="form-nueva-venta" onsubmit="guardarNuevaVenta(event)">
-          <!-- Buscador Inteligente de Salidas / Ventas de Tienda (Cruce con Asistente) -->
-          <div
-            style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
-            <div style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy); margin-bottom: 6px;">
-              🔗 1. Llamar Facturas de Venta Despachadas por el Asistente en Tienda
+          <!-- TARJETA 1: Buscador y Vinculación con Despachos de Almacén (DG67) -->
+          <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+            <div style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy); margin-bottom: 6px; display:flex; align-items:center; gap:6px;">
+              🔗 1. Vincular Despachos de Almacén en Tienda (DG67)
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="m-vent-buscar-tienda" class="form-control"
-                placeholder="Buscar por N° Factura (ej: 755, 1980, 2223) o Fecha (ej: 2026-08-15)..."
+                placeholder="Buscar por N° Factura (ej: 2595, 2601) o Fecha (ej: 2026-10-29)..."
                 oninput="buscarSalidasTiendaParaVenta(this.value)" style="font-size: 0.82rem;">
               <button type="button" class="btn btn-sm btn-emerald"
                 onclick="buscarSalidasTiendaParaVenta(document.getElementById('m-vent-buscar-tienda').value)"
-                style="white-space: nowrap;">🔍 Buscar Salidas</button>
+                style="white-space: nowrap; font-weight:700;">🔍 Buscar Salidas</button>
             </div>
             <div id="lista-resultados-salida-tienda"
-              style="max-height: 150px; overflow-y: auto; margin-top: 8px; display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;">
+              style="max-height: 220px; overflow-y: auto; margin-top: 8px; display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px;">
             </div>
             <div id="badge-salida-vinculada"
-              style="display: none; margin-top: 8px; padding: 6px 10px; background: #dcfce7; color: #166534; border-radius: 6px; font-size: 0.78rem; font-weight: 700;">
+              style="display: none; margin-top: 8px; padding: 8px 12px; background: #dcfce7; color: #166534; border: 1px solid #86efac; border-radius: 6px; font-size: 0.8rem; font-weight: 700;">
             </div>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>Período Fiscal:</label>
-              <select id="m-vent-periodo" class="form-control" required onchange="onCambioPeriodoVentaZ()">
-                <option value="2026-10" selected>10 - Octubre 2026</option>
-                <option value="2026-11">11 - Noviembre 2026</option>
-                <option value="2026-12">12 - Diciembre 2026</option>
-                <option value="2026-09">09 - Septiembre 2026</option>
-                <option value="2026-08">08 - Agosto 2026</option>
-                <option value="2026-07">07 - Julio 2026</option>
-                <option value="2026-06">06 - Junio 2026</option>
-                <option value="2026-05">05 - Mayo 2026</option>
-                <option value="2026-04">04 - Abril 2026</option>
-                <option value="2026-03">03 - Marzo 2026</option>
-                <option value="2026-02">02 - Febrero 2026</option>
-                <option value="2026-01">01 - Enero 2026</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Fecha de Operación / Reporte:</label>
-              <input type="date" id="m-vent-fecha" class="form-control" required onchange="onCambioFechaVentaZ()">
-            </div>
-          </div>
-
-          <!-- Banner Informativo de Sugerencia Automática desde Salidas de DG67 -->
-          <div id="banner-sugerencia-salidas-z" style="display:none; margin-bottom:12px; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:10px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-              <div>
-                <strong id="banner-sugerencia-z-title" style="color:#15803d; font-size:0.82rem; display:block;"></strong>
-                <span id="banner-sugerencia-z-sub" style="font-size:0.74rem; color:#166534;"></span>
+            <!-- Banner Informativo de Sugerencia Automática desde Salidas de DG67 -->
+            <div id="banner-sugerencia-salidas-z" style="display:none; margin-top:8px; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:10px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <strong id="banner-sugerencia-z-title" style="color:#15803d; font-size:0.82rem; display:block;"></strong>
+                  <span id="banner-sugerencia-z-sub" style="font-size:0.74rem; color:#166534;"></span>
+                </div>
+                <button type="button" class="btn btn-sm btn-emerald" onclick="aplicarSugerenciaSalidasZ()" style="font-weight:800; font-size:0.75rem;">
+                  ⚡ Autocompletar Montos desde DG67
+                </button>
               </div>
-              <button type="button" class="btn btn-sm btn-emerald" onclick="aplicarSugerenciaSalidasZ()" style="font-weight:800; font-size:0.75rem;">
-                ⚡ Autocompletar Montos desde DG67
-              </button>
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; background: #f1f5f9; padding: 10px 14px; border-radius: 8px;">
-            <div class="form-group" style="margin: 0;">
-              <label style="font-weight: 700; color: #0B2447;">📄 N° Reporte Z (Fiscal):</label>
-              <input type="text" id="m-vent-numero-z" class="form-control font-mono font-bold" placeholder="ej: 0317">
+          <!-- TARJETA 2: Identificación Fiscal del Reporte Z -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+            <div style="font-size: 0.82rem; font-weight: 800; color: #0B2447; margin-bottom: 10px;">
+              📑 2. Identificación del Período y Máquina Fiscal
             </div>
-            <div class="form-group" style="margin: 0;">
-              <label style="font-weight: 700; color: #0B2447;">🖨️ Serial Máquina Fiscal:</label>
-              <input type="text" id="m-vent-serial" class="form-control font-mono" value="Z0A0000176" placeholder="ej: Z0A0000176">
-            </div>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns: 1.2fr 1.2fr 1fr; gap: 12px; margin-bottom: 12px;">
-            <div class="form-group">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <label>Factura Desde (Inicial):</label>
-                <span id="m-vent-correlativo-sugerido" style="font-size:0.68rem; color:#0369a1; font-weight:700;"></span>
-              </div>
-              <input type="text" id="m-vent-desde" class="form-control font-mono font-bold" placeholder="ej: 00002433" required oninput="calcularCantidadFacturasZ()">
-            </div>
-            <div class="form-group">
-              <label>Factura Hasta (Final):</label>
-              <input type="text" id="m-vent-hasta" class="form-control font-mono font-bold" placeholder="ej: 00002439" required oninput="calcularCantidadFacturasZ()">
-            </div>
-            <div class="form-group">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <label># Facturas Emitidas:</label>
-                <span id="m-vent-cant-badge" style="font-size:0.68rem; color:#15803d; font-weight:800;"></span>
-              </div>
-              <input type="number" id="m-vent-cant" class="form-control font-bold" value="1" min="1" required oninput="calcularCantidadFacturasZ()">
-            </div>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label># Facturas Anuladas:</label>
-              <input type="number" id="m-vent-anuladas" class="form-control font-mono" value="0" min="0" oninput="calcularCantidadFacturasZ()">
-            </div>
-            <div class="form-group">
-              <label>Monto Total Anulaciones (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-anulaciones-monto" class="form-control font-mono" value="0.00">
-            </div>
-          </div>
-
-          <div
-            style="background:#f0f9ff; border:1px solid #19A7CE; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
-            <div
-              style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <span style="font-size:0.8rem; font-weight:800; color:#0B2447;">💱 Doble Expresión Monetaria (PA
-                SNAT/2026/00093):</span>
-              <span id="m-vent-bcv-legend"
-                style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:4px 10px; border-radius:6px; border:1.5px solid #19A7CE; box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏛️
-                Tasa Oficial BCV: Bs. 889,58 por USD</span>
-            </div>
-            <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
               <div class="form-group" style="margin:0;">
-                <label>Modo de Carga del Monto:</label>
-                <select id="m-vent-modo-moneda" class="form-control" style="font-weight:700; color:#0B2447;"
-                  onchange="calcularIvaVenta()">
+                <label style="font-size:0.75rem;">Período Fiscal:</label>
+                <select id="m-vent-periodo" class="form-control" required onchange="onCambioPeriodoVentaZ()" style="font-size:0.8rem; font-weight:700;">
+                  <option value="2026-10" selected>10 - Octubre 2026</option>
+                  <option value="2026-11">11 - Noviembre 2026</option>
+                  <option value="2026-12">12 - Diciembre 2026</option>
+                  <option value="2026-09">09 - Septiembre 2026</option>
+                  <option value="2026-08">08 - Agosto 2026</option>
+                  <option value="2026-07">07 - Julio 2026</option>
+                  <option value="2026-06">06 - Junio 2026</option>
+                  <option value="2026-05">05 - Mayo 2026</option>
+                  <option value="2026-04">04 - Abril 2026</option>
+                  <option value="2026-03">03 - Marzo 2026</option>
+                  <option value="2026-02">02 - Febrero 2026</option>
+                  <option value="2026-01">01 - Enero 2026</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.75rem;">Fecha de Operación:</label>
+                <input type="date" id="m-vent-fecha" class="form-control font-mono" required onchange="onCambioFechaVentaZ()" style="font-size:0.8rem;">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">📄 N° Reporte Z (Fiscal):</label>
+                <input type="text" id="m-vent-numero-z" class="form-control font-mono font-bold" placeholder="ej: 0317" style="font-size:0.85rem;">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">🖨️ Serial Impresora:</label>
+                <input type="text" id="m-vent-serial" class="form-control font-mono" value="Z0A0000176" placeholder="ej: Z0A0000176" style="font-size:0.85rem;">
+              </div>
+            </div>
+          </div>
+
+          <!-- TARJETA 3: Correlativo de Facturas y Control de Comprobantes -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <span style="font-size: 0.82rem; font-weight: 800; color: #0B2447;">
+                🧾 3. Rango Correlativo y Control de Comprobantes Fiscales
+              </span>
+              <span id="m-vent-correlativo-sugerido" style="font-size:0.72rem; color:#0369a1; font-weight:700;"></span>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.75rem;">Factura Desde (Inicial):</label>
+                <input type="text" id="m-vent-desde" class="form-control font-mono font-bold" placeholder="ej: 00002433" required oninput="calcularCantidadFacturasZ()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.75rem;">Factura Hasta (Final):</label>
+                <input type="text" id="m-vent-hasta" class="form-control font-mono font-bold" placeholder="ej: 00002439" required oninput="calcularCantidadFacturasZ()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <label style="font-size:0.75rem; font-weight:700; color:#15803d;"># Facturas Efectivas:</label>
+                  <span id="m-vent-cant-badge" style="font-size:0.68rem; color:#15803d; font-weight:800;"></span>
+                </div>
+                <input type="number" id="m-vent-cant" class="form-control font-bold" value="1" min="1" required oninput="calcularCantidadFacturasZ()" style="background:#f0fdf4; color:#166534; font-size:0.95rem;">
+              </div>
+            </div>
+
+            <!-- Fila Inteligente de Facturas Anuladas -->
+            <div style="background: #fff7ed; border: 1px dashed #fdba74; border-radius: 8px; padding: 10px 12px;">
+              <div class="form-grid" style="grid-template-columns: 2fr 1fr 1.2fr; gap: 10px; align-items: center;">
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.74rem; font-weight:700; color:#9a3412;">
+                    🚫 N° Facturas Anuladas Específicas:
+                  </label>
+                  <input type="text" id="m-vent-anuladas-numeros" class="form-control font-mono"
+                    placeholder="ej: 00002598, 00002600" oninput="onInputFacturasAnuladasNumeros(this.value)"
+                    style="font-size:0.8rem; background:#ffffff;">
+                  <span style="font-size:0.68rem; color:#c2410c;">Separa por comas las facturas anuladas del día</span>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.74rem; font-weight:700; color:#9a3412;">Cant. Anuladas:</label>
+                  <input type="number" id="m-vent-anuladas" class="form-control font-mono" value="0" min="0" oninput="calcularCantidadFacturasZ()" style="font-size:0.85rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.74rem; font-weight:700; color:#9a3412;">Monto Anulaciones (Bs.):</label>
+                  <input type="number" step="0.01" id="m-vent-anulaciones-monto" class="form-control font-mono" value="0.00" style="font-size:0.85rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TARJETA 4: Liquidación Monetaria Bimonetaria (PA SNAT/2026/00093) -->
+          <div style="background: #f0f9ff; border: 1.5px solid #0284c7; border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+              <span style="font-size:0.82rem; font-weight:800; color:#0B2447;">
+                💱 4. Liquidación Monetaria Bimonetaria (PA SNAT/2026/00093)
+              </span>
+              <span id="m-vent-bcv-legend"
+                style="font-size:0.75rem; font-weight:800; color:#0B2447; background:#FFFFFF; padding:4px 10px; border-radius:6px; border:1.5px solid #0284c7; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                🏛️ Tasa Oficial BCV: Bs. 889,58 por USD
+              </span>
+            </div>
+
+            <!-- Controles de Tasa BCV -->
+            <div class="form-grid" style="grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; margin-bottom: 12px; background:#ffffff; padding:10px; border-radius:8px; border:1px solid #bae6fd;">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.74rem;">Modo de Carga:</label>
+                <select id="m-vent-modo-moneda" class="form-control" style="font-weight:700; color:#0B2447; font-size:0.78rem;" onchange="calcularIvaVenta()">
                   <option value="BS">🇻🇪 Ingresar en Bolívares (Bs.) ➔ Calcula USD</option>
                   <option value="DIVISA">💵 Ingresar en Divisas ($ USD) ➔ Calcula Bs.</option>
                 </select>
               </div>
               <div class="form-group" style="margin:0;">
-                <label>Tasa Oficial BCV (Bs./USD):</label>
-                <input type="number" step="0.01" id="m-vent-tasa-bcv" class="form-control font-mono font-bold"
-                  value="88.50" oninput="calcularIvaVenta()">
+                <label style="font-size:0.74rem;">Tasa Oficial BCV (Bs./USD):</label>
+                <input type="number" step="0.01" id="m-vent-tasa-bcv" class="form-control font-mono font-bold" value="889.58" oninput="calcularIvaVenta()" style="font-size:0.82rem;">
               </div>
               <div class="form-group" style="margin:0;">
-                <label>Fecha de la Tasa BCV:</label>
-                <input type="date" id="m-vent-fecha-tasa" class="form-control font-mono" oninput="calcularIvaVenta()">
+                <label style="font-size:0.74rem;">Fecha de la Tasa BCV:</label>
+                <input type="date" id="m-vent-fecha-tasa" class="form-control font-mono" oninput="calcularIvaVenta()" style="font-size:0.82rem;">
+              </div>
+            </div>
+
+            <!-- Grilla Bimonetaria Ordenada en 2 Columnas -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+              <!-- Columna Bolívares (Principal) -->
+              <div style="background: #ffffff; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px;">
+                <div style="font-size:0.76rem; font-weight:800; color:#1e40af; border-bottom:1px solid #dbeafe; padding-bottom:4px; margin-bottom:8px;">
+                  🇻🇪 BOLÍVARES (Bs. - Moneda Legal Principal)
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.72rem;">Base Imponible Gravada (Bs.):</label>
+                  <input type="number" step="0.01" id="m-vent-base" class="form-control font-mono font-bold" placeholder="0.00" required oninput="calcularIvaVenta('BS')">
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.72rem;">Ventas Exentas (Bs.):</label>
+                  <input type="number" step="0.01" id="m-vent-exento" class="form-control font-mono" value="0.00" oninput="calcularIvaVenta()">
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.72rem;">Débito Fiscal IVA 16% (Bs.):</label>
+                  <input type="number" step="0.01" id="m-vent-iva" class="form-control font-mono" placeholder="0.00" readonly style="background:#f1f5f9; font-weight:700;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.74rem; font-weight:800; color:var(--ucg-navy);">TOTAL FACTURADO (Bs.):</label>
+                  <input type="number" step="0.01" id="m-vent-total" class="form-control font-mono font-bold" readonly style="background:#eff6ff; font-weight:800; font-size:1.1rem; color:var(--ucg-navy); border-color:#3b82f6;">
+                </div>
+              </div>
+
+              <!-- Columna Dólares (Referencia BCV) -->
+              <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
+                <div style="font-size:0.76rem; font-weight:800; color:#0369a1; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:8px;">
+                  💵 REFERENCIA EN DÓLARES ($ USD Oficial BCV)
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.72rem;">Base Imponible ($ USD):</label>
+                  <input type="number" step="0.01" id="m-vent-base-divisa" class="form-control font-mono" placeholder="0.00" oninput="calcularIvaVenta('DIVISA')">
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.72rem;">Débito Fiscal IVA 16% ($ USD):</label>
+                  <div id="m-vent-iva-divisa-lbl" class="font-mono font-bold" style="padding: 7px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem; color: #0369a1;">Ref: $0.00 USD</div>
+                </div>
+                <div class="form-group" style="margin:0; padding-top:22px;">
+                  <label style="font-size:0.74rem; font-weight:800; color:#0f172a;">TOTAL EN DÓLARES ($ USD):</label>
+                  <div id="m-vent-total-divisa-lbl" class="font-mono font-bold" style="padding: 7px 10px; background: #0B2447; color: #38bdf8; border-radius: 6px; font-size: 1.05rem; text-align: right;">
+                    $0.00 USD
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="form-grid"
-            style="grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; background: #f8fafc; padding: 14px; border-radius: 8px;">
-            <div class="form-group">
-              <label>Base Imponible Gravada (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-base" class="form-control font-mono font-bold"
-                placeholder="0.00" required oninput="calcularIvaVenta('BS')">
-            </div>
-            <div class="form-group">
-              <label>Base Imponible ($ USD):</label>
-              <input type="number" step="0.01" id="m-vent-base-divisa" class="form-control font-mono" placeholder="0.00"
-                oninput="calcularIvaVenta('DIVISA')">
-            </div>
-            <div class="form-group">
-              <label>Débito Fiscal IVA 16% (Bs. / $):</label>
-              <input type="number" step="0.01" id="m-vent-iva" class="form-control font-mono" placeholder="0.00"
-                readonly style="background:#f1f5f9; font-weight:700;">
-              <div id="m-vent-iva-divisa-lbl"
-                style="font-size:0.72rem; color:#0369a1; font-family:monospace; font-weight:700; margin-top:2px;">Ref:
-                $0.00 USD</div>
-            </div>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div class="form-group">
-              <label>Ventas Exentas (Bs.):</label>
-              <input type="number" step="0.01" id="m-vent-exento" class="form-control font-mono" value="0.00"
-                oninput="calcularIvaVenta()">
-            </div>
-            <div class="form-group">
-              <label>Total Ventas (Bs. / Equivalente USD):</label>
-              <input type="number" step="0.01" id="m-vent-total" class="form-control font-mono" readonly
-                style="background:#f1f5f9; font-weight:800; font-size:1.05rem; color:var(--ucg-navy);">
-              <div id="m-vent-total-divisa-lbl"
-                style="font-size:0.76rem; color:#0B2447; font-family:monospace; font-weight:800; margin-top:3px;">
-                Equivalente: $0.00 USD</div>
-            </div>
-          </div>
-
-          <div class="modal-footer"
-            style="padding-top: 16px; border-top: 1px solid var(--border-light); margin-top: 16px;">
+          <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid var(--border-light); margin-top: 14px; display:flex; justify-content:flex-end; gap:10px;">
             <button type="button" class="btn btn-secondary" onclick="closeModal('modal-nueva-venta')">Cancelar</button>
-            <button type="submit" class="btn btn-navy" id="btn-save-venta">Guardar en Libro de Ventas</button>
+            <button type="submit" class="btn btn-navy" id="btn-save-venta" style="font-weight:800;">
+              💾 Guardar en Libro de Ventas
+            </button>
           </div>
         </form>
       </div>

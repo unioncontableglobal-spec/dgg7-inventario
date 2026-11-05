@@ -6,6 +6,8 @@ import {
   getResumenCruceDobleVia,
   getProximaFacturaZ,
   getCruceComprasEntradas,
+  getCruceVentasSalidas,
+  getSalidasTiendaAgrupadas,
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
 } from '../lib/cruce_engine.js';
@@ -826,7 +828,16 @@ export async function onRequest(context) {
 
       let resultadoCruce = null;
       if (tipo === 'SALIDA_VENTA') {
-        resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+        const zId = body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null;
+        if (zId) {
+          await db.execute({
+            sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
+            args: [zId, movimientoId]
+          });
+          resultadoCruce = await conciliarReporteZ(zId, db);
+        } else {
+          resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+        }
       } else if (tipo === 'ENTRADA_COMPRA') {
         let lcId = body.libro_compras_id || null;
         if (!lcId && numFacturaNum) {
@@ -995,57 +1006,14 @@ export async function onRequest(context) {
       const periodo = url.searchParams.get('periodo');
       const fecha = url.searchParams.get('fecha');
       const q = url.searchParams.get('q');
-      let sql = `
-        SELECT 
-          m.fecha,
-          strftime('%Y-%m', m.fecha) as periodo,
-          COUNT(DISTINCT m.id) as cantidad_movimientos,
-          COUNT(DISTINCT CASE 
-            WHEN m.observaciones LIKE 'FACT%' THEN m.observaciones 
-            ELSE m.numero_documento 
-          END) as cantidad_comprobantes,
-          MIN(CASE 
-            WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
-            WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
-            ELSE m.observaciones
-          END) as factura_desde,
-          MAX(CASE 
-            WHEN m.observaciones LIKE 'FACT%' THEN TRIM(REPLACE(m.observaciones, 'FACT', ''))
-            WHEN m.numero_documento NOT LIKE 'VENTA-%' THEN m.numero_documento
-            ELSE m.observaciones
-          END) as factura_hasta,
-          GROUP_CONCAT(DISTINCT CASE 
-            WHEN m.observaciones != '' THEN m.observaciones 
-            ELSE m.numero_documento 
-          END) as lista_facturas,
-          COALESCE(SUM(md.cantidad), 0) as total_unidades_despachadas,
-          COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd, 0)), 0) as valor_referencial_usd,
-          (SELECT lv.id FROM libro_ventas lv WHERE lv.fecha = m.fecha LIMIT 1) as libro_venta_id
-        FROM movimientos m
-        LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-        LEFT JOIN productos p ON md.producto_id = p.id
-        WHERE m.tipo = 'SALIDA_VENTA'
-      `;
-      const args = [];
-      if (periodo && periodo !== 'TODOS') {
-        sql += ` AND strftime('%Y-%m', m.fecha) = ?`;
-        args.push(periodo);
-      }
-      if (fecha) {
-        sql += ` AND m.fecha = ?`;
-        args.push(fecha);
-      }
-      if (q) {
-        sql += ` AND (m.numero_documento LIKE ? OR m.observaciones LIKE ?)`;
-        args.push(`%${q}%`, `%${q}%`);
-      }
-      sql += `
-        GROUP BY m.fecha
-        ORDER BY m.fecha DESC
-        LIMIT 150
-      `;
-      const result = await db.execute({ sql, args });
-      return jsonResponse(result.rows);
+      const result = await getSalidasTiendaAgrupadas(periodo, fecha, q, db);
+      return jsonResponse(result);
+    }
+
+    if (path === '/api/fiscal/cruce-ventas-salidas' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo') || '2026-10';
+      const cruce = await getCruceVentasSalidas(periodo, db);
+      return jsonResponse(cruce);
     }
 
     if (path === '/api/fiscal/verificar-duplicado-compra' && method === 'GET') {
@@ -1096,7 +1064,7 @@ export async function onRequest(context) {
       const body = await request.json();
       const {
         periodo, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
-        cantidad_comprobantes, cantidad_anuladas, total_anulaciones_bs,
+        cantidad_comprobantes, cantidad_anuladas, total_anulaciones_bs, facturas_anuladas_lista,
         total_bs, total_divisa, exento_bs, exento_divisa,
         base_imponible_bs, base_imponible_divisa, alicuota, iva_bs, monto_iva_divisa,
         tasa_bcv, fecha_tasa_bcv, moneda_divisa
@@ -1131,20 +1099,21 @@ export async function onRequest(context) {
       const serial = String(serial_impresora || 'Z0A0000176').trim();
       const cantAnul = Number(cantidad_anuladas) || 0;
       const totAnulBs = Number(total_anulaciones_bs) || 0.0;
+      const anulLista = String(facturas_anuladas_lista || '').trim();
 
       const insResult = await db.execute({
         sql: `INSERT INTO libro_ventas 
               (periodo, archivo_origen, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
                total_bs, exento_bs, base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
-               cantidad_anuladas, total_anulaciones_bs,
+               cantidad_anuladas, total_anulaciones_bs, facturas_anuladas_lista,
                tasa_bcv, fecha_tasa_bcv, moneda_divisa, exento_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa,
                estatus_conciliacion)
-              VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
+              VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
               RETURNING id`,
         args: [
           periodo, fecha, numZ, serial, factura_desde || null, factura_hasta || null,
           totalCalc, exBs, baseBs, ali, ivaCalc, cant,
-          cantAnul, totAnulBs,
+          cantAnul, totAnulBs, anulLista,
           tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc
         ]
       });
@@ -1263,162 +1232,7 @@ export async function onRequest(context) {
       });
     }
 
-    if ((path === '/api/fiscal/libro-ventas' || path === '/api/cruce/reporte-z') && method === 'POST') {
-      const body = await request.json();
-      const {
-        periodo, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
-        cantidad_comprobantes, cantidad_anuladas, total_anulaciones_bs,
-        total_bs, total_divisa, exento_bs, exento_divisa,
-        base_imponible_bs, base_imponible_divisa, alicuota, iva_bs, monto_iva_divisa,
-        tasa_bcv, fecha_tasa_bcv, moneda_divisa
-      } = body;
 
-      if (!periodo || !fecha || (base_imponible_bs === undefined && base_imponible_divisa === undefined)) {
-        return jsonResponse({ error: 'Faltan campos requeridos (Período, Fecha, Base Imponible)' }, 400);
-      }
-
-      const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
-      const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
-      const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
-      const monedaOp = moneda_divisa || 'USD';
-
-      const ali = Number(alicuota) || 0.16;
-      let baseBs = Number(base_imponible_bs) || 0.0;
-      let baseDiv = Number(base_imponible_divisa) || 0.0;
-      if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
-      else if (baseDiv <= 0 && baseBs > 0) baseDiv = Number((baseBs / tasaOp).toFixed(2));
-
-      let exBs = Number(exento_bs) || 0.0;
-      let exDiv = Number(exento_divisa) || 0.0;
-      if (exBs <= 0 && exDiv > 0) exBs = Number((exDiv * tasaOp).toFixed(2));
-      else if (exDiv <= 0 && exBs > 0) exDiv = Number((exBs / tasaOp).toFixed(2));
-
-      const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
-      const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaCalc / tasaOp).toFixed(2));
-      const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc + exBs).toFixed(2));
-      const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
-      const cant = Number(cantidad_comprobantes) || 1;
-      const numZ = String(numero_reporte_z || '').trim();
-      const serial = String(serial_impresora || 'Z0A0000176').trim();
-      const cantAnul = Number(cantidad_anuladas) || 0;
-      const totAnulBs = Number(total_anulaciones_bs) || 0.0;
-
-      const insResult = await db.execute({
-        sql: `INSERT INTO libro_ventas 
-              (periodo, archivo_origen, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
-               total_bs, exento_bs, base_imponible_bs, alicuota, iva_bs, cantidad_comprobantes,
-               cantidad_anuladas, total_anulaciones_bs,
-               tasa_bcv, fecha_tasa_bcv, moneda_divisa, exento_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa,
-               estatus_conciliacion)
-              VALUES (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_DG67')
-              RETURNING id`,
-        args: [
-          periodo, fecha, numZ, serial, factura_desde || null, factura_hasta || null,
-          totalCalc, exBs, baseBs, ali, ivaCalc, cant,
-          cantAnul, totAnulBs,
-          tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc
-        ]
-      });
-
-      const zId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
-      const resultadoCruce = await conciliarReporteZ(zId, db);
-
-      return jsonResponse({
-        success: true,
-        id: zId,
-        message: 'Reporte Z guardado con éxito en Libro de Ventas (Conciliación Automática)',
-        conciliacion: resultadoCruce
-      });
-    }
-
-    if (path === '/api/fiscal/libro-compras' && method === 'POST') {
-      const body = await request.json();
-      const {
-        periodo, fecha, rif, razon_social, nro_factura, nro_control,
-        tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
-        aplica_inventario, tipo_servicio, tasa_bcv, fecha_tasa_bcv
-      } = body;
-
-      if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
-        return jsonResponse({ error: 'Faltan campos obligatorios para el Libro de Compras' }, 400);
-      }
-
-      const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
-      const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
-      const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
-
-      const ali = Number(alicuota) || 0.16;
-      const baseBs = Number(base_imponible_bs) || 0.0;
-      const ivaBs = Number(iva_bs) || Number((baseBs * ali).toFixed(2));
-      const totBs = Number(total_bs) || Number((baseBs + ivaBs).toFixed(2));
-      const baseDiv = Number((baseBs / tasaOp).toFixed(2));
-      const ivaDiv = Number((ivaBs / tasaOp).toFixed(2));
-      const totDiv = Number((totBs / tasaOp).toFixed(2));
-      const esMercancia = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1');
-
-      const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [String(rif).trim()] });
-      const provId = provRes.rows[0]?.id || null;
-
-      let matchMovId = null;
-      let estatus = esMercancia ? 'PENDIENTE_DG67' : 'NO_APLICA_GASTO';
-      let obs = esMercancia ? 'Declarada en SENIAT. Pendiente por recibir físicamente en almacén.' : 'Gasto operativo / servicio.';
-
-      if (esMercancia) {
-        const numClean = String(nro_factura).replace(/\D/g, '');
-        if (numClean) {
-          const matchMov = await db.execute({
-            sql: `SELECT id FROM movimientos 
-                  WHERE tipo = 'ENTRADA_COMPRA' 
-                    AND (numero_factura_numerico = ? OR numero_documento LIKE ? OR numero_documento LIKE ?)
-                  LIMIT 1`,
-            args: [parseInt(numClean, 10), `%${numClean}%`, `%${nro_factura}%`]
-          });
-          if (matchMov.rows.length > 0) {
-            matchMovId = matchMov.rows[0].id;
-            estatus = 'CONCILIADO';
-            obs = 'Conciliada automáticamente con recepción física en almacén.';
-          }
-        }
-      }
-
-      const insResult = await db.execute({
-        sql: `INSERT INTO libro_compras 
-              (periodo, archivo_origen, fecha, rif, razon_social, nro_factura, nro_control,
-               tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
-               proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
-               tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
-              VALUES 
-              (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?,
-               ?, ?, ?, ?, ?,
-               ?, ?, ?, ?, ?, ?,
-               ?, ?, 'USD', ?, ?, ?)
-              RETURNING id`,
-        args: [
-          periodo, fecha, String(rif).trim(), String(razon_social).trim(), String(nro_factura).trim(), nro_control || '00-000000',
-          tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
-          provId, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
-          esMercancia ? 1 : 0, estatus, matchMovId, obs,
-          tasaOp, fechaTasaOp, baseDiv, ivaDiv, totDiv
-        ]
-      });
-
-      const lcId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
-
-      if (matchMovId) {
-        await db.execute({
-          sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
-          args: [lcId, matchMovId]
-        });
-      }
-
-      return jsonResponse({
-        success: true,
-        id: lcId,
-        message: 'Factura registrada con éxito en Libro de Compras (Doble Vía)',
-        estatus_conciliacion: estatus,
-        movimiento_id: matchMovId
-      });
-    }
 
     if (path === '/api/fiscal/declaraciones-iva' && method === 'GET') {
       const res = await db.execute("SELECT * FROM declaraciones_iva ORDER BY periodo ASC");
