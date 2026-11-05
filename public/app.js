@@ -628,14 +628,16 @@ function switchTab(tabId) {
     if (bannerConsulta) bannerConsulta.style.display = isAuditor ? 'none' : 'flex';
     if (bannerAuditor) bannerAuditor.style.display = isAuditor ? 'flex' : 'none';
 
-    const btnRapida = document.getElementById('btn-modo-auditoria-rapida');
+    const btnApertura = document.getElementById('btn-abrir-apertura-acta');
+    const btnRapida = document.getElementById('btn-modo-rapido-auditoria') || document.getElementById('btn-modo-auditoria-rapida');
     const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
     const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
     const btnConfigActa = document.getElementById('btn-configurar-acta-banner');
 
-    if (btnRapida) btnRapida.style.display = isAuditor ? 'inline-flex' : 'none';
-    if (btnCerrar) btnCerrar.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-flex' : 'none';
-    if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'inline-flex' : 'none';
+    if (btnApertura) btnApertura.style.display = isAuditor ? 'flex' : 'none';
+    if (btnRapida) btnRapida.style.display = isAuditor ? 'flex' : 'none';
+    if (btnCerrar) btnCerrar.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
+    if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'flex' : 'none';
     if (btnConfigActa) btnConfigActa.style.display = isAuditor ? 'inline-block' : 'none';
 
     // Apertura secuencial controlada: EXCLUSIVA para el usuario Auditor de Tienda
@@ -8052,7 +8054,7 @@ function obtenerActaActiva() {
   try {
     const raw = localStorage.getItem('dg67_acta_iniciada_202610');
     if (raw) return JSON.parse(raw);
-  } catch (e) {}
+  } catch (e) { }
   return null;
 }
 
@@ -8211,9 +8213,9 @@ async function cargarEstatusTomaFisica(periodo = '2026-10') {
 
     if (state.tomaFisicaEstatus === 'CERRADA') {
       if (btnCerrar) btnCerrar.style.display = 'none';
-      if (btnReabrir) btnReabrir.style.display = isAuditor ? 'inline-flex' : 'none';
+      if (btnReabrir) btnReabrir.style.display = isAuditor ? 'flex' : 'none';
     } else {
-      if (btnCerrar) btnCerrar.style.display = isAuditor ? 'inline-flex' : 'none';
+      if (btnCerrar) btnCerrar.style.display = isAuditor ? 'flex' : 'none';
       if (btnReabrir) btnReabrir.style.display = 'none';
     }
 

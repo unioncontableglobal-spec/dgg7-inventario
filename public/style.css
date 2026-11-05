@@ -3828,3 +3828,173 @@ body {
   transform: translateX(20px);
 }
 
+/* ==========================================================================
+   BARRA EJECUTIVA DE FASES DE AUDITORÍA (TARJETAS / BOTONES DE TOMA FÍSICA)
+   ========================================================================== */
+.pzero-fases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+@media (min-width: 1100px) {
+  .pzero-fases-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1099px) and (min-width: 640px) {
+  .pzero-fases-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .pzero-fases-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pzero-fase-card {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 58px;
+  height: auto;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  font-family: inherit;
+  color: #ffffff;
+  outline: none;
+  text-decoration: none;
+}
+
+.pzero-fase-card:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.pzero-fase-card:active {
+  transform: translateY(0);
+}
+
+/* Badge numérico de paso */
+.pzero-fase-card .fase-badge-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Contenedor central de texto */
+.pzero-fase-card .fase-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.pzero-fase-card .fase-sub {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pzero-fase-card .fase-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+/* Ícono lateral derecho */
+.pzero-fase-card .fase-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.92;
+  margin-left: auto;
+}
+
+/* 1. Tarjeta Azul (Apertura de Acta) */
+.pzero-fase-azul {
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+  border-color: #1e3a8a;
+  box-shadow: 0 3px 10px rgba(30, 64, 175, 0.28);
+}
+.pzero-fase-azul .fase-sub {
+  color: #bfdbfe;
+}
+
+/* 2. Tarjeta Verde (Modo Ajuste Rápido) */
+.pzero-fase-verde {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  border-color: #047857;
+  box-shadow: 0 3px 10px rgba(5, 150, 105, 0.28);
+}
+.pzero-fase-verde .fase-sub {
+  color: #d1fae5;
+}
+
+/* 3. Tarjeta Negra / Azul Marino (Ver / Imprimir Acta) */
+.pzero-fase-negro {
+  background: linear-gradient(135deg, #0B2447 0%, #1e293b 100%);
+  border-color: #020617;
+  box-shadow: 0 3px 10px rgba(11, 36, 71, 0.28);
+}
+.pzero-fase-negro .fase-sub {
+  color: #cbd5e1;
+}
+
+/* 4. Tarjeta Naranja (Cerrar Toma Física) */
+.pzero-fase-naranja {
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+  border-color: #9a3412;
+  box-shadow: 0 3px 10px rgba(194, 65, 12, 0.28);
+}
+.pzero-fase-naranja .fase-sub {
+  color: #fed7aa;
+}
+
+/* 4b. Tarjeta Reabrir (Estatus Cerrado) */
+.pzero-fase-reabrir {
+  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  border-color: #065f46;
+  box-shadow: 0 3px 10px rgba(4, 120, 87, 0.28);
+}
+.pzero-fase-reabrir .fase-sub {
+  color: #a7f3d0;
+}
+
