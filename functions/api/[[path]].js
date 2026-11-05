@@ -910,9 +910,150 @@ export async function onRequest(context) {
     }
 
     // ----------------------------------------------------
+    // ESTATUS, CIERRE Y REAPERTURA DE TOMA FÍSICA
+    // ----------------------------------------------------
+    if (path === '/api/auditoria/toma-fisica/estatus' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo') || '2026-10';
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS actas_toma_fisica (
+          periodo TEXT PRIMARY KEY,
+          numero_acta TEXT,
+          estatus TEXT DEFAULT 'ABIERTA',
+          fecha_corte TEXT,
+          fecha_cierre TEXT,
+          usuario_cierre TEXT,
+          auditor_tienda TEXT,
+          gerente_dg67 TEXT,
+          contador_ucg TEXT,
+          tasa_bcv REAL DEFAULT 889.58,
+          resumen_items TEXT,
+          updated_at TEXT
+        );
+      `).catch(() => {});
+      await db.execute("ALTER TABLE actas_toma_fisica ADD COLUMN tasa_bcv REAL DEFAULT 889.58;").catch(() => {});
+
+      const actaRes = await db.execute({
+        sql: "SELECT * FROM actas_toma_fisica WHERE periodo = ? LIMIT 1",
+        args: [periodo]
+      });
+      if (actaRes.rows.length === 0) {
+        return jsonResponse({
+          periodo,
+          estatus: 'ABIERTA',
+          numero_acta: `ACTA-INV-${periodo.replace('-', '')}-01`,
+          tasa_bcv: 889.58,
+          fecha_cierre: null,
+          usuario_cierre: null
+        });
+      }
+      const a = actaRes.rows[0];
+      return jsonResponse({
+        periodo: a.periodo,
+        estatus: a.estatus || 'ABIERTA',
+        numero_acta: a.numero_acta,
+        fecha_corte: a.fecha_corte,
+        fecha_cierre: a.fecha_cierre,
+        usuario_cierre: a.usuario_cierre,
+        auditor_tienda: a.auditor_tienda,
+        gerente_dg67: a.gerente_dg67,
+        contador_ucg: a.contador_ucg,
+        tasa_bcv: Number(a.tasa_bcv || 889.58)
+      });
+    }
+
+    if (path === '/api/auditoria/toma-fisica/cerrar' && method === 'POST') {
+      const body = await request.json();
+      const {
+        periodo = '2026-10',
+        numero_acta = 'ACTA-INV-202610-01',
+        usuario = 'ADMIN_DG67',
+        fecha_cierre = new Date().toISOString(),
+        auditor_tienda = 'Personal de Almacén DG 67',
+        gerente_dg67 = 'Gerencia General Inversiones DG 67, C.A.',
+        contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+        tasa_bcv = 889.58
+      } = body || {};
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS actas_toma_fisica (
+          periodo TEXT PRIMARY KEY,
+          numero_acta TEXT,
+          estatus TEXT DEFAULT 'ABIERTA',
+          fecha_corte TEXT,
+          fecha_cierre TEXT,
+          usuario_cierre TEXT,
+          auditor_tienda TEXT,
+          gerente_dg67 TEXT,
+          contador_ucg TEXT,
+          tasa_bcv REAL DEFAULT 889.58,
+          resumen_items TEXT,
+          updated_at TEXT
+        );
+      `).catch(() => {});
+      await db.execute("ALTER TABLE actas_toma_fisica ADD COLUMN tasa_bcv REAL DEFAULT 889.58;").catch(() => {});
+
+      await db.execute({
+        sql: `
+          INSERT INTO actas_toma_fisica 
+          (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, tasa_bcv, updated_at)
+          VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+          ON CONFLICT(periodo) DO UPDATE SET
+            numero_acta = excluded.numero_acta,
+            estatus = 'CERRADA',
+            fecha_cierre = excluded.fecha_cierre,
+            usuario_cierre = excluded.usuario_cierre,
+            auditor_tienda = excluded.auditor_tienda,
+            gerente_dg67 = excluded.gerente_dg67,
+            contador_ucg = excluded.contador_ucg,
+            tasa_bcv = excluded.tasa_bcv,
+            updated_at = datetime('now', 'localtime')
+        `,
+        args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg, Number(tasa_bcv || 889.58)]
+      });
+
+      return jsonResponse({
+        success: true,
+        periodo,
+        numero_acta,
+        estatus: 'CERRADA',
+        fecha_cierre,
+        usuario_cierre: usuario,
+        mensaje: `✅ Toma Física del período ${periodo} formalmente cerrada y sellada.`
+      });
+    }
+
+    if (path === '/api/auditoria/toma-fisica/reabrir' && method === 'POST') {
+      const body = await request.json();
+      const { periodo = '2026-10' } = body || {};
+      await db.execute({
+        sql: `UPDATE actas_toma_fisica SET estatus = 'ABIERTA', updated_at = datetime('now', 'localtime') WHERE periodo = ?`,
+        args: [periodo]
+      });
+      return jsonResponse({
+        success: true,
+        periodo,
+        estatus: 'ABIERTA',
+        mensaje: `🔓 Toma Física del período ${periodo} reabierta para ajustes y rectificaciones.`
+      });
+    }
+
+    // ----------------------------------------------------
     // TASAS BCV
     // ----------------------------------------------------
     if (path === '/api/tasas-bcv' && method === 'GET') {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fecha TEXT NOT NULL,
+          hora TEXT NOT NULL,
+          timestamp INTEGER,
+          tasa_bcv REAL NOT NULL,
+          moneda TEXT DEFAULT 'USD',
+          usuario TEXT,
+          origen TEXT DEFAULT 'MANUAL_MODAL'
+        );
+      `).catch(() => {});
+
       const [tasasRes, cfgRes] = await Promise.all([
         db.execute("SELECT * FROM tasas_bcv_periodo ORDER BY periodo ASC"),
         db.execute("SELECT metodo_valoracion_kardex, tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
@@ -937,10 +1078,17 @@ export async function onRequest(context) {
             origen: 'CIERRE_MES'
           } : { tasa_bcv: 889.58, fecha: '2026-10-30', periodo: '2026-10', moneda: 'USD', origen: 'DEFAULT' });
 
+      const fechaFiltro = tasaActiva.fecha || new Date().toISOString().split('T')[0];
+      const histRes = await db.execute({
+        sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 25",
+        args: [fechaFiltro]
+      }).catch(() => ({ rows: [] }));
+
       return jsonResponse({
         metodo_valoracion_kardex: cfg.metodo_valoracion_kardex || 'CPP',
         tasas,
-        tasa_activa: tasaActiva
+        tasa_activa: tasaActiva,
+        historico_hoy: histRes.rows || []
       });
     }
 
@@ -950,16 +1098,73 @@ export async function onRequest(context) {
       if (!numTasa || numTasa <= 0) return jsonResponse({ error: 'Monto de tasa BCV inválido' }, 400);
 
       const fechaTasa = b.fecha || new Date().toISOString().split('T')[0];
+      const periodo = fechaTasa.slice(0, 7);
+      const usuario = b.usuario || 'ADMIN_DG67';
+      const ahora = new Date();
+      const hora = ahora.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      const timestamp = ahora.getTime();
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fecha TEXT NOT NULL,
+          hora TEXT NOT NULL,
+          timestamp INTEGER,
+          tasa_bcv REAL NOT NULL,
+          moneda TEXT DEFAULT 'USD',
+          usuario TEXT,
+          origen TEXT DEFAULT 'MANUAL_MODAL'
+        );
+      `).catch(() => {});
+
       await db.execute({
         sql: `UPDATE config_fiscal_islr SET tasa_bcv_activa_dia = ?, fecha_bcv_activa_dia = ? WHERE id = 1`,
         args: [numTasa, fechaTasa]
       });
 
+      await db.execute({
+        sql: `INSERT INTO historico_tasas_bcv (fecha, hora, timestamp, tasa_bcv, moneda, usuario, origen) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [fechaTasa, hora, timestamp, numTasa, b.moneda || 'USD', usuario, 'MODAL_DIARIO']
+      });
+
+      const histRes = await db.execute({
+        sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 25",
+        args: [fechaTasa]
+      }).catch(() => ({ rows: [] }));
+
       return jsonResponse({
         ok: true,
         mensaje: `Tasa BCV actualizada: Bs. ${numTasa.toFixed(4)} (${fechaTasa})`,
         tasa_bcv: numTasa,
-        fecha: fechaTasa
+        fecha: fechaTasa,
+        periodo,
+        historico_hoy: histRes.rows || []
+      });
+    }
+
+    if (path === '/api/tasas-bcv/historico' && method === 'GET') {
+      const fechaQuery = url.searchParams.get('fecha') || new Date().toISOString().split('T')[0];
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fecha TEXT NOT NULL,
+          hora TEXT NOT NULL,
+          timestamp INTEGER,
+          tasa_bcv REAL NOT NULL,
+          moneda TEXT DEFAULT 'USD',
+          usuario TEXT,
+          origen TEXT DEFAULT 'MANUAL_MODAL'
+        );
+      `).catch(() => {});
+
+      const histRes = await db.execute({
+        sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 50",
+        args: [fechaQuery]
+      });
+
+      return jsonResponse({
+        fecha: fechaQuery,
+        historico: histRes.rows || []
       });
     }
 

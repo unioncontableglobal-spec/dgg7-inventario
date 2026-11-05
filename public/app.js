@@ -324,6 +324,8 @@ function logoutSession() {
   if (!confirm('¿Desea cerrar la sesión de trabajo segura?')) return;
   localStorage.removeItem(AUTH_STORAGE_KEY);
   sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  appInitialized = false;
+  state.currentUser = null;
   const pwdEl = document.getElementById('login-password');
   if (pwdEl) pwdEl.value = '';
   showLogin();
@@ -427,18 +429,36 @@ async function loadTasasBcvPeriodo() {
 
     // Actualizar Widget Ejecutivo del Dashboard y formularios con la tasa activa
     const tasaActiva = data.tasa_activa || (state.tasasBcv && state.tasasBcv[state.tasasBcv.length - 1]);
-    if (tasaActiva) {
+    if (tasaActiva && Number(tasaActiva.tasa_bcv) > 0) {
       state.tasaActiva = tasaActiva;
+      const rateNum = Number(tasaActiva.tasa_bcv || 0);
+
+      try {
+        localStorage.setItem('dg67_tasa_bcv_activa', JSON.stringify({
+          tasa_bcv: rateNum,
+          fecha: tasaActiva.fecha || new Date().toISOString().split('T')[0],
+          timestamp: Date.now()
+        }));
+      } catch (e) {}
+
       const displayRate = document.getElementById('dashboard-tasa-bcv-display');
       const displayFecha = document.getElementById('dashboard-tasa-bcv-fecha');
       const inputRate = document.getElementById('daily-bcv-input');
       const inputFecha = document.getElementById('daily-bcv-fecha-input');
 
-      const rateNum = Number(tasaActiva.tasa_bcv || 0);
       if (displayRate) displayRate.textContent = `Bs. ${rateNum.toFixed(4)}`;
       if (displayFecha) displayFecha.textContent = `Vigencia Oficial: ${tasaActiva.fecha || tasaActiva.fecha_cierre || 'Al día'}`;
-      if (inputRate && !inputRate.value) inputRate.value = rateNum.toFixed(4);
-      if (inputFecha && !inputFecha.value) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || new Date().toISOString().split('T')[0];
+      if (inputRate) inputRate.value = rateNum.toFixed(4);
+      if (inputFecha) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || new Date().toISOString().split('T')[0];
+
+      // Sincronizar modal flotante de Tasa BCV del día
+      const popupTasaInput = document.getElementById('popup-tasa-valor');
+      if (popupTasaInput) {
+        popupTasaInput.value = rateNum.toFixed(4);
+        if (typeof actualizarPreviewTasaModal === 'function') {
+          actualizarPreviewTasaModal(rateNum);
+        }
+      }
 
       // Asignar tasa BCV por defecto en Entrada (Factura) y Salida (Venta)
       const entTasa = document.getElementById('ent-tasa');
@@ -447,6 +467,10 @@ async function loadTasasBcvPeriodo() {
       if (salTasa && !salTasa.value) salTasa.value = rateNum.toFixed(4);
       calculateEntryTotals();
       calculateExitTotals();
+    }
+
+    if (Array.isArray(data.historico_hoy) && typeof renderHistoricoTasasModal === 'function') {
+      renderHistoricoTasasModal(data.historico_hoy);
     }
   } catch (err) {
     console.error('Error cargando tasas BCV:', err);
@@ -597,8 +621,25 @@ function switchTab(tabId) {
     cargarAuditoriaEnVivo();
     if (typeof cargarEstatusTomaFisica === 'function') cargarEstatusTomaFisica('2026-10');
     if (typeof actualizarBannerActaActiva === 'function') actualizarBannerActaActiva();
-    // Apertura secuencial controlada: sólo si el modal de BCV no está abierto y el acta no está aperturada
-    if (!state.modalBcvAbierto && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
+
+    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+    const bannerConsulta = document.getElementById('pzero-banner-modo-consulta');
+    const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
+    if (bannerConsulta) bannerConsulta.style.display = isAuditor ? 'none' : 'flex';
+    if (bannerAuditor) bannerAuditor.style.display = isAuditor ? 'flex' : 'none';
+
+    const btnRapida = document.getElementById('btn-modo-auditoria-rapida');
+    const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
+    const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
+    const btnConfigActa = document.getElementById('btn-configurar-acta-banner');
+
+    if (btnRapida) btnRapida.style.display = isAuditor ? 'inline-flex' : 'none';
+    if (btnCerrar) btnCerrar.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-flex' : 'none';
+    if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'inline-flex' : 'none';
+    if (btnConfigActa) btnConfigActa.style.display = isAuditor ? 'inline-block' : 'none';
+
+    // Apertura secuencial controlada: EXCLUSIVA para el usuario Auditor de Tienda
+    if (isAuditor && !state.modalBcvAbierto && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
       setTimeout(() => {
         abrirModalAperturaActa();
       }, 400);
@@ -2247,8 +2288,9 @@ function closeModal(modalId) {
 
   if (modalId === 'modal-tasa-bcv-dia') {
     state.modalBcvAbierto = false;
-    // Transición secuencial: al cerrar Tasa BCV, si está en Toma Física y el acta aún no está abierta, abrir modal de apertura de acta
-    if (state.activeTab === 'tab-punto-cero' && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
+    // Transición secuencial: al cerrar Tasa BCV, EXCLUSIVO para usuario Auditor de Toma Física si el acta aún no está abierta
+    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+    if (isAuditor && state.activeTab === 'tab-punto-cero' && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
       setTimeout(() => {
         abrirModalAperturaActa();
       }, 350);
@@ -7523,12 +7565,33 @@ function abrirModalTasaBcvDia() {
   const tInput = document.getElementById('popup-tasa-valor');
   if (fInput) fInput.value = hoy;
 
-  const tasaActual = state.tasaActiva?.tasa_bcv || (state.tasasBcv && state.tasasBcv[state.tasasBcv.length - 1]?.tasa_bcv) || 889.58;
-  if (tInput && !tInput.value) tInput.value = Number(tasaActual).toFixed(4);
+  // 1. Priorizar tasa activa guardada en localStorage o en state para que nunca se reinicie al salir
+  let tasaActual = null;
+  try {
+    const rawCache = localStorage.getItem('dg67_tasa_bcv_activa');
+    if (rawCache) {
+      const parsed = JSON.parse(rawCache);
+      if (parsed && Number(parsed.tasa_bcv) > 0) {
+        tasaActual = Number(parsed.tasa_bcv);
+      }
+    }
+  } catch (e) {}
+
+  if (!tasaActual && state.tasaActiva && Number(state.tasaActiva.tasa_bcv) > 0) {
+    tasaActual = Number(state.tasaActiva.tasa_bcv);
+  }
+  if (!tasaActual && state.tasasBcv && state.tasasBcv.length > 0) {
+    tasaActual = Number(state.tasasBcv[state.tasasBcv.length - 1].tasa_bcv);
+  }
+  if (!tasaActual) tasaActual = 894.89;
+
+  if (tInput) tInput.value = Number(tasaActual).toFixed(4);
   actualizarPreviewTasaModal(tInput?.value || tasaActual);
 
   const m = document.getElementById('modal-tasa-bcv-dia');
   if (m) m.style.display = 'flex';
+
+  cargarHistoricoTasasModal(fInput?.value || hoy);
 }
 
 function actualizarPreviewTasaModal(val) {
@@ -7539,6 +7602,51 @@ function actualizarPreviewTasaModal(val) {
   }
 }
 
+async function cargarHistoricoTasasModal(fecha) {
+  const container = document.getElementById('popup-tasa-historial-lista');
+  const countBadge = document.getElementById('popup-tasa-historial-count');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/api/tasas-bcv/historico?fecha=${encodeURIComponent(fecha)}`);
+    const data = await res.json();
+    renderHistoricoTasasModal(data.historico || []);
+  } catch (e) {
+    console.warn('Error cargando historial de tasas:', e);
+  }
+}
+
+function renderHistoricoTasasModal(historico) {
+  const container = document.getElementById('popup-tasa-historial-lista');
+  const countBadge = document.getElementById('popup-tasa-historial-count');
+  if (!container) return;
+
+  if (!Array.isArray(historico) || historico.length === 0) {
+    container.innerHTML = '<span style="color: #94a3b8; font-style: italic;">Sin actualizaciones registradas para esta fecha aún.</span>';
+    if (countBadge) countBadge.textContent = '0 registros';
+    return;
+  }
+
+  if (countBadge) countBadge.textContent = `${historico.length} registro${historico.length === 1 ? '' : 's'}`;
+
+  container.innerHTML = historico.map((h, i) => {
+    const tasaNum = Number(h.tasa_bcv || 0);
+    const esUltima = i === 0;
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: ${i < historico.length - 1 ? '1px dashed #e2e8f0' : 'none'};">
+        <div>
+          <span style="font-weight: 800; color: #0B2447; font-family: monospace;">Bs. ${tasaNum.toFixed(4)}</span>
+          <span style="color: #64748b; font-size: 0.7rem; margin-left: 6px;">(${h.hora || ''})</span>
+          ${esUltima ? '<span class="badge" style="background: #dcfce7; color: #15803d; font-size: 0.65rem; padding: 1px 5px; margin-left: 4px; font-weight: 700;">ACTIVA</span>' : ''}
+        </div>
+        <div style="font-size: 0.7rem; color: #475569;">
+          👤 <span style="font-weight: 700;">${h.usuario || 'ADMIN'}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 async function confirmarTasaBcvModalDia(e) {
   if (e && e.preventDefault) e.preventDefault();
   const fInput = document.getElementById('popup-tasa-fecha');
@@ -7547,6 +7655,7 @@ async function confirmarTasaBcvModalDia(e) {
 
   const numTasa = parseFloat(tInput?.value);
   const fecha = fInput?.value || new Date().toLocaleDateString('en-CA');
+  const usuario = state.currentUser?.usuario || 'ADMIN_DG67';
 
   if (!numTasa || numTasa <= 0) {
     showToast('Ingrese una tasa oficial BCV válida mayor a cero.', 'error');
@@ -7562,11 +7671,32 @@ async function confirmarTasaBcvModalDia(e) {
     const res = await fetch('/api/tasas-bcv/diaria', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tasa_bcv: numTasa, fecha, moneda: 'USD' })
+      body: JSON.stringify({ tasa_bcv: numTasa, fecha, moneda: 'USD', usuario })
     });
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al guardar tasa oficial BCV diaria');
+
+    try {
+      localStorage.setItem('dg67_tasa_bcv_activa', JSON.stringify({
+        tasa_bcv: numTasa,
+        fecha,
+        usuario,
+        timestamp: Date.now()
+      }));
+    } catch (e) {}
+
+    state.tasaActiva = {
+      tasa_bcv: numTasa,
+      fecha,
+      periodo: fecha.slice(0, 7),
+      moneda: 'USD',
+      origen: 'DIARIA_ACTIVA'
+    };
+
+    if (Array.isArray(data.historico_hoy)) {
+      renderHistoricoTasasModal(data.historico_hoy);
+    }
 
     sessionStorage.setItem('dg67_bcv_verified_session', fecha);
     showToast(`✅ Tasa Oficial BCV confirmada para hoy: Bs. ${numTasa.toFixed(4)} / USD`, 'success');
@@ -7827,6 +7957,9 @@ function renderizarTablaAuditoriaEnVivo() {
 
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  const actionBtnText = isAuditor ? '✏️ Auditar' : '👁️ Ver Ficha';
+  const actionBtnClass = isAuditor ? 'btn-navy' : 'btn-secondary';
 
   const listaRender = pzeroFiltrados.slice(0, pzeroLimiteRender);
   const rowsHtml = listaRender.map((p, index) => {
@@ -7854,7 +7987,7 @@ function renderizarTablaAuditoriaEnVivo() {
     return `
       <tr class="${trClass}" style="cursor:pointer;" onclick="if (!event.target.closest('button, input')) abrirDrawerAuditoriaPorId(${p.producto_id})">
         <td style="text-align:center;">
-          <button type="button" class="pzero-check-btn ${checkClass}" title="${isAuditado ? 'Auditado' : 'Marcar como Auditado'}" onclick="event.stopPropagation(); toggleAuditadoDirecto(${p.producto_id}, event)">
+          <button type="button" class="pzero-check-btn ${checkClass}" style="${isAuditor ? '' : 'cursor:default; opacity:0.85;'}" title="${isAuditor ? (isAuditado ? 'Auditado' : 'Marcar como Auditado') : (isAuditado ? 'Auditado por Almacén' : 'Pendiente de Toma Física')}" onclick="event.stopPropagation(); ${isAuditor ? `toggleAuditadoDirecto(${p.producto_id}, event)` : ''}">
             ${checkIcon}
           </button>
         </td>
@@ -7888,8 +8021,8 @@ function renderizarTablaAuditoriaEnVivo() {
           <div class="pzero-sub-ref">Ref: $${fmtUsd(p.precio_venta_s_iva_usd)} USD</div>
         </td>
         <td style="text-align:center;">
-          <button type="button" class="btn btn-sm btn-navy" style="padding:4px 8px; font-size:0.75rem; font-weight:700;" onclick="event.stopPropagation(); abrirDrawerAuditoriaPorId(${p.producto_id})">
-            ✏️ Auditar
+          <button type="button" class="btn btn-sm ${actionBtnClass}" style="padding:4px 8px; font-size:0.75rem; font-weight:700;" onclick="event.stopPropagation(); abrirDrawerAuditoriaPorId(${p.producto_id})">
+            ${actionBtnText}
           </button>
         </td>
       </tr>
@@ -7928,6 +8061,10 @@ function verificarActaAperturada() {
 }
 
 function abrirModalAperturaActa(callback) {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    if (typeof callback === 'function') callback();
+    return;
+  }
   aperturaActaCallback = typeof callback === 'function' ? callback : null;
   const acta = obtenerActaActiva();
 
@@ -8054,6 +8191,10 @@ function actualizarBannerActaActiva() {
       bCont.style.borderColor = '#bae6fd';
     }
   }
+
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  const btnConfig = document.getElementById('btn-configurar-acta-banner');
+  if (btnConfig) btnConfig.style.display = isAuditor ? 'inline-block' : 'none';
 }
 
 async function cargarEstatusTomaFisica(periodo = '2026-10') {
@@ -8064,14 +8205,15 @@ async function cargarEstatusTomaFisica(periodo = '2026-10') {
     state.tomaFisicaEstatus = data.estatus || 'ABIERTA';
     state.tomaFisicaInfo = data;
 
+    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
     const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
     const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
 
     if (state.tomaFisicaEstatus === 'CERRADA') {
       if (btnCerrar) btnCerrar.style.display = 'none';
-      if (btnReabrir) btnReabrir.style.display = 'flex';
+      if (btnReabrir) btnReabrir.style.display = isAuditor ? 'inline-flex' : 'none';
     } else {
-      if (btnCerrar) btnCerrar.style.display = 'flex';
+      if (btnCerrar) btnCerrar.style.display = isAuditor ? 'inline-flex' : 'none';
       if (btnReabrir) btnReabrir.style.display = 'none';
     }
 
@@ -8082,6 +8224,11 @@ async function cargarEstatusTomaFisica(periodo = '2026-10') {
 }
 
 function abrirModalCierreTomaFisica() {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede cerrar y sellar formalmente la Toma Física.', 'warning');
+    return;
+  }
+
   const acta = (typeof obtenerActaActiva === 'function' ? obtenerActaActiva() : null) || {
     numero: 'ACTA-INV-202610-01',
     periodo: '2026-10',
@@ -8161,6 +8308,10 @@ async function confirmarCierreTomaFisica(e) {
 }
 
 async function reabrirTomaFisicaPeriodo() {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está autorizado para reabrir el expediente de Toma Física.', 'warning');
+    return;
+  }
   if (!confirm('¿Está seguro de reabrir la Toma Física del período para realizar ajustes o rectificaciones físicas?')) {
     return;
   }
@@ -8199,7 +8350,8 @@ function actualizarOpcionesDrawerActa(numeroActa) {
 // ----------------------------------------------------------------------------
 
 function abrirDrawerAuditoriaPorId(productoId) {
-  if (!verificarActaAperturada()) {
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  if (isAuditor && !verificarActaAperturada()) {
     abrirModalAperturaActa(() => {
       abrirDrawerAuditoriaPorIdDirecto(productoId);
     });
@@ -8288,35 +8440,38 @@ function abrirDrawerAuditoria(index) {
   }
   calcularPreciosDrawer('BS_S_IVA');
 
-  // 5. Modo Solo Lectura si la Toma Física está Cerrada
+  // 5. Modo Solo Lectura si la Toma Física está Cerrada o si el usuario NO es Auditor
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
   const isCerrada = (state.tomaFisicaEstatus === 'CERRADA');
+  const isReadOnly = isCerrada || !isAuditor;
+
   const elAlertaCerrada = document.getElementById('drawer-alerta-toma-cerrada');
+  const elAlertaConsulta = document.getElementById('drawer-alerta-modo-consulta');
   const btnGuardar = document.getElementById('btn-drawer-guardar');
   const btnGuardarSig = document.getElementById('btn-drawer-guardar-sig');
 
   if (elAlertaCerrada) elAlertaCerrada.style.display = isCerrada ? 'block' : 'none';
+  if (elAlertaConsulta) elAlertaConsulta.style.display = (!isAuditor && !isCerrada) ? 'block' : 'none';
 
   ['drawer-cant-fisica', 'drawer-costo-s-iva-bs', 'drawer-precio-s-iva-bs', 'drawer-motivo-select', 'drawer-acta-select', 'drawer-justificacion-detalle'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      if (isCerrada) el.setAttribute('disabled', 'disabled');
+      if (isReadOnly) el.setAttribute('disabled', 'disabled');
       else el.removeAttribute('disabled');
     }
   });
   if (elToggleInactivo) {
-    if (isCerrada) elToggleInactivo.setAttribute('disabled', 'disabled');
+    if (isReadOnly) elToggleInactivo.setAttribute('disabled', 'disabled');
     else elToggleInactivo.removeAttribute('disabled');
   }
 
   if (btnGuardar) {
-    btnGuardar.disabled = isCerrada;
-    btnGuardar.style.opacity = isCerrada ? '0.45' : '1';
-    btnGuardar.style.cursor = isCerrada ? 'not-allowed' : 'pointer';
+    btnGuardar.disabled = isReadOnly;
+    btnGuardar.style.display = isReadOnly ? 'none' : 'inline-block';
   }
   if (btnGuardarSig) {
-    btnGuardarSig.disabled = isCerrada;
-    btnGuardarSig.style.opacity = isCerrada ? '0.45' : '1';
-    btnGuardarSig.style.cursor = isCerrada ? 'not-allowed' : 'pointer';
+    btnGuardarSig.disabled = isReadOnly;
+    btnGuardarSig.style.display = isReadOnly ? 'none' : 'inline-block';
   }
 
   // Abrir Drawer
@@ -8348,6 +8503,10 @@ function navegarProductoAuditoria(delta) {
 
 // Iniciar Modo Auditoría Rápida (busca el primer pendiente)
 function iniciarModoAuditoriaRapida() {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede ejecutar la Auditoría Rápida.', 'warning');
+    return;
+  }
   if (!verificarActaAperturada()) {
     abrirModalAperturaActa(() => {
       iniciarModoAuditoriaRapidaDirecto();
@@ -8576,6 +8735,10 @@ function onToggleInactivoDrawer(el) {
 
 // Guardar producto auditado (Bloques A, B y C)
 async function guardarProductoAuditoria(avanzarSiguiente = false) {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está autorizado para asentar ajustes físicos de stock.', 'warning');
+    return;
+  }
   if (state.tomaFisicaEstatus === 'CERRADA') {
     showToast('🔒 La Toma Física del período está CERRADA. Reabra el expediente con autorización para modificar cantidades.', 'warning');
     return;
@@ -8666,6 +8829,14 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
 
 // Toggle directo de checkbox en la tabla
 async function toggleAuditadoDirecto(productoId, event) {
+  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede cambiar el estado de auditoría.', 'warning');
+    return;
+  }
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    showToast('🔒 La Toma Física del período está CERRADA y sellada formalmente.', 'warning');
+    return;
+  }
   const p = pzeroProductos.find(item => item.producto_id === productoId);
   if (!p) return;
 
@@ -8987,6 +9158,8 @@ window.reabrirTomaFisicaPeriodo = reabrirTomaFisicaPeriodo;
 window.cargarEstatusTomaFisica = cargarEstatusTomaFisica;
 window.continuarSesionInactividad = continuarSesionInactividad;
 window.cerrarSesionPorInactividad = cerrarSesionPorInactividad;
+window.cargarHistoricoTasasModal = cargarHistoricoTasasModal;
+window.renderHistoricoTasasModal = renderHistoricoTasasModal;
 
 
 

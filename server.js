@@ -4076,6 +4076,19 @@ app.get('/api/islr/export-excel', async (req, res) => {
 
 app.get('/api/tasas-bcv', async (req, res) => {
   try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT NOT NULL,
+        hora TEXT NOT NULL,
+        timestamp INTEGER,
+        tasa_bcv REAL NOT NULL,
+        moneda TEXT DEFAULT 'USD',
+        usuario TEXT,
+        origen TEXT DEFAULT 'MANUAL_MODAL'
+      );
+    `).catch(() => {});
+
     const [tasasRes, cfgRes] = await Promise.all([
       db.execute("SELECT * FROM tasas_bcv_periodo ORDER BY periodo ASC"),
       db.execute("SELECT metodo_valoracion_kardex, tasa_bcv_activa_dia, fecha_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
@@ -4101,26 +4114,49 @@ app.get('/api/tasas-bcv', async (req, res) => {
         origen: 'CIERRE_MES'
       } : { tasa_bcv: 889.58, fecha: '2026-10-30', periodo: '2026-10', moneda: 'USD', origen: 'DEFAULT' });
 
+    const fechaFiltro = tasaActiva.fecha || new Date().toISOString().split('T')[0];
+    const histRes = await db.execute({
+      sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 25",
+      args: [fechaFiltro]
+    }).catch(() => ({ rows: [] }));
+
     res.json({
       metodo_valoracion_kardex: cfg.metodo_valoracion_kardex || 'CPP',
       tasas,
-      tasa_activa: tasaActiva
+      tasa_activa: tasaActiva,
+      historico_hoy: histRes.rows || []
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Endpoint para Actualización Rápida Diaria de Tasa Oficial BCV
+// Endpoint para Actualización Rápida Diaria de Tasa Oficial BCV con Histórico Intradía
 app.post('/api/tasas-bcv/diaria', async (req, res) => {
   try {
-    const { tasa_bcv, fecha, moneda = 'USD' } = req.body || {};
+    const { tasa_bcv, fecha, moneda = 'USD', usuario = 'ADMIN_DG67' } = req.body || {};
     const numTasa = parseFloat(tasa_bcv);
     if (!numTasa || numTasa <= 0) {
       return res.status(400).json({ error: 'Monto de tasa BCV inválido. Ingrese un valor mayor a cero.' });
     }
     const fechaTasa = fecha || new Date().toISOString().split('T')[0];
     const periodo = fechaTasa.slice(0, 7);
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    const timestamp = ahora.getTime();
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT NOT NULL,
+        hora TEXT NOT NULL,
+        timestamp INTEGER,
+        tasa_bcv REAL NOT NULL,
+        moneda TEXT DEFAULT 'USD',
+        usuario TEXT,
+        origen TEXT DEFAULT 'MANUAL_MODAL'
+      );
+    `).catch(() => {});
 
     // Guardar en config_fiscal_islr para no alterar las tasas de cierre mensual del 30
     await db.execute({
@@ -4128,15 +4164,57 @@ app.post('/api/tasas-bcv/diaria', async (req, res) => {
       args: [numTasa, fechaTasa]
     });
 
+    // Guardar registro histórico de cada cambio durante el día
+    await db.execute({
+      sql: `INSERT INTO historico_tasas_bcv (fecha, hora, timestamp, tasa_bcv, moneda, usuario, origen) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [fechaTasa, hora, timestamp, numTasa, moneda, usuario, 'MODAL_DIARIO']
+    });
+
+    const histRes = await db.execute({
+      sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 25",
+      args: [fechaTasa]
+    }).catch(() => ({ rows: [] }));
+
     res.json({
       ok: true,
       mensaje: `Tasa BCV del día actualizada con éxito: Bs. ${numTasa.toFixed(4)} por ${moneda} (${fechaTasa})`,
       tasa_bcv: numTasa,
       fecha: fechaTasa,
-      periodo
+      periodo,
+      historico_hoy: histRes.rows || []
     });
   } catch (err) {
     res.status(500).json({ error: 'Error guardando tasa diaria: ' + err.message });
+  }
+});
+
+// Endpoint para Consultar Historial Intradía de Tasas Oficiales
+app.get('/api/tasas-bcv/historico', async (req, res) => {
+  try {
+    const fecha = req.query.fecha || new Date().toISOString().split('T')[0];
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS historico_tasas_bcv (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT NOT NULL,
+        hora TEXT NOT NULL,
+        timestamp INTEGER,
+        tasa_bcv REAL NOT NULL,
+        moneda TEXT DEFAULT 'USD',
+        usuario TEXT,
+        origen TEXT DEFAULT 'MANUAL_MODAL'
+      );
+    `).catch(() => {});
+
+    const histRes = await db.execute({
+      sql: "SELECT * FROM historico_tasas_bcv WHERE fecha = ? ORDER BY id DESC LIMIT 50",
+      args: [fecha]
+    });
+    res.json({
+      fecha,
+      historico: histRes.rows || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

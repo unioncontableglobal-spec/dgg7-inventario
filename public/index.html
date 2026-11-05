@@ -1901,13 +1901,25 @@
               </div>
             </div>
             <div style="display: flex; gap: 8px;">
-              <button type="button" class="btn btn-sm btn-secondary" onclick="abrirModalAperturaActa()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
+              <button type="button" class="btn btn-sm btn-secondary" id="btn-configurar-acta-banner" onclick="abrirModalAperturaActa()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
                 ✏️ Configurar Acta
               </button>
               <button type="button" class="btn btn-sm btn-navy" onclick="abrirModalActaOficial()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px; background: #0B2447; color: #fff;">
                 📄 Ver Acta en Vivo
               </button>
             </div>
+          </div>
+
+          <!-- Banner Informativo para Modo Consulta (Supervisión y Otros Usuarios) -->
+          <div id="pzero-banner-modo-consulta" style="display:none; background:#eff6ff; border:1.5px solid #93c5fd; border-radius:10px; padding:12px 18px; margin-bottom:16px; align-items:center; justify-content:space-between; gap:12px; box-shadow:0 2px 6px rgba(59,130,246,0.1);">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:1.4rem;">👁️</span>
+              <div>
+                <strong style="color:#1e40af; font-size:0.9rem; display:block;">Modo Consulta y Supervisión (Solo Lectura)</strong>
+                <span style="color:#1e3a8a; font-size:0.76rem;">Ha iniciado sesión en modo de supervisión. La Toma Física activa, levantamiento de actas y ajustes de inventario corresponden con carácter legal y operativo exclusivamente al <strong>Auditor de Tienda (DG 67)</strong>.</span>
+              </div>
+            </div>
+            <span class="badge" style="background:#3b82f6; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 12px; border-radius:12px;">MODO CONSULTA</span>
           </div>
 
           <!-- Banner Informativo para Rol Exclusivo de Auditor de Toma Física -->
@@ -2080,6 +2092,14 @@
                   <span>🔒 TOMA FÍSICA CERRADA Y CONCILIADA</span>
                 </div>
                 El expediente de auditoría física de este período está formalmente sellado. Las cantidades físicas y ajustes se encuentran en <strong>modo de solo lectura</strong> para resguardo legal y fiscal.
+              </div>
+
+              <!-- Alerta de Modo Consulta para No-Auditores -->
+              <div id="drawer-alerta-modo-consulta" style="display:none; background:#eff6ff; border:1.5px solid #93c5fd; border-radius:8px; padding:12px 14px; margin-bottom:12px; font-size:0.82rem; color:#1e40af; line-height:1.4;">
+                <div style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                  <span>👁️ MODO CONSULTA Y SUPERVISIÓN (SOLO LECTURA)</span>
+                </div>
+                Vista de supervisión técnica. Solo el usuario <strong>Auditor de Tienda (DG 67)</strong> está facultado para modificar cantidades físicas y asentar diferencias en Kardex.
               </div>
 
               <!-- Badge de Estatus de Auditoría -->
@@ -5116,20 +5136,33 @@
           <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; margin-bottom: 16px;">
             <div>
               <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">📅 Fecha de Hoy *</label>
-              <input type="date" id="popup-tasa-fecha" class="form-control" style="font-size: 0.9rem; font-weight: 700; padding: 8px;" required>
+              <input type="date" id="popup-tasa-fecha" class="form-control" style="font-size: 0.9rem; font-weight: 700; padding: 8px;" required onchange="cargarHistoricoTasasModal(this.value)">
             </div>
             <div>
               <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">💱 Tasa Oficial (Bs. / USD) *</label>
               <div style="display: flex; align-items: center; border: 2px solid #19A7CE; border-radius: 6px; overflow: hidden; background: #fff;">
                 <span style="padding: 0 10px; font-weight: 800; color: #0B2447; background: #e0f2fe; font-size: 0.9rem;">Bs.</span>
-                <input type="number" step="any" min="0.0001" id="popup-tasa-valor" class="form-control font-mono font-bold" style="border: none; font-size: 1.15rem; color: #0B2447; padding: 8px 10px;" placeholder="Ej: 889.58" required oninput="actualizarPreviewTasaModal(this.value)">
+                <input type="number" step="any" min="0.0001" id="popup-tasa-valor" class="form-control font-mono font-bold" style="border: none; font-size: 1.15rem; color: #0B2447; padding: 8px 10px;" placeholder="Ej: 894.89" required oninput="actualizarPreviewTasaModal(this.value)">
               </div>
             </div>
           </div>
 
           <div id="popup-tasa-preview" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.78rem; color: #475569; display: flex; justify-content: space-between; align-items: center;">
             <span>Equivalencia de referencia:</span>
-            <strong style="color: #059669; font-size: 0.85rem;" id="popup-tasa-preview-text">1.00 USD = Bs. 889,58</strong>
+            <strong style="color: #059669; font-size: 0.85rem;" id="popup-tasa-preview-text">1.00 USD = Bs. 894,89</strong>
+          </div>
+
+          <!-- Historial de Actualizaciones Diarias (Intradía) -->
+          <div id="popup-tasa-historial-container" style="margin-bottom: 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.75rem; font-weight: 800; color: #0B2447; display: flex; align-items: center; gap: 6px;">
+                <span>📋</span> Historial de Actualizaciones del Día
+              </span>
+              <span id="popup-tasa-historial-count" class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">0 registros</span>
+            </div>
+            <div id="popup-tasa-historial-lista" style="max-height: 110px; overflow-y: auto; font-size: 0.74rem;">
+              <span style="color: #94a3b8; font-style: italic;">Sin actualizaciones registradas hoy aún.</span>
+            </div>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 10px;">
