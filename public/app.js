@@ -14,6 +14,16 @@ const state = {
 };
 
 // --------------------------------------------------------------------------
+// FORMATEO MONETARIO GLOBAL BIMONETARIO (Bs. / USD)
+// --------------------------------------------------------------------------
+function fmtBs(val) {
+  return Number(val || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtUsd(val) {
+  return Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// --------------------------------------------------------------------------
 // CONTROL DE ACCESO CORPORATIVO Y AUTENTICACIÓN (UNIÓN CONTABLE GLOBAL)
 // --------------------------------------------------------------------------
 const AUTH_STORAGE_KEY = 'dg67_auth_session';
@@ -3787,10 +3797,6 @@ function getNombrePeriodoFormal(periodo) {
   return map[periodo] || `PERÍODO IMPOSITIVO ${periodo}`;
 }
 
-function fmtBs(val) {
-  return Number(val || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function imprimirLibroCompras() {
   const periodo = document.getElementById('compras-periodo-select')?.value || '2026-10';
   const compras = fiscalStateNew.compras || [];
@@ -4074,7 +4080,10 @@ function renderLibroVentas(ventas) {
       <tr>
         <td class="text-center font-bold">${index + 1}</td>
         <td>
-          <div>${v.fecha || '-'}</div>
+          <div style="font-weight:700;">${v.fecha || '-'}</div>
+          <div style="font-size:0.72rem; font-family:monospace; color:#0369a1; font-weight:700; margin-top:2px;">
+            ${v.numero_reporte_z ? `Z: ${v.numero_reporte_z} • ${v.serial_impresora || 'Z0A0000176'}` : `<span style="color:#dc2626; background:#fee2e2; padding:1px 5px; border-radius:4px; font-weight:800;">⚠️ S/Z (Editar)</span>`}
+          </div>
           <div style="font-size:0.68rem; color:#64748b;">BCV: Bs. ${tasa.toFixed(2)}</div>
         </td>
         <td class="font-mono font-bold" style="color: var(--ucg-navy);">${v.factura_desde || '00000001'}</td>
@@ -4094,7 +4103,10 @@ function renderLibroVentas(ventas) {
           <div>Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.72rem; color:#059669;">($${totalUsd.toFixed(2)})</div>
         </td>
-        <td class="text-center">
+        <td class="text-center" style="white-space:nowrap;">
+          <button class="btn btn-sm btn-navy" title="Editar / Completar Reporte Z" onclick="editarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; margin-right: 4px; font-weight:700;">
+            ✏️ Editar
+          </button>
           <button class="btn btn-sm btn-secondary" title="Eliminar Registro" onclick="eliminarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
             ✕
           </button>
@@ -4259,6 +4271,27 @@ function aplicarSugerenciaSalidasZ() {
 
 function openModalNuevaVenta() {
   document.getElementById('form-nueva-venta').reset();
+  const idInput = document.getElementById('m-vent-id');
+  if (idInput) idInput.value = '';
+
+  const titleEl = document.getElementById('modal-venta-title');
+  if (titleEl) {
+    titleEl.innerHTML = `📤 Registrar Venta Diaria / Reporte Z <span class="badge badge-navy" style="font-size:0.7rem;">SENIAT PA SNAT/2026/00093</span>`;
+  }
+  const btnSave = document.getElementById('btn-save-venta');
+  if (btnSave) {
+    btnSave.textContent = '💾 Guardar en Libro de Ventas';
+    btnSave.disabled = false;
+  }
+  const modeBanner = document.getElementById('modal-venta-modo-banner');
+  if (modeBanner) modeBanner.style.display = 'none';
+
+  // Quitar bordes de error si quedaron marcados
+  const inputZ = document.getElementById('m-vent-numero-z');
+  if (inputZ) inputZ.style.borderColor = '';
+  const inputSerial = document.getElementById('m-vent-serial');
+  if (inputSerial) inputSerial.style.borderColor = '';
+
   const badge = document.getElementById('badge-salida-vinculada');
   if (badge) badge.style.display = 'none';
   const list = document.getElementById('lista-resultados-salida-tienda');
@@ -4285,6 +4318,118 @@ function openModalNuevaVenta() {
 
   // Autoconsultar próximo correlativo consecutivo esperado y sugerencias de tienda
   onCambioFechaVentaZ();
+}
+
+async function editarVenta(id) {
+  let venta = (fiscalStateNew.ventas || []).find(v => Number(v.id) === Number(id));
+  if (!venta) {
+    try {
+      const res = await fetch(`/api/fiscal/libro-ventas?id=${id}`);
+      if (res.ok) {
+        const rows = await res.json();
+        venta = Array.isArray(rows) ? rows.find(x => Number(x.id) === Number(id)) : rows;
+      }
+    } catch (e) {
+      console.error('Error buscando venta por id:', e);
+    }
+  }
+
+  if (!venta) {
+    showToast('No se encontró el registro de venta a editar', 'error');
+    return;
+  }
+
+  document.getElementById('form-nueva-venta').reset();
+  const idInput = document.getElementById('m-vent-id');
+  if (idInput) idInput.value = venta.id;
+
+  const titleEl = document.getElementById('modal-venta-title');
+  if (titleEl) {
+    titleEl.innerHTML = `✏️ Editar Venta Diaria / Reporte Z <span class="badge badge-navy" style="font-size:0.7rem;">ID: #${venta.id}</span>`;
+  }
+  const btnSave = document.getElementById('btn-save-venta');
+  if (btnSave) {
+    btnSave.textContent = '💾 Actualizar Reporte Z';
+    btnSave.disabled = false;
+  }
+
+  const modeBanner = document.getElementById('modal-venta-modo-banner');
+  if (modeBanner) {
+    modeBanner.style.display = 'block';
+    modeBanner.innerHTML = `✏️ <strong>Modo Edición / Conciliación:</strong> Modifique o complete los datos requeridos (N° Reporte Z, Serial de Máquina Fiscal, Rango Correlativo o Montos). Al guardar, se recalcula el Débito Fiscal y la Conciliación con las salidas de tienda.`;
+  }
+
+  const listEl = document.getElementById('lista-resultados-salida-tienda');
+  if (listEl) listEl.style.display = 'none';
+  const bannerSug = document.getElementById('banner-sugerencia-salidas-z');
+  if (bannerSug) bannerSug.style.display = 'none';
+
+  const selPer = document.getElementById('m-vent-periodo');
+  if (selPer && venta.periodo) selPer.value = venta.periodo;
+
+  if (document.getElementById('m-vent-fecha')) document.getElementById('m-vent-fecha').value = venta.fecha || '';
+  if (document.getElementById('m-vent-fecha-tasa')) document.getElementById('m-vent-fecha-tasa').value = venta.fecha_tasa_bcv || venta.fecha || '';
+  if (document.getElementById('m-vent-numero-z')) document.getElementById('m-vent-numero-z').value = venta.numero_reporte_z || '';
+  if (document.getElementById('m-vent-serial')) document.getElementById('m-vent-serial').value = venta.serial_impresora || 'Z0A0000176';
+
+  const padFactura = (val) => {
+    if (!val) return '';
+    const digits = String(val).replace(/\D/g, '');
+    return digits ? digits.padStart(8, '0') : String(val).trim();
+  };
+
+  const inpDesde = document.getElementById('m-vent-desde');
+  const inpHasta = document.getElementById('m-vent-hasta');
+  if (inpDesde) {
+    inpDesde.value = padFactura(venta.factura_desde);
+    delete inpDesde.dataset.autoSugerido;
+  }
+  if (inpHasta) {
+    inpHasta.value = padFactura(venta.factura_hasta);
+    delete inpHasta.dataset.autoSugerido;
+  }
+  if (document.getElementById('m-vent-cant')) {
+    document.getElementById('m-vent-cant').value = venta.cantidad_comprobantes || 1;
+  }
+
+  if (document.getElementById('m-vent-anuladas')) document.getElementById('m-vent-anuladas').value = venta.cantidad_anuladas || 0;
+  if (document.getElementById('m-vent-anulaciones-monto')) document.getElementById('m-vent-anulaciones-monto').value = (Number(venta.total_anulaciones_bs) || 0).toFixed(2);
+  if (document.getElementById('m-vent-anuladas-numeros')) document.getElementById('m-vent-anuladas-numeros').value = venta.facturas_anuladas_lista || '';
+
+  const tasaVal = Number(venta.tasa_bcv) || 889.58;
+  if (document.getElementById('m-vent-tasa-bcv')) document.getElementById('m-vent-tasa-bcv').value = tasaVal.toFixed(2);
+
+  if (document.getElementById('m-vent-base')) document.getElementById('m-vent-base').value = (Number(venta.base_imponible_bs) || 0).toFixed(2);
+  if (document.getElementById('m-vent-base-divisa')) document.getElementById('m-vent-base-divisa').value = (Number(venta.base_imponible_divisa) || 0).toFixed(2);
+  if (document.getElementById('m-vent-exento')) document.getElementById('m-vent-exento').value = (Number(venta.exento_bs) || 0).toFixed(2);
+
+  calcularIvaVenta('BS');
+  calcularCantidadFacturasZ();
+
+  const badgeVinculada = document.getElementById('badge-salida-vinculada');
+  if (badgeVinculada) {
+    badgeVinculada.style.display = 'block';
+    if (venta.estatus_conciliacion === 'CONCILIADO') {
+      badgeVinculada.style.background = '#dcfce7';
+      badgeVinculada.style.color = '#166534';
+      badgeVinculada.style.border = '1px solid #86efac';
+      badgeVinculada.innerHTML = `✅ Este Reporte Z está <strong>100% CONCILIADO</strong> con las salidas despachadas en tienda por DG67.`;
+    } else {
+      badgeVinculada.style.background = '#fef3c7';
+      badgeVinculada.style.color = '#92400e';
+      badgeVinculada.style.border = '1px solid #fcd34d';
+      badgeVinculada.innerHTML = `⏳ Estatus de Conciliación: <strong>${venta.estatus_conciliacion || 'PENDIENTE_DG67'}</strong>. Verifique los datos y presione Actualizar para re-conciliar con los movimientos de almacén.`;
+    }
+  }
+
+  document.getElementById('modal-nueva-venta').style.display = 'flex';
+  if (!venta.numero_reporte_z) {
+    const inputZ = document.getElementById('m-vent-numero-z');
+    if (inputZ) {
+      inputZ.style.borderColor = '#dc2626';
+      inputZ.focus();
+    }
+  }
 }
 
 function toggleDetalleSubgrupoSalidas(idx) {
@@ -4398,10 +4543,16 @@ function seleccionarSalidaTiendaEnVenta(idx, fromFullModal = false) {
   const item = salidasTiendaCache[idx];
   if (!item) return;
 
+  if (item.libro_venta_id) {
+    if (fromFullModal) closeModal('modal-cruce-salidas-tienda');
+    editarVenta(item.libro_venta_id);
+    return;
+  }
+
   if (fromFullModal) {
     closeModal('modal-cruce-salidas-tienda');
-    openModalNuevaVenta();
   }
+  openModalNuevaVenta();
 
   if (item.periodo) {
     const selPer = document.getElementById('m-vent-periodo');
@@ -4409,7 +4560,14 @@ function seleccionarSalidaTiendaEnVenta(idx, fromFullModal = false) {
       selPer.value = item.periodo;
     }
   }
-  if (item.fecha) document.getElementById('m-vent-fecha').value = item.fecha;
+  if (item.fecha) {
+    document.getElementById('m-vent-fecha').value = item.fecha;
+    if (document.getElementById('m-vent-fecha-tasa')) document.getElementById('m-vent-fecha-tasa').value = item.fecha;
+    const tBcv = getTasaBcvPorFechaOPeriodo(item.fecha);
+    if (tBcv && document.getElementById('m-vent-tasa-bcv')) {
+      document.getElementById('m-vent-tasa-bcv').value = Number(tBcv).toFixed(2);
+    }
+  }
 
   const padFactura = (val) => {
     if (!val) return '';
@@ -4420,14 +4578,24 @@ function seleccionarSalidaTiendaEnVenta(idx, fromFullModal = false) {
   const fDesde = padFactura(item.factura_desde);
   const fHasta = padFactura(item.factura_hasta);
 
-  document.getElementById('m-vent-desde').value = fDesde;
-  document.getElementById('m-vent-hasta').value = fHasta;
-  document.getElementById('m-vent-cant').value = item.cantidad_comprobantes || 1;
+  const inpDesde = document.getElementById('m-vent-desde');
+  const inpHasta = document.getElementById('m-vent-hasta');
+  if (inpDesde) {
+    inpDesde.value = fDesde;
+    delete inpDesde.dataset.autoSugerido;
+  }
+  if (inpHasta) {
+    inpHasta.value = fHasta;
+    delete inpHasta.dataset.autoSugerido;
+  }
+  if (document.getElementById('m-vent-cant')) {
+    document.getElementById('m-vent-cant').value = item.cantidad_comprobantes || 1;
+  }
 
   if (Number(item.base_imponible_bs) > 0) {
     document.getElementById('m-vent-base').value = item.base_imponible_bs;
-    calcularIvaVenta('BS');
   }
+  calcularIvaVenta('BS');
 
   const listEl = document.getElementById('lista-resultados-salida-tienda');
   if (listEl) listEl.style.display = 'none';
@@ -4435,11 +4603,17 @@ function seleccionarSalidaTiendaEnVenta(idx, fromFullModal = false) {
   const badge = document.getElementById('badge-salida-vinculada');
   if (badge) {
     badge.style.display = 'block';
-    badge.innerHTML = `✅ Vinculado con Salidas de Tienda del <strong>${item.fecha}</strong>: Correlativo <strong>${fDesde} ➔ ${fHasta}</strong> (${item.cantidad_comprobantes} facturas / ${item.total_unidades_despachadas} unds despachadas). Total estimado: <strong>Bs. ${fmtBs(item.total_bs)}</strong> ($${fmtUsd(item.total_usd)} USD).`;
+    badge.style.background = '#dcfce7';
+    badge.style.color = '#166534';
+    badge.style.border = '1px solid #86efac';
+    badge.innerHTML = `✅ Vinculado con Salidas de Tienda del <strong>${item.fecha}</strong>: Correlativo <strong>${fDesde} ➔ ${fHasta}</strong> (${item.cantidad_comprobantes} facturas / ${item.total_unidades_despachadas} unds despachadas). Total estimado: <strong>Bs. ${fmtBs(item.total_bs)}</strong> ($${fmtUsd(item.total_usd)} USD). Complete el N° de Reporte Z reglamentario.`;
   }
 
   calcularCantidadFacturasZ();
-  document.getElementById('m-vent-base')?.focus();
+  const inputZ = document.getElementById('m-vent-numero-z');
+  if (inputZ) {
+    inputZ.focus();
+  }
 }
 
 async function openModalImportarSalidaTienda() {
@@ -4493,9 +4667,15 @@ async function cargarTablaSalidasTiendaModal() {
           </td>
           <td class="text-center">${statusBadge}</td>
           <td class="text-center">
-            <button class="btn btn-sm btn-emerald" onclick="seleccionarSalidaTiendaEnVenta(${idx}, true)" style="padding: 4px 10px; font-size: 11px;">
-              📤 Llamar a Libro Ventas
-            </button>
+            ${yaEnLibro ? `
+              <button class="btn btn-sm btn-navy" onclick="seleccionarSalidaTiendaEnVenta(${idx}, true)" style="padding: 4px 10px; font-size: 11px; font-weight:700;">
+                🔍 Verificar / Editar Z
+              </button>
+            ` : `
+              <button class="btn btn-sm btn-emerald" onclick="seleccionarSalidaTiendaEnVenta(${idx}, true)" style="padding: 4px 10px; font-size: 11px; font-weight:700;">
+                📥 Llamar a Libro Ventas
+              </button>
+            `}
           </td>
         </tr>
       `;
@@ -4547,9 +4727,50 @@ function calcularIvaVenta(editedField = 'BS') {
 
 async function guardarNuevaVenta(e) {
   e.preventDefault();
+
+  const editId = document.getElementById('m-vent-id')?.value;
+  const inputZ = document.getElementById('m-vent-numero-z');
+  const numZ = inputZ ? inputZ.value.trim() : '';
+  const inputSerial = document.getElementById('m-vent-serial');
+  const serial = inputSerial ? inputSerial.value.trim() : '';
+  const inputDesde = document.getElementById('m-vent-desde');
+  const fDesde = inputDesde ? inputDesde.value.trim() : '';
+  const inputHasta = document.getElementById('m-vent-hasta');
+  const fHasta = inputHasta ? inputHasta.value.trim() : '';
+
+  // Validación reglamentaria estricta (SENIAT PA SNAT/2026/00093 / Providencia 00071)
+  if (!numZ) {
+    showToast('⚠️ OBLIGATORIO: Debe ingresar el N° de Reporte Z según normativa fiscal SENIAT.', 'warning');
+    if (inputZ) {
+      inputZ.style.borderColor = '#dc2626';
+      inputZ.focus();
+    }
+    return;
+  } else if (inputZ) {
+    inputZ.style.borderColor = '';
+  }
+
+  if (!serial) {
+    showToast('⚠️ OBLIGATORIO: Ingrese el Serial de la Máquina Fiscal.', 'warning');
+    if (inputSerial) {
+      inputSerial.style.borderColor = '#dc2626';
+      inputSerial.focus();
+    }
+    return;
+  } else if (inputSerial) {
+    inputSerial.style.borderColor = '';
+  }
+
+  if (!fDesde || !fHasta) {
+    showToast('⚠️ OBLIGATORIO: Ingrese el rango correlativo de facturas (Desde / Hasta).', 'warning');
+    if (!fDesde && inputDesde) { inputDesde.focus(); }
+    else if (!fHasta && inputHasta) { inputHasta.focus(); }
+    return;
+  }
+
   const btn = document.getElementById('btn-save-venta');
   btn.disabled = true;
-  btn.textContent = 'Guardando...';
+  btn.textContent = editId ? 'Actualizando...' : 'Guardando...';
 
   const tasa = parseFloat(document.getElementById('m-vent-tasa-bcv')?.value) || 889.58;
   const baseBs = parseFloat(document.getElementById('m-vent-base').value) || 0;
@@ -4559,19 +4780,20 @@ async function guardarNuevaVenta(e) {
   const facturasAnuladasLista = document.getElementById('m-vent-anuladas-numeros')?.value.trim() || '';
 
   const data = {
+    id: editId ? Number(editId) : undefined,
     periodo: document.getElementById('m-vent-periodo').value,
     fecha: document.getElementById('m-vent-fecha').value,
-    numero_reporte_z: document.getElementById('m-vent-numero-z')?.value.trim() || null,
-    serial_impresora: document.getElementById('m-vent-serial')?.value.trim() || 'Z0A0000176',
-    factura_desde: document.getElementById('m-vent-desde').value.trim() || null,
-    factura_hasta: document.getElementById('m-vent-hasta').value.trim() || null,
+    numero_reporte_z: numZ,
+    serial_impresora: serial,
+    factura_desde: fDesde,
+    factura_hasta: fHasta,
     cantidad_comprobantes: parseInt(document.getElementById('m-vent-cant').value, 10) || 1,
     cantidad_anuladas: parseInt(document.getElementById('m-vent-anuladas')?.value, 10) || 0,
     total_anulaciones_bs: parseFloat(document.getElementById('m-vent-anulaciones-monto')?.value) || 0,
     facturas_anuladas_lista: facturasAnuladasLista,
     tasa_bcv: tasa,
     fecha_tasa_bcv: document.getElementById('m-vent-fecha-tasa')?.value || document.getElementById('m-vent-fecha').value,
-    moneda_operacion: 'USD',
+    moneda_divisa: 'USD',
     base_imponible_bs: baseBs,
     base_imponible_divisa: baseDiv,
     exento_bs: parseFloat(document.getElementById('m-vent-exento').value) || 0,
@@ -4583,8 +4805,11 @@ async function guardarNuevaVenta(e) {
   };
 
   try {
-    const res = await fetch('/api/fiscal/libro-ventas', {
-      method: 'POST',
+    const url = editId ? `/api/fiscal/libro-ventas/${editId}` : '/api/fiscal/libro-ventas';
+    const method = editId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
@@ -4595,14 +4820,14 @@ async function guardarNuevaVenta(e) {
 
     if (result.conciliacion) {
       if (result.conciliacion.estatus === 'CONCILIADO') {
-        showToast('✅ Reporte Z guardado y 100% CONCILIADO con las salidas de tienda', 'success');
+        showToast(editId ? '✅ Reporte Z actualizado y 100% CONCILIADO' : '✅ Reporte Z guardado y 100% CONCILIADO', 'success');
       } else if (result.conciliacion.faltantes_cant > 0) {
         showToast(`⏳ Reporte Z guardado. Faltan ${result.conciliacion.faltantes_cant} facturas por detallar en DG67: ${result.conciliacion.faltantes_lista.join(', ')}`, 'warning');
       } else {
-        showToast('Reporte Z guardado en Libro de Ventas', 'success');
+        showToast(editId ? 'Reporte Z actualizado con éxito' : 'Reporte Z guardado en Libro de Ventas', 'success');
       }
     } else {
-      showToast('Registro de venta agregado al Libro de Ventas', 'success');
+      showToast(editId ? 'Reporte Z actualizado con éxito' : 'Registro de venta agregado al Libro de Ventas', 'success');
     }
 
     await Promise.all([loadLibroVentas(), loadCruceDobleVia(), cargarPanelCruceSalidas()]);
@@ -4610,7 +4835,7 @@ async function guardarNuevaVenta(e) {
     showToast(err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Guardar en Libro de Ventas';
+    btn.textContent = editId ? '💾 Actualizar Reporte Z' : '💾 Guardar en Libro de Ventas';
   }
 }
 

@@ -3770,13 +3770,15 @@
   <div class="modal-overlay" id="modal-nueva-venta" style="display: none;">
     <div class="modal-box" style="max-width: 740px;">
       <div class="modal-header">
-        <h3 style="color: var(--ucg-navy); font-weight: 800; display:flex; align-items:center; gap:8px;">
+        <h3 id="modal-venta-title" style="color: var(--ucg-navy); font-weight: 800; display:flex; align-items:center; gap:8px;">
           📤 Registrar Venta Diaria / Reporte Z <span class="badge badge-navy" style="font-size:0.7rem;">SENIAT PA SNAT/2026/00093</span>
         </h3>
         <button class="modal-close" onclick="closeModal('modal-nueva-venta')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="form-nueva-venta" onsubmit="guardarNuevaVenta(event)">
+          <input type="hidden" id="m-vent-id" value="">
+          <div id="modal-venta-modo-banner" style="display:none; margin-bottom:12px; padding:10px 14px; background:#e0f2fe; border:1px solid #7dd3fc; border-radius:8px; color:#0369a1; font-size:0.8rem; font-weight:600;"></div>
           <!-- TARJETA 1: Buscador y Vinculación con Despachos de Almacén (DG67) -->
           <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 14px;">
             <div style="font-size: 0.82rem; font-weight: 800; color: var(--ucg-navy); margin-bottom: 6px; display:flex; align-items:center; gap:6px;">
@@ -3838,12 +3840,12 @@
                 <input type="date" id="m-vent-fecha" class="form-control font-mono" required onchange="onCambioFechaVentaZ()" style="font-size:0.8rem;">
               </div>
               <div class="form-group" style="margin:0;">
-                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">📄 N° Reporte Z (Fiscal):</label>
-                <input type="text" id="m-vent-numero-z" class="form-control font-mono font-bold" placeholder="ej: 0317" style="font-size:0.85rem;">
+                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">📄 N° Reporte Z (Fiscal) *:</label>
+                <input type="text" id="m-vent-numero-z" class="form-control font-mono font-bold" placeholder="ej: 0317" required style="font-size:0.85rem;">
               </div>
               <div class="form-group" style="margin:0;">
-                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">🖨️ Serial Impresora:</label>
-                <input type="text" id="m-vent-serial" class="form-control font-mono" value="Z0A0000176" placeholder="ej: Z0A0000176" style="font-size:0.85rem;">
+                <label style="font-size:0.75rem; font-weight: 700; color: #0B2447;">🖨️ Serial Impresora *:</label>
+                <input type="text" id="m-vent-serial" class="form-control font-mono" value="Z0A0000176" placeholder="ej: Z0A0000176" required style="font-size:0.85rem;">
               </div>
             </div>
           </div>

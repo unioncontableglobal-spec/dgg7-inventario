@@ -1049,9 +1049,13 @@ export async function onRequest(context) {
 
     if (path === '/api/fiscal/libro-ventas' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
+      const id = url.searchParams.get('id');
       let sql = `SELECT * FROM libro_ventas WHERE 1=1`;
       const args = [];
-      if (periodo && periodo !== 'TODOS') {
+      if (id) {
+        sql += ` AND id = ?`;
+        args.push(id);
+      } else if (periodo && periodo !== 'TODOS') {
         sql += ` AND periodo = ?`;
         args.push(periodo);
       }
@@ -1070,8 +1074,20 @@ export async function onRequest(context) {
         tasa_bcv, fecha_tasa_bcv, moneda_divisa
       } = body;
 
-      if (!periodo || !fecha || (base_imponible_bs === undefined && base_imponible_divisa === undefined)) {
-        return jsonResponse({ error: 'Faltan campos requeridos (Período, Fecha, Base Imponible)' }, 400);
+      if (!periodo || !fecha) {
+        return jsonResponse({ error: 'Faltan campos requeridos (Período y Fecha)' }, 400);
+      }
+      if (!numero_reporte_z || String(numero_reporte_z).trim() === '') {
+        return jsonResponse({ error: 'El N° de Reporte Z es obligatorio según normativa SENIAT (Providencia 00071).' }, 400);
+      }
+      if (!serial_impresora || String(serial_impresora).trim() === '') {
+        return jsonResponse({ error: 'El Serial de la Máquina Fiscal es obligatorio.' }, 400);
+      }
+      if (!factura_desde || !factura_hasta) {
+        return jsonResponse({ error: 'El rango correlativo de facturas (Desde / Hasta) es obligatorio.' }, 400);
+      }
+      if (base_imponible_bs === undefined && base_imponible_divisa === undefined && exento_bs === undefined) {
+        return jsonResponse({ error: 'Debe registrar la Base Imponible o Ventas Exentas.' }, 400);
       }
 
       const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
@@ -1127,6 +1143,93 @@ export async function onRequest(context) {
         message: 'Reporte Z guardado con éxito en Libro de Ventas (Conciliación Automática)',
         conciliacion: resultadoCruce
       });
+    }
+
+    if ((path.startsWith('/api/fiscal/libro-ventas/') && (method === 'PUT' || method === 'POST')) || (path === '/api/fiscal/libro-ventas' && method === 'PUT')) {
+      const body = await request.json();
+      const zId = parseInt(path === '/api/fiscal/libro-ventas' ? body.id : path.split('/').pop(), 10);
+      if (!zId) return jsonResponse({ error: 'ID de Reporte Z inválido para actualización' }, 400);
+
+      const {
+        periodo, fecha, numero_reporte_z, serial_impresora, factura_desde, factura_hasta,
+        cantidad_comprobantes, cantidad_anuladas, total_anulaciones_bs, facturas_anuladas_lista,
+        total_bs, total_divisa, exento_bs, exento_divisa,
+        base_imponible_bs, base_imponible_divisa, alicuota, iva_bs, monto_iva_divisa,
+        tasa_bcv, fecha_tasa_bcv, moneda_divisa
+      } = body;
+
+      if (!periodo || !fecha) {
+        return jsonResponse({ error: 'Faltan campos requeridos (Período y Fecha)' }, 400);
+      }
+      if (!numero_reporte_z || String(numero_reporte_z).trim() === '') {
+        return jsonResponse({ error: 'El N° de Reporte Z es obligatorio según normativa SENIAT (Providencia 00071).' }, 400);
+      }
+      if (!serial_impresora || String(serial_impresora).trim() === '') {
+        return jsonResponse({ error: 'El Serial de la Máquina Fiscal es obligatorio.' }, 400);
+      }
+      if (!factura_desde || !factura_hasta) {
+        return jsonResponse({ error: 'El rango correlativo de facturas (Desde / Hasta) es obligatorio.' }, 400);
+      }
+
+      const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+      const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
+      const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
+      const monedaOp = moneda_divisa || 'USD';
+
+      const ali = Number(alicuota) || 0.16;
+      let baseBs = Number(base_imponible_bs) || 0.0;
+      let baseDiv = Number(base_imponible_divisa) || 0.0;
+      if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
+      else if (baseDiv <= 0 && baseBs > 0) baseDiv = Number((baseBs / tasaOp).toFixed(2));
+
+      let exBs = Number(exento_bs) || 0.0;
+      let exDiv = Number(exento_divisa) || 0.0;
+      if (exBs <= 0 && exDiv > 0) exBs = Number((exDiv * tasaOp).toFixed(2));
+      else if (exDiv <= 0 && exBs > 0) exDiv = Number((exBs / tasaOp).toFixed(2));
+
+      const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+      const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaCalc / tasaOp).toFixed(2));
+      const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc + exBs).toFixed(2));
+      const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
+      const cant = Number(cantidad_comprobantes) || 1;
+      const numZ = String(numero_reporte_z || '').trim();
+      const serial = String(serial_impresora || 'Z0A0000176').trim();
+      const cantAnul = Number(cantidad_anuladas) || 0;
+      const totAnulBs = Number(total_anulaciones_bs) || 0.0;
+      const anulLista = String(facturas_anuladas_lista || '').trim();
+
+      await db.execute({
+        sql: `UPDATE libro_ventas SET 
+                periodo = ?, fecha = ?, numero_reporte_z = ?, serial_impresora = ?, 
+                factura_desde = ?, factura_hasta = ?, total_bs = ?, exento_bs = ?, 
+                base_imponible_bs = ?, alicuota = ?, iva_bs = ?, cantidad_comprobantes = ?, 
+                cantidad_anuladas = ?, total_anulaciones_bs = ?, facturas_anuladas_lista = ?, 
+                tasa_bcv = ?, fecha_tasa_bcv = ?, moneda_divisa = ?, exento_divisa = ?, 
+                base_imponible_divisa = ?, monto_iva_divisa = ?, total_divisa = ?
+              WHERE id = ?`,
+        args: [
+          periodo, fecha, numZ, serial, factura_desde || null, factura_hasta || null,
+          totalCalc, exBs, baseBs, ali, ivaCalc, cant,
+          cantAnul, totAnulBs, anulLista,
+          tasaOp, fechaTasaOp, monedaOp, exDiv, baseDiv, ivaDivCalc, totalDivCalc,
+          zId
+        ]
+      });
+
+      const resultadoCruce = await conciliarReporteZ(zId, db);
+
+      return jsonResponse({
+        success: true,
+        id: zId,
+        message: 'Reporte Z actualizado con éxito en el Libro de Ventas (Conciliación Recalculada)',
+        conciliacion: resultadoCruce
+      });
+    }
+
+    if (path.startsWith('/api/fiscal/libro-ventas/') && method === 'DELETE') {
+      const zId = parseInt(path.split('/').pop(), 10);
+      await db.execute({ sql: "DELETE FROM libro_ventas WHERE id = ?", args: [zId] });
+      return jsonResponse({ success: true, message: 'Registro de venta eliminado del Libro de Ventas' });
     }
 
     if (path === '/api/fiscal/libro-compras' && method === 'POST') {
