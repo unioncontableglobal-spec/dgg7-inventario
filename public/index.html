@@ -1896,9 +1896,9 @@
 
           <!-- 2. BARRA DE FILTROS Y BÚSQUEDA EN TIEMPO REAL -->
           <div class="pzero-filter-bar">
-            <!-- Buscador Dinámico -->
+            <!-- Buscador Dinámico con Debounce Inteligente -->
             <div style="position:relative; flex:1; min-width:280px;">
-              <input type="text" id="pzero-search-input" class="form-control" placeholder="🔍 Buscar por código, descripción, almacén o categoría..." style="padding-left:14px; font-size:0.82rem;" oninput="filtrarAuditoriaEnVivo()">
+              <input type="text" id="pzero-search-input" class="form-control" placeholder="🔍 Buscar por código, descripción, almacén o categoría..." style="padding-left:14px; font-size:0.82rem;" oninput="debouncedFiltrarAuditoriaEnVivo()">
             </div>
 
             <!-- Filtros en Pills -->
@@ -3456,7 +3456,7 @@
                 <div style="position: relative; flex: 2; min-width: 220px;">
                   <input type="text" id="m-comp-buscar-tienda" class="form-control"
                     placeholder="🔍 Filtrar por N° de Factura, RIF, Proveedor o Repuesto (ej: 2225, Partzeus, Century)..."
-                    oninput="filtrarEntradasPendientesTienda(this.value)"
+                    oninput="debouncedFiltrarEntradasPendientes(this.value)"
                     style="font-size: 0.82rem; padding-left: 10px;">
                 </div>
                 <select id="m-comp-filtro-periodo" class="form-control"
@@ -3787,7 +3787,7 @@
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="m-vent-buscar-tienda" class="form-control"
                 placeholder="Buscar por N° Factura (ej: 2595, 2601) o Fecha (ej: 2026-10-29)..."
-                oninput="buscarSalidasTiendaParaVenta(this.value)" style="font-size: 0.82rem;">
+                oninput="debouncedBuscarSalidasTienda(this.value)" style="font-size: 0.82rem;">
               <button type="button" class="btn btn-sm btn-emerald"
                 onclick="buscarSalidasTiendaParaVenta(document.getElementById('m-vent-buscar-tienda').value)"
                 style="white-space: nowrap; font-weight:700;">🔍 Buscar Salidas</button>
@@ -4121,7 +4121,7 @@
           <div class="search-box" style="flex: 2;">
             <input type="text" id="filtro-tienda-ent-q"
               placeholder="Buscar por N° de Factura, RIF o Proveedor (ej: 2225, 2242, Disbattery, Angelinev)..."
-              oninput="cargarTablaEntradasTiendaModal()">
+              oninput="debouncedCargarTablaEntradasModal()">
           </div>
           <div class="select-group">
             <select id="filtro-tienda-ent-periodo" onchange="cargarTablaEntradasTiendaModal()">
@@ -4184,7 +4184,7 @@
           <div class="search-box" style="flex: 2;">
             <input type="text" id="filtro-tienda-sal-q"
               placeholder="Buscar por N° de Factura de Venta (ej: FACT 755, 1980, 2223)..."
-              oninput="cargarTablaSalidasTiendaModal()">
+              oninput="debouncedCargarTablaSalidasModal()">
           </div>
           <div class="select-group">
             <select id="filtro-tienda-sal-periodo" onchange="cargarTablaSalidasTiendaModal()">

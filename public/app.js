@@ -24,6 +24,34 @@ function fmtUsd(val) {
 }
 
 // --------------------------------------------------------------------------
+// OPTIMIZADOR DE RENDIMIENTO: DEBOUNCE PARA ENTRADAS Y BÚSQUEDAS EN VIVO
+// Evita el congelamiento y sobrecarga del hilo principal del navegador
+// --------------------------------------------------------------------------
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+const debouncedBuscarSalidasTienda = debounce((q) => buscarSalidasTiendaParaVenta(q), 300);
+const debouncedCargarTablaSalidasModal = debounce(() => cargarTablaSalidasTiendaModal(), 300);
+const debouncedCargarTablaEntradasModal = debounce(() => cargarTablaEntradasTiendaModal(), 300);
+const debouncedFiltrarAuditoriaEnVivo = debounce(() => filtrarAuditoriaEnVivo(), 200);
+const debouncedFiltrarEntradasPendientes = debounce((q) => filtrarEntradasPendientesTienda(q), 250);
+
+window.debouncedBuscarSalidasTienda = debouncedBuscarSalidasTienda;
+window.debouncedCargarTablaSalidasModal = debouncedCargarTablaSalidasModal;
+window.debouncedCargarTablaEntradasModal = debouncedCargarTablaEntradasModal;
+window.debouncedFiltrarAuditoriaEnVivo = debouncedFiltrarAuditoriaEnVivo;
+window.debouncedFiltrarEntradasPendientes = debouncedFiltrarEntradasPendientes;
+
+// --------------------------------------------------------------------------
 // CONTROL DE ACCESO CORPORATIVO Y AUTENTICACIÓN (UNIÓN CONTABLE GLOBAL)
 // --------------------------------------------------------------------------
 const AUTH_STORAGE_KEY = 'dg67_auth_session';
@@ -2333,19 +2361,6 @@ function showToast(message, type = 'success') {
     toast.style.transform = 'translateX(20px)';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
-}
-
-// Helper: Debounce
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
 }
 
 // ==========================================================================
@@ -4830,7 +4845,13 @@ async function guardarNuevaVenta(e) {
       showToast(editId ? 'Reporte Z actualizado con éxito' : 'Registro de venta agregado al Libro de Ventas', 'success');
     }
 
-    await Promise.all([loadLibroVentas(), loadCruceDobleVia(), cargarPanelCruceSalidas()]);
+    // Recarga optimizada por pestaña activa para respuesta instantánea sin congelar la pantalla
+    await loadLibroVentas();
+    if (state.activeTab === 'tab-fiscal') {
+      await loadCruceDobleVia();
+    } else if (state.activeTab === 'tab-salida') {
+      await cargarPanelCruceSalidas();
+    }
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -7249,7 +7270,16 @@ function cambiarFiltroPills(tipo) {
 }
 
 // Filtrar la lista en vivo
+let pzeroLimiteRender = 80;
+
+function pzeroMostrarMas() {
+  pzeroLimiteRender += 80;
+  renderizarTablaAuditoriaEnVivo();
+}
+window.pzeroMostrarMas = pzeroMostrarMas;
+
 function filtrarAuditoriaEnVivo() {
+  pzeroLimiteRender = 80;
   const searchInput = document.getElementById('pzero-search-input');
   const catSelect = document.getElementById('pzero-filter-cat');
   const almSelect = document.getElementById('pzero-filter-alm');
@@ -7286,14 +7316,14 @@ function filtrarAuditoriaEnVivo() {
   renderizarTablaAuditoriaEnVivo();
 }
 
-// Renderizar filas de la tabla
+// Renderizar filas de la tabla con paginación/chunking para máxima fluidez de CPU
 function renderizarTablaAuditoriaEnVivo() {
   const tbody = document.getElementById('tbody-auditoria-en-vivo');
   const conteoEl = document.getElementById('pzero-tabla-conteo');
   if (!tbody) return;
 
   if (conteoEl) {
-    conteoEl.textContent = `Mostrando ${pzeroFiltrados.length} de ${pzeroProductos.length} productos`;
+    conteoEl.textContent = `Mostrando ${Math.min(pzeroLimiteRender, pzeroFiltrados.length)} de ${pzeroFiltrados.length} productos coincidentes (Total Maestro: ${pzeroProductos.length})`;
   }
 
   if (pzeroFiltrados.length === 0) {
@@ -7310,7 +7340,8 @@ function renderizarTablaAuditoriaEnVivo() {
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  tbody.innerHTML = pzeroFiltrados.map((p, index) => {
+  const listaRender = pzeroFiltrados.slice(0, pzeroLimiteRender);
+  const rowsHtml = listaRender.map((p, index) => {
     const isAuditado = p.auditado === 1;
     const isInactive = p.inactivo === 1;
 
@@ -7376,6 +7407,18 @@ function renderizarTablaAuditoriaEnVivo() {
       </tr>
     `;
   }).join('');
+
+  const masHtml = pzeroFiltrados.length > pzeroLimiteRender ? `
+    <tr>
+      <td colspan="10" class="text-center" style="padding:14px; background:#f8fafc; border-top:1px solid #cbd5e1;">
+        <button type="button" class="btn btn-navy" onclick="pzeroMostrarMas()" style="font-weight:700; font-size:0.8rem; padding:6px 18px;">
+          ⬇️ Cargar 80 productos más (Mostrando ${pzeroLimiteRender} de ${pzeroFiltrados.length})
+        </button>
+      </td>
+    </tr>
+  ` : '';
+
+  tbody.innerHTML = rowsHtml + masHtml;
 }
 
 // ----------------------------------------------------------------------------
