@@ -7628,12 +7628,14 @@ async function cargarAuditoriaEnVivo() {
     `;
   }
 
-  // Tasa Oficial BCV para Octubre 2026
-  if (typeof getTasaBcvPorFechaOPeriodo === 'function') {
-    pzeroTasaBcv = Number(getTasaBcvPorFechaOPeriodo('2026-10') || 889.58);
-  }
+  // Tasa Oficial BCV de Cierre Fiscal para Octubre 2026 (Fija al 31/10/2026)
+  const actaActiva = (typeof obtenerActaActiva === 'function') ? obtenerActaActiva() : null;
+  pzeroTasaBcv = Number(actaActiva?.tasa_bcv || (typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo('2026-10') : 889.58) || 889.58);
+
   const tasaBadge = document.getElementById('pzero-kpi-tasa');
   if (tasaBadge) tasaBadge.textContent = `Bs. ${pzeroTasaBcv.toFixed(2)}`;
+  const bannerTasa = document.getElementById('banner-acta-tasa-cierre');
+  if (bannerTasa) bannerTasa.textContent = `Bs. ${pzeroTasaBcv.toFixed(2)} / USD (Fija 31/10/2026)`;
 
   try {
     const res = await fetch('/api/auditoria/listado-en-vivo');
@@ -7935,6 +7937,9 @@ function abrirModalAperturaActa(callback) {
   const almInput = document.getElementById('apertura-acta-almacen');
   const audInput = document.getElementById('apertura-acta-auditor-tienda');
   const gerInput = document.getElementById('apertura-acta-gerente-dg67');
+  const tasaInput = document.getElementById('apertura-acta-tasa-bcv');
+
+  const tasaCierreSugerida = Number(acta?.tasa_bcv || (typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo('2026-10') : 889.58) || 889.58);
 
   if (acta) {
     if (numInput) numInput.value = acta.numero || 'ACTA-INV-202610-01';
@@ -7943,12 +7948,14 @@ function abrirModalAperturaActa(callback) {
     if (almInput) almInput.value = acta.almacen || 'Almacén Principal DG 67 (Tienda y Depósito)';
     if (audInput) audInput.value = acta.auditor_tienda || 'Personal de Almacén / Auditor DG 67';
     if (gerInput) gerInput.value = acta.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.';
+    if (tasaInput) tasaInput.value = tasaCierreSugerida.toFixed(4);
   } else {
     if (numInput && !numInput.value) numInput.value = 'ACTA-INV-202610-01';
     if (fecInput && !fecInput.value) fecInput.value = '2026-10-31';
     if (almInput && !almInput.value) almInput.value = 'Almacén Principal DG 67 (Tienda y Depósito)';
     if (audInput && !audInput.value) audInput.value = 'Personal de Almacén / Auditor DG 67';
     if (gerInput && !gerInput.value) gerInput.value = 'Gerencia General Inversiones DG 67, C.A.';
+    if (tasaInput) tasaInput.value = tasaCierreSugerida.toFixed(4);
   }
 
   const modal = document.getElementById('modal-apertura-acta-inventario');
@@ -7963,6 +7970,7 @@ function guardarAperturaActa(e) {
   const almInput = document.getElementById('apertura-acta-almacen');
   const audInput = document.getElementById('apertura-acta-auditor-tienda');
   const gerInput = document.getElementById('apertura-acta-gerente-dg67');
+  const tasaInput = document.getElementById('apertura-acta-tasa-bcv');
 
   const numero = numInput?.value?.trim() || 'ACTA-INV-202610-01';
   const periodo = perSelect?.value || '2026-10';
@@ -7970,18 +7978,21 @@ function guardarAperturaActa(e) {
   const almacen = almInput?.value?.trim() || 'Almacén Principal DG 67 (Tienda y Depósito)';
   const auditor_tienda = audInput?.value?.trim() || 'Personal de Almacén / Auditor DG 67';
   const gerente_dg67 = gerInput?.value?.trim() || 'Gerencia General Inversiones DG 67, C.A.';
+  const tasa_bcv = parseFloat(tasaInput?.value) || 889.58;
 
   const actaData = {
     numero,
     periodo,
     fecha,
     almacen,
+    tasa_bcv,
     auditor_tienda,
     gerente_dg67,
     contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
     fecha_apertura_registro: new Date().toISOString()
   };
 
+  pzeroTasaBcv = tasa_bcv;
   localStorage.setItem('dg67_acta_iniciada_202610', JSON.stringify(actaData));
   state.actaActiva = actaData;
 
@@ -7989,7 +8000,7 @@ function guardarAperturaActa(e) {
   actualizarOpcionesDrawerActa(numero);
   closeModal('modal-apertura-acta-inventario');
 
-  showToast(`✅ Acta Oficial [${numero}] aperturada. Todo ajuste físico se vinculará a este expediente.`, 'success');
+  showToast(`✅ Acta Oficial [${numero}] aperturada. Tasa de Cierre fijada en Bs. ${tasa_bcv.toFixed(2)} / USD (31/10/2026).`, 'success');
 
   if (aperturaActaCallback) {
     const cb = aperturaActaCallback;
@@ -8002,6 +8013,7 @@ function actualizarBannerActaActiva() {
   const acta = obtenerActaActiva() || {
     numero: 'ACTA-INV-202610-01',
     periodo: '2026-10',
+    tasa_bcv: 889.58,
     auditor_tienda: 'Personal de Almacén / Auditor DG 67',
     gerente_dg67: 'Gerencia General DG 67'
   };
@@ -8011,10 +8023,17 @@ function actualizarBannerActaActiva() {
   const bDg67 = document.getElementById('banner-acta-dg67');
   const bBadge = document.getElementById('banner-acta-badge');
   const bCont = document.getElementById('pzero-banner-acta-activa');
+  const bTasa = document.getElementById('banner-acta-tasa-cierre');
+  const tasaBadge = document.getElementById('pzero-kpi-tasa');
+
+  const tasaCierreNum = Number(acta.tasa_bcv || pzeroTasaBcv || 889.58);
+  pzeroTasaBcv = tasaCierreNum;
 
   if (bNro) bNro.textContent = acta.numero;
   if (bPer) bPer.textContent = `(Toma Física ${acta.periodo === '2026-10' ? 'Octubre 2026' : acta.periodo})`;
   if (bDg67) bDg67.textContent = `Inversiones DG 67, C.A. (${acta.auditor_tienda})`;
+  if (bTasa) bTasa.textContent = `Bs. ${tasaCierreNum.toFixed(2)} / USD (Fija 31/10/2026)`;
+  if (tasaBadge) tasaBadge.textContent = `Bs. ${tasaCierreNum.toFixed(2)}`;
 
   if (state.tomaFisicaEstatus === 'CERRADA') {
     if (bBadge) {
@@ -8249,17 +8268,21 @@ function abrirDrawerAuditoria(index) {
   if (elJust) elJust.value = '';
   calcularDiferenciaDrawer();
 
-  // 3. Bloque B: Estructura de Costos (Moneda Principal: Bolívares Bs.)
+  // 3. Bloque B: Estructura de Costos (Moneda Principal: Bolívares Bs. / Fija al Cierre 31/10/2026)
   const costoBs = Number(((p.costo_s_iva_usd || 0) * pzeroTasaBcv).toFixed(2));
   const elCostoSIVABs = document.getElementById('drawer-costo-s-iva-bs');
+  const drawerCostoTasa = document.getElementById('drawer-costo-tasa-bcv-val');
+  if (drawerCostoTasa) drawerCostoTasa.textContent = pzeroTasaBcv.toFixed(2);
   if (elCostoSIVABs) {
     elCostoSIVABs.value = costoBs.toFixed(2);
   }
   calcularCostosDrawer('BS_S_IVA');
 
-  // 4. Bloque C: Estructura de Precios de Venta (Moneda Principal: Bolívares Bs.)
+  // 4. Bloque C: Estructura de Precios de Venta (Moneda Principal: Bolívares Bs. / Fija al Cierre 31/10/2026)
   const precioBs = Number(((p.precio_venta_s_iva_usd || 0) * pzeroTasaBcv).toFixed(2));
   const elPrecioSIVABs = document.getElementById('drawer-precio-s-iva-bs');
+  const drawerPrecioTasa = document.getElementById('drawer-precio-tasa-bcv-val');
+  if (drawerPrecioTasa) drawerPrecioTasa.textContent = pzeroTasaBcv.toFixed(2);
   if (elPrecioSIVABs) {
     elPrecioSIVABs.value = precioBs.toFixed(2);
   }

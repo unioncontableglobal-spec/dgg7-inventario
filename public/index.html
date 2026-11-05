@@ -1894,8 +1894,9 @@
                   <span id="banner-acta-periodo-texto" style="font-size: 0.74rem; color: #0369a1; font-weight: 700;">(Toma Física Octubre 2026)</span>
                 </div>
                 <div style="font-size: 0.75rem; color: #475569; margin-top: 2px;">
-                  <strong>Conteo Físico Real:</strong> <span id="banner-acta-dg67">Inversiones DG 67, C.A. (Responsable de Información)</span> • 
-                  <strong>Receptor Contable:</strong> <span id="banner-acta-ucg" style="color: #1e40af; font-weight: 700;">Lcda. Liliana Chacón (Unión Contable Global)</span>
+                  <strong>Conteo Físico Real:</strong> <span id="banner-acta-dg67">Inversiones DG 67, C.A.</span> • 
+                  <strong>Receptor Contable:</strong> <span id="banner-acta-ucg" style="color: #1e40af; font-weight: 700;">Lcda. Liliana Chacón (UCG)</span> • 
+                  <strong>Tasa Cierre:</strong> <span id="banner-acta-tasa-cierre" style="color: #0369a1; font-weight: 800;">Bs. 889,58 / USD (Fija 31/10/2026)</span>
                 </div>
               </div>
             </div>
@@ -1962,8 +1963,8 @@
                 <span>🔒 Inactivos (Bajas):</span>
                 <strong id="pzero-kpi-inactivos">0</strong>
               </div>
-              <div class="pzero-chip" style="margin-left:auto; background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8;">
-                <span>🏛️ Tasa BCV Oficial:</span>
+              <div class="pzero-chip" style="margin-left:auto; background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8;" title="Tasa Oficial BCV de Cierre al 31/10/2026 para la Toma Física y Conciliación Fiscal">
+                <span>🏛️ Tasa Cierre Oct 2026 (Fija 31/10):</span>
                 <strong id="pzero-kpi-tasa">Bs. 889,58</strong>
               </div>
             </div>
@@ -2172,6 +2173,10 @@
                 <div class="pzero-zone-title">
                   <span>💲 BLOQUE B: Estructura de Costos (Compras)</span>
                 </div>
+                <div style="font-size:0.72rem; color:#0369a1; font-weight:700; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:5px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                  <span>🏛️ Tasa BCV Cierre Fiscal (Oct 2026):</span>
+                  <strong style="color:#0c4a6e;">Bs. <span id="drawer-costo-tasa-bcv-val">889.58</span> / USD (31/10/2026)</strong>
+                </div>
                 <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Valoración de inventario conforme al Art. 177 RISLR. Ingrese el Costo S/IVA en Bolívares (Bs.) o el Costo Total para autocalcular el IVA (16%).</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
@@ -2202,6 +2207,10 @@
               <div class="pzero-zone-card zone-c">
                 <div class="pzero-zone-title">
                   <span>🏷️ BLOQUE C: Estructura de Precios (Ventas)</span>
+                </div>
+                <div style="font-size:0.72rem; color:#0369a1; font-weight:700; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:5px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                  <span>🏛️ Tasa BCV Cierre Fiscal (Oct 2026):</span>
+                  <strong style="color:#0c4a6e;">Bs. <span id="drawer-precio-tasa-bcv-val">889.58</span> / USD (31/10/2026)</strong>
                 </div>
                 <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Precios de venta sugeridos para el mostrador de DG67, salidas de tienda y facturación por máquina fiscal.</p>
 
@@ -4441,6 +4450,26 @@
             </div>
           </div>
 
+          <!-- Tasa Oficial BCV de Cierre Fiscal (Obligatoria para la Valoración) -->
+          <div style="background: #f0f9ff; border: 1.5px solid #0284c7; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 0.76rem; font-weight: 800; color: #0369a1; text-transform: uppercase;">
+                🏛️ Tasa Oficial BCV de Cierre Fiscal (Corte 31/10/2026) *
+              </label>
+              <span style="font-size: 0.68rem; background: #0284c7; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: 700;">TASA DE CIERRE FIJA</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="display: flex; align-items: center; border: 2px solid #0284c7; border-radius: 6px; overflow: hidden; background: #fff; width: 100%;">
+                <span style="padding: 0 12px; font-weight: 800; color: #0B2447; background: #e0f2fe; font-size: 0.95rem;">Bs.</span>
+                <input type="number" step="any" min="0.0001" id="apertura-acta-tasa-bcv" class="form-control font-mono font-bold" style="border: none; font-size: 1.15rem; color: #0B2447; padding: 7px 10px;" value="889.5800" required>
+                <span style="padding: 0 12px; font-weight: 700; color: #64748b; background: #f8fafc; font-size: 0.85rem;">/ USD</span>
+              </div>
+            </div>
+            <div style="font-size: 0.72rem; color: #0369a1; margin-top: 6px; line-height: 1.4;">
+              ⚖️ <strong>Criterio Tributario y Contable (Art. 177 RISLR):</strong> Toda la Toma Física, costos y asientos de ajuste por faltantes/sobrantes de Octubre 2026 se valoran obligatoriamente con esta tasa fija de cierre al 31/10/2026, sin verse alterada por las tasas diarias fluctuantes de noviembre.
+            </div>
+          </div>
+
           <!-- Delimitación Formal de Responsabilidades (DG67 vs UCG) -->
           <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
             <div style="font-size: 0.74rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase;">
@@ -5076,8 +5105,11 @@
 
       <div class="modal-body" style="padding: 20px;">
         <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.8rem; color: #0369a1; line-height: 1.45;">
-          <strong>Vigencia y Doble Expresión Monetaria:</strong><br>
-          Verifique o actualice la tasa oficial de hoy. Aplica automáticamente a todas las operaciones de inventario, compras, ventas y conciliación fiscal en Bolívares (Bs.) y Dólares ($ USD).
+          <strong>Vigencia Diaria y Doble Expresión Monetaria:</strong><br>
+          Verifique o actualice la tasa oficial de hoy. Aplica para las operaciones y movimientos cotidianos del día en curso.<br>
+          <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #93c5fd; font-size: 0.74rem; color: #0c4a6e; font-weight: 700;">
+            ⚖️ <em>Auditoría de Inventario:</em> La <strong>Toma Física al Cierre de Octubre 2026</strong> se valora obligatoriamente con la <strong>Tasa Oficial de Cierre al 31/10/2026 (Bs. 889,58 / USD)</strong>, resguardando la exactitud y congruencia fiscal del ejercicio.
+          </div>
         </div>
 
         <form id="form-popup-tasa-bcv" onsubmit="confirmarTasaBcvModalDia(event)">

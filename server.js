@@ -94,10 +94,12 @@ localDb.execute(`
     auditor_tienda TEXT,
     gerente_dg67 TEXT,
     contador_ucg TEXT,
+    tasa_bcv REAL DEFAULT 889.58,
     resumen_items TEXT,
     updated_at TEXT
   );
 `).catch(() => { });
+localDb.execute("ALTER TABLE actas_toma_fisica ADD COLUMN tasa_bcv REAL DEFAULT 889.58;").catch(() => { });
 localDb.execute("PRAGMA synchronous = NORMAL;").catch(() => { });
 
 const remoteUrl = process.env.TURSO_DATABASE_URL;
@@ -3289,6 +3291,7 @@ app.get('/api/auditoria/toma-fisica/estatus', async (req, res) => {
         periodo,
         estatus: 'ABIERTA',
         numero_acta: `ACTA-INV-${periodo.replace('-', '')}-01`,
+        tasa_bcv: 889.58,
         fecha_cierre: null,
         usuario_cierre: null
       });
@@ -3303,7 +3306,8 @@ app.get('/api/auditoria/toma-fisica/estatus', async (req, res) => {
       usuario_cierre: a.usuario_cierre,
       auditor_tienda: a.auditor_tienda,
       gerente_dg67: a.gerente_dg67,
-      contador_ucg: a.contador_ucg
+      contador_ucg: a.contador_ucg,
+      tasa_bcv: Number(a.tasa_bcv || 889.58)
     });
   } catch (error) {
     console.error('Error obteniendo estatus de toma física:', error);
@@ -3320,14 +3324,15 @@ app.post('/api/auditoria/toma-fisica/cerrar', async (req, res) => {
       fecha_cierre = new Date().toISOString(),
       auditor_tienda = 'Personal de Almacén DG 67',
       gerente_dg67 = 'Gerencia General Inversiones DG 67, C.A.',
-      contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+      contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+      tasa_bcv = 889.58
     } = req.body || {};
 
     await db.execute({
       sql: `
         INSERT INTO actas_toma_fisica 
-        (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
-        VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, tasa_bcv, updated_at)
+        VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
         ON CONFLICT(periodo) DO UPDATE SET
           numero_acta = excluded.numero_acta,
           estatus = 'CERRADA',
@@ -3336,9 +3341,10 @@ app.post('/api/auditoria/toma-fisica/cerrar', async (req, res) => {
           auditor_tienda = excluded.auditor_tienda,
           gerente_dg67 = excluded.gerente_dg67,
           contador_ucg = excluded.contador_ucg,
+          tasa_bcv = excluded.tasa_bcv,
           updated_at = datetime('now', 'localtime')
       `,
-      args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg]
+      args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg, Number(tasa_bcv || 889.58)]
     });
 
     res.json({
