@@ -1833,7 +1833,22 @@
               <p class="subtitle">Conciliación de existencias físicas en tiempo real, ajustes de Kardex (Octubre 2026) y actualización de costos y precios de venta.</p>
             </div>
             <div class="header-buttons">
-              <button class="btn btn-navy" id="btn-generar-acta-oficial" onclick="abrirModalActaOficial()" style="display:flex; align-items:center; gap:8px; font-weight:800; background:#0B2447; color:#fff; box-shadow:0 2px 8px rgba(11,36,71,0.25);">
+              <button class="btn btn-navy" id="btn-abrir-apertura-acta" onclick="abrirModalAperturaActa()" style="display:flex; align-items:center; gap:8px; font-weight:800; background:#1e40af; color:#fff; box-shadow:0 2px 8px rgba(30,64,175,0.25);" title="Aperturar o configurar el Acta Oficial de Toma Física del período">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <span>📋 1. Aperturar Acta</span>
+              </button>
+              <button class="btn btn-emerald" id="btn-modo-rapido-auditoria" onclick="iniciarModoAuditoriaRapida()" style="display:flex; align-items:center; gap:8px; font-weight:800; box-shadow:0 2px 8px rgba(16,185,129,0.3);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span>⚡ 2. Modo Ajuste Rápido</span>
+              </button>
+              <button class="btn btn-navy" id="btn-generar-acta-oficial" onclick="abrirModalActaOficial()" style="display:flex; align-items:center; gap:8px; font-weight:800; background:#0B2447; color:#fff; box-shadow:0 2px 8px rgba(11,36,71,0.25);" title="Ver e imprimir Acta Oficial compilada en tiempo real">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
@@ -1841,13 +1856,7 @@
                   <line x1="16" y1="17" x2="8" y2="17"></line>
                   <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                <span>📄 Generar Acta Oficial de Toma Física (SENIAT)</span>
-              </button>
-              <button class="btn btn-emerald" id="btn-modo-rapido-auditoria" onclick="iniciarModoAuditoriaRapida()" style="display:flex; align-items:center; gap:8px; font-weight:800; box-shadow:0 2px 8px rgba(16,185,129,0.3);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                </svg>
-                <span>⚡ Modo Ajuste Rápido</span>
+                <span>📄 3. Ver / Imprimir Acta</span>
               </button>
               <button class="btn btn-secondary" onclick="descargarMatrizAuditoria()" style="display:flex; align-items:center; gap:8px; font-weight:700;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1856,6 +1865,32 @@
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
                 <span>Exportar Matriz (.XLSX)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Banner Informativo del Acta Oficial Activa en Curso -->
+          <div id="pzero-banner-acta-activa" style="background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; box-shadow: 0 2px 8px rgba(14,165,233,0.08);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 1.5rem;">📋</span>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 0.72rem; font-weight: 800; background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px;">EXPEDIENTE OFICIAL ACTIVO</span>
+                  <strong id="banner-acta-nro" style="color: #0B2447; font-size: 0.95rem; font-family: monospace;">ACTA-INV-202610-01</strong>
+                  <span id="banner-acta-periodo-texto" style="font-size: 0.74rem; color: #0369a1; font-weight: 700;">(Toma Física Octubre 2026)</span>
+                </div>
+                <div style="font-size: 0.75rem; color: #475569; margin-top: 2px;">
+                  <strong>Conteo Físico Real:</strong> <span id="banner-acta-dg67">Inversiones DG 67, C.A. (Responsable de Información)</span> • 
+                  <strong>Receptor Contable:</strong> <span id="banner-acta-ucg" style="color: #1e40af; font-weight: 700;">Lcda. Liliana Chacón (Unión Contable Global)</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="abrirModalAperturaActa()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
+                ✏️ Configurar Acta
+              </button>
+              <button type="button" class="btn btn-sm btn-navy" onclick="abrirModalActaOficial()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px; background: #0B2447; color: #fff;">
+                📄 Ver Acta en Vivo
               </button>
             </div>
           </div>
@@ -4323,6 +4358,97 @@
         <div style="margin-top: 24px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 0.68rem; color: #94a3b8;">
           Documento probatorio para fines fiscales ante el SENIAT y auditoría externa. Generado automáticamente por el Sistema SISCON-ES DG67.
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL FLOTANTE: APERTURA Y REGISTRO PREVIO DE ACTA DE TOMA FÍSICA      -->
+  <!-- Fundamento Legal: Art. 177 RISLR • Art. 27 LISLR • PA SNAT/2026/00093   -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-apertura-acta-inventario" style="display: none; z-index: 1070;">
+    <div class="modal-box" style="max-width: 680px; width: 95%; border-top: 5px solid #0B2447; box-shadow: 0 10px 45px rgba(11,36,71,0.35);">
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF; padding: 16px 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">📋</span>
+          <div>
+            <h3 style="color: #FFFFFF; font-size: 1.15rem; font-weight: 800; margin: 0;">Apertura de Acta de Toma Física y Ajuste</h3>
+            <div style="font-size: 0.72rem; color: #7dd3fc; font-weight: 700;">EXPEDIENTE OFICIAL DE AUDITORÍA • ART. 177 RISLR • SENIAT</div>
+          </div>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF; font-size: 1.5rem;" onclick="closeModal('modal-apertura-acta-inventario')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <!-- Banner Explicativo -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.8rem; color: #1e40af; line-height: 1.45;">
+          <strong>Apertura Previa del Acta Obligatoria:</strong><br>
+          Antes de registrar ajustes de inventario o modificar cantidades físicas, se apertura formalmente el Acta Oficial del período. A medida que audite el inventario en tienda, todos los faltantes, averías y sobrantes se vincularán y consolidarán automáticamente en este expediente legal.
+        </div>
+
+        <form id="form-apertura-acta" onsubmit="guardarAperturaActa(event)">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">N° de Acta Oficial (Correlativo SENIAT) *</label>
+              <input type="text" id="apertura-acta-numero" class="form-control font-mono font-bold" style="font-size: 0.95rem; color: #1e40af; background: #f8fafc; padding: 8px 10px;" value="ACTA-INV-202610-01" required>
+            </div>
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">Período Fiscal de Cierre *</label>
+              <select id="apertura-acta-periodo" class="form-control font-bold" style="font-size: 0.88rem; padding: 8px 10px;" required>
+                <option value="2026-10" selected>10 - Octubre 2026</option>
+                <option value="2026-09">09 - Septiembre 2026</option>
+                <option value="2026-11">11 - Noviembre 2026</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">Fecha de Levantamiento / Corte *</label>
+              <input type="date" id="apertura-acta-fecha" class="form-control font-bold" style="font-size: 0.88rem; padding: 8px 10px;" value="2026-10-31" required>
+            </div>
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">Almacén / Tienda a Auditar *</label>
+              <input type="text" id="apertura-acta-almacen" class="form-control" style="font-size: 0.85rem; padding: 8px 10px;" value="Almacén Principal DG 67 (Tienda y Depósito)" required>
+            </div>
+          </div>
+
+          <!-- Delimitación Formal de Responsabilidades (DG67 vs UCG) -->
+          <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+            <div style="font-size: 0.74rem; font-weight: 800; color: #0B2447; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase;">
+              ⚖️ Sujetos Intervinientes y Responsabilidad Tributaria (Art. 177 RISLR):
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #475569; display: block; margin-bottom: 3px;">Responsable Conteo en Tienda (DG 67) *:</label>
+                <input type="text" id="apertura-acta-auditor-tienda" class="form-control" style="font-size: 0.82rem; padding: 6px 10px;" value="Personal de Almacén / Auditor DG 67" required>
+              </div>
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #475569; display: block; margin-bottom: 3px;">Representante Legal (DG 67) *:</label>
+                <input type="text" id="apertura-acta-gerente-dg67" class="form-control" style="font-size: 0.82rem; padding: 6px 10px;" value="Gerencia General Inversiones DG 67, C.A." required>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Contador Público Colegiado (Receptor Contable / Asesor Externo):</label>
+              <div style="background: #ffffff; border: 1px solid #93c5fd; border-radius: 6px; padding: 7px 10px; font-size: 0.82rem; font-weight: 700; color: #1e40af; display: flex; align-items: center; justify-content: space-between;">
+                <span>Lcda. Liliana Chacón • CPC (Unión Contable Global)</span>
+                <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">RECEPTOR CONTABLE</span>
+              </div>
+            </div>
+            <div style="font-size: 0.70rem; color: #64748b; margin-top: 8px; line-height: 1.35; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              📌 <em>Nota legal:</em> El conteo físico es practicado exclusivamente por el personal y gerencia de <strong>Inversiones DG 67, C.A.</strong>, quienes son enteramente responsables de la información suministrada. <strong>Unión Contable Global</strong> recibe las cantidades para fines de registro de ajustes en Kardex y conciliación fiscal.
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-apertura-acta-inventario')" style="font-weight: 600;">
+              Omitir por ahora
+            </button>
+            <button type="submit" class="btn btn-navy" id="btn-confirmar-apertura-acta" style="font-weight: 800; padding: 9px 20px; background: #0B2447; color: #fff; box-shadow: 0 4px 12px rgba(11,36,71,0.25);">
+              🚀 Iniciar e Inscribir Acta de Inventario
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

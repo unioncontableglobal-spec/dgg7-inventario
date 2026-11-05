@@ -492,7 +492,15 @@ function switchTab(tabId) {
   if (tabId === 'tab-declaraciones') loadDeclaracionDetalle();
   if (tabId === 'tab-retenciones-islr') loadModuloRetencionesISLR();
   if (tabId === 'tab-proveedores') loadProveedoresDirectorio();
-  if (tabId === 'tab-punto-cero') cargarAuditoriaEnVivo();
+  if (tabId === 'tab-punto-cero') {
+    cargarAuditoriaEnVivo();
+    if (typeof actualizarBannerActaActiva === 'function') actualizarBannerActaActiva();
+    if (typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
+      setTimeout(() => {
+        abrirModalAperturaActa();
+      }, 400);
+    }
+  }
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
 
@@ -7789,11 +7797,139 @@ function renderizarTablaAuditoriaEnVivo() {
   tbody.innerHTML = rowsHtml + masHtml;
 }
 
+// ============================================================================
+// GESTIÓN DE APERTURA PREVIA DE ACTA DE TOMA FÍSICA (ART. 177 RISLR)
+// ============================================================================
+
+let aperturaActaCallback = null;
+
+function obtenerActaActiva() {
+  try {
+    const raw = localStorage.getItem('dg67_acta_iniciada_202610');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+function verificarActaAperturada() {
+  return !!obtenerActaActiva();
+}
+
+function abrirModalAperturaActa(callback) {
+  aperturaActaCallback = typeof callback === 'function' ? callback : null;
+  const acta = obtenerActaActiva();
+
+  const numInput = document.getElementById('apertura-acta-numero');
+  const perSelect = document.getElementById('apertura-acta-periodo');
+  const fecInput = document.getElementById('apertura-acta-fecha');
+  const almInput = document.getElementById('apertura-acta-almacen');
+  const audInput = document.getElementById('apertura-acta-auditor-tienda');
+  const gerInput = document.getElementById('apertura-acta-gerente-dg67');
+
+  if (acta) {
+    if (numInput) numInput.value = acta.numero || 'ACTA-INV-202610-01';
+    if (perSelect) perSelect.value = acta.periodo || '2026-10';
+    if (fecInput) fecInput.value = acta.fecha || '2026-10-31';
+    if (almInput) almInput.value = acta.almacen || 'Almacén Principal DG 67 (Tienda y Depósito)';
+    if (audInput) audInput.value = acta.auditor_tienda || 'Personal de Almacén / Auditor DG 67';
+    if (gerInput) gerInput.value = acta.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.';
+  } else {
+    if (numInput && !numInput.value) numInput.value = 'ACTA-INV-202610-01';
+    if (fecInput && !fecInput.value) fecInput.value = '2026-10-31';
+    if (almInput && !almInput.value) almInput.value = 'Almacén Principal DG 67 (Tienda y Depósito)';
+    if (audInput && !audInput.value) audInput.value = 'Personal de Almacén / Auditor DG 67';
+    if (gerInput && !gerInput.value) gerInput.value = 'Gerencia General Inversiones DG 67, C.A.';
+  }
+
+  const modal = document.getElementById('modal-apertura-acta-inventario');
+  if (modal) modal.style.display = 'flex';
+}
+
+function guardarAperturaActa(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const numInput = document.getElementById('apertura-acta-numero');
+  const perSelect = document.getElementById('apertura-acta-periodo');
+  const fecInput = document.getElementById('apertura-acta-fecha');
+  const almInput = document.getElementById('apertura-acta-almacen');
+  const audInput = document.getElementById('apertura-acta-auditor-tienda');
+  const gerInput = document.getElementById('apertura-acta-gerente-dg67');
+
+  const numero = numInput?.value?.trim() || 'ACTA-INV-202610-01';
+  const periodo = perSelect?.value || '2026-10';
+  const fecha = fecInput?.value || '2026-10-31';
+  const almacen = almInput?.value?.trim() || 'Almacén Principal DG 67 (Tienda y Depósito)';
+  const auditor_tienda = audInput?.value?.trim() || 'Personal de Almacén / Auditor DG 67';
+  const gerente_dg67 = gerInput?.value?.trim() || 'Gerencia General Inversiones DG 67, C.A.';
+
+  const actaData = {
+    numero,
+    periodo,
+    fecha,
+    almacen,
+    auditor_tienda,
+    gerente_dg67,
+    contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+    fecha_apertura_registro: new Date().toISOString()
+  };
+
+  localStorage.setItem('dg67_acta_iniciada_202610', JSON.stringify(actaData));
+  state.actaActiva = actaData;
+
+  actualizarBannerActaActiva();
+  actualizarOpcionesDrawerActa(numero);
+  closeModal('modal-apertura-acta-inventario');
+
+  showToast(`✅ Acta Oficial [${numero}] aperturada. Todo ajuste físico se vinculará a este expediente.`, 'success');
+
+  if (aperturaActaCallback) {
+    const cb = aperturaActaCallback;
+    aperturaActaCallback = null;
+    cb();
+  }
+}
+
+function actualizarBannerActaActiva() {
+  const acta = obtenerActaActiva() || {
+    numero: 'ACTA-INV-202610-01',
+    periodo: '2026-10',
+    auditor_tienda: 'Personal de Almacén / Auditor DG 67',
+    gerente_dg67: 'Gerencia General DG 67'
+  };
+
+  const bNro = document.getElementById('banner-acta-nro');
+  const bPer = document.getElementById('banner-acta-periodo-texto');
+  const bDg67 = document.getElementById('banner-acta-dg67');
+
+  if (bNro) bNro.textContent = acta.numero;
+  if (bPer) bPer.textContent = `(Toma Física ${acta.periodo === '2026-10' ? 'Octubre 2026' : acta.periodo})`;
+  if (bDg67) bDg67.textContent = `Inversiones DG 67, C.A. (${acta.auditor_tienda})`;
+}
+
+function actualizarOpcionesDrawerActa(numeroActa) {
+  const select = document.getElementById('drawer-acta-select');
+  if (!select) return;
+  const num = numeroActa || 'ACTA-INV-202610-01';
+  select.innerHTML = `
+    <option value="${num}" selected>${num} (Expediente Activo en Curso)</option>
+    <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
+  `;
+}
+
 // ----------------------------------------------------------------------------
 // DRAWER / PANEL LATERAL: LAS 3 ZONAS DE EDICIÓN
 // ----------------------------------------------------------------------------
 
 function abrirDrawerAuditoriaPorId(productoId) {
+  if (!verificarActaAperturada()) {
+    abrirModalAperturaActa(() => {
+      abrirDrawerAuditoriaPorIdDirecto(productoId);
+    });
+    return;
+  }
+  abrirDrawerAuditoriaPorIdDirecto(productoId);
+}
+
+function abrirDrawerAuditoriaPorIdDirecto(productoId) {
   const index = pzeroProductos.findIndex(p => p.producto_id === productoId);
   if (index !== -1) {
     abrirDrawerAuditoria(index);
@@ -7840,7 +7976,15 @@ function abrirDrawerAuditoria(index) {
     elToggleInactivo.checked = p.inactivo === 1;
   }
   const elActa = document.getElementById('drawer-acta-select');
-  if (elActa) elActa.value = 'ACTA-INV-202610-01';
+  const actaActiva = obtenerActaActiva();
+  const numActa = actaActiva?.numero || 'ACTA-INV-202610-01';
+  if (elActa) {
+    elActa.innerHTML = `
+      <option value="${numActa}" selected>${numActa} (Expediente Activo en Curso)</option>
+      <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
+    `;
+    elActa.value = numActa;
+  }
   const elJust = document.getElementById('drawer-justificacion-detalle');
   if (elJust) elJust.value = '';
   calcularDiferenciaDrawer();
@@ -7890,6 +8034,16 @@ function navegarProductoAuditoria(delta) {
 
 // Iniciar Modo Auditoría Rápida (busca el primer pendiente)
 function iniciarModoAuditoriaRapida() {
+  if (!verificarActaAperturada()) {
+    abrirModalAperturaActa(() => {
+      iniciarModoAuditoriaRapidaDirecto();
+    });
+    return;
+  }
+  iniciarModoAuditoriaRapidaDirecto();
+}
+
+function iniciarModoAuditoriaRapidaDirecto() {
   const primerPendienteIndex = pzeroProductos.findIndex(p => p.auditado !== 1);
   if (primerPendienteIndex !== -1) {
     abrirDrawerAuditoria(primerPendienteIndex);
@@ -8362,12 +8516,16 @@ async function abrirModalActaOficial() {
     }
 
     const { empresa, resumen, items, acta_numero, fecha_acta, tasa_bcv } = data;
+    const actaActiva = (typeof obtenerActaActiva === 'function') ? obtenerActaActiva() : null;
+    const actaNumFinal = actaActiva?.numero || acta_numero;
+    const actaFechaFinal = actaActiva?.fecha || fecha_acta;
+    const actaAlmacenFinal = actaActiva?.almacen || `Almacén Principal DG 67 (Tienda y Depósito)`;
 
     // Poblar Encabezado
-    if (document.getElementById('acta-numero')) document.getElementById('acta-numero').textContent = acta_numero;
-    if (document.getElementById('acta-fecha')) document.getElementById('acta-fecha').textContent = fecha_acta;
-    if (document.getElementById('acta-fecha-texto')) document.getElementById('acta-fecha-texto').textContent = `31 días del mes de octubre de 2026`;
-    if (document.getElementById('acta-almacen')) document.getElementById('acta-almacen').textContent = `Almacén Principal DG 67 (Tienda y Depósito)`;
+    if (document.getElementById('acta-numero')) document.getElementById('acta-numero').textContent = actaNumFinal;
+    if (document.getElementById('acta-fecha')) document.getElementById('acta-fecha').textContent = actaFechaFinal;
+    if (document.getElementById('acta-fecha-texto')) document.getElementById('acta-fecha-texto').textContent = `${actaFechaFinal.split('-')[2] || '31'} días del mes de octubre de 2026`;
+    if (document.getElementById('acta-almacen')) document.getElementById('acta-almacen').textContent = actaAlmacenFinal;
     if (document.getElementById('acta-tasa-bcv')) document.getElementById('acta-tasa-bcv').textContent = `Bs. ${fmtBs(tasa_bcv)} / USD`;
 
     if (empresa) {
