@@ -3419,7 +3419,7 @@
         <div>
           <div style="display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 1.4rem;">📥</span>
-            <h3 style="color: #ffffff; font-weight: 800; font-size: 1.2rem; margin: 0; letter-spacing: -0.02em;">
+            <h3 id="modal-compra-title" style="color: #ffffff; font-weight: 800; font-size: 1.2rem; margin: 0; letter-spacing: -0.02em;">
               Registrar Factura en Libro de Compras Fiscal</h3>
             <span
               style="background: rgba(25, 167, 206, 0.25); color: #7dd3fc; border: 1px solid #19A7CE; font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 700;">SENIAT
@@ -3436,7 +3436,10 @@
 
       <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; max-height: calc(92vh - 85px);">
         <form id="form-nueva-compra" onsubmit="guardarNuevaCompra(event)">
+          <input type="hidden" id="m-comp-id" value="">
           <input type="hidden" id="m-comp-movimiento-id" value="">
+
+          <div id="modal-compra-modo-banner" style="display: none; background: #e0f2fe; border: 1.5px solid #0284c7; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color: #0369a1; font-size: 0.82rem;"></div>
 
           <!-- Tipología de Operación -->
           <div

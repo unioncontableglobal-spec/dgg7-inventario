@@ -2015,7 +2015,7 @@ app.get('/api/export/excel', async (req, res) => {
 // 10.1 Libro de Compras con Filtros, Clasificación y Doble Expresión Monetaria (Bs. / USD)
 app.get('/api/fiscal/libro-compras', async (req, res) => {
   try {
-    const { periodo, tipo_servicio, estatus, aplica_inventario } = req.query;
+    const { id, periodo, tipo_servicio, estatus, aplica_inventario } = req.query;
     let sql = `
       SELECT 
         lc.id,
@@ -2051,6 +2051,10 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
     `;
     const args = [];
 
+    if (id) {
+      sql += ` AND lc.id = ?`;
+      args.push(Number(id));
+    }
     if (periodo && periodo !== 'TODOS') {
       sql += ` AND lc.periodo = ?`;
       args.push(periodo);
@@ -2494,7 +2498,35 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-    const movIdInt = movimiento_id ? Number(movimiento_id) : null;
+    let movIdInt = movimiento_id ? Number(movimiento_id) : null;
+
+    // Si es mercancía y no se especificó movimiento_id, buscar coincidencia estricta por RIF + Nro Factura
+    if (!movIdInt && aplicaInvInt === 1) {
+      const numClean = String(nro_factura).replace(/\D/g, '');
+      const numInt = numClean ? parseInt(numClean, 10) : null;
+      try {
+        const matchMov = await db.execute({
+          sql: `SELECT m.id FROM movimientos m
+                JOIN proveedores pr ON m.proveedor_id = pr.id
+                WHERE m.tipo = 'ENTRADA_COMPRA'
+                  AND (m.libro_compras_id IS NULL OR m.libro_compras_id = 0)
+                  AND UPPER(REPLACE(REPLACE(REPLACE(pr.rif, '-', ''), '.', ''), ' ', '')) = UPPER(REPLACE(REPLACE(REPLACE(?, '-', ''), '.', ''), ' ', ''))
+                  AND (
+                    (m.numero_factura_numerico IS NOT NULL AND m.numero_factura_numerico = ?)
+                    OR UPPER(TRIM(m.numero_documento)) = UPPER(TRIM(?))
+                    OR m.numero_documento LIKE ?
+                  )
+                LIMIT 1`,
+          args: [cleanRif, numInt || -1, nro_factura, `%${nro_factura}%`]
+        });
+        if (matchMov.rows.length > 0) {
+          movIdInt = matchMov.rows[0].id;
+        }
+      } catch (e) {
+        console.warn('Error buscando cruce automático de entrada:', e.message);
+      }
+    }
+
     const estatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : (movIdInt ? 'CONCILIADO' : 'NO_CONCILIADO');
     const obs = observaciones_cruce || (aplicaInvInt === 0 ? `Gasto / Servicio (${cleanTipo})` : (movIdInt ? `Cruzado con Entrada de Almacén #${movIdInt}` : 'Factura cargada desde el sistema web'));
 
@@ -2533,14 +2565,18 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
       ]
     });
 
-    if (movIdInt) {
+    const newLcId = insertResult.rows?.[0]?.id;
+
+    if (movIdInt && newLcId) {
       await db.execute({
         sql: `UPDATE movimientos 
-              SET nro_control = COALESCE(NULLIF(nro_control, ''), ?),
+              SET libro_compras_id = ?,
+                  estatus_conciliacion = 'CONCILIADO',
+                  nro_control = COALESCE(NULLIF(nro_control, ''), ?),
                   fecha_factura = COALESCE(fecha_factura, ?),
                   tasa_bcv_factura = COALESCE(tasa_bcv_factura, ?)
               WHERE id = ?`,
-        args: [nro_control || '', fecha, tasaOp, movIdInt]
+        args: [newLcId, nro_control || '', fecha, tasaOp, movIdInt]
       }).catch(e => console.warn('Could not sync back to movimientos:', e.message));
     }
 
@@ -2548,7 +2584,7 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
 
     res.json({
       success: true,
-      id: insertResult.rows?.[0]?.id,
+      id: newLcId,
       message: 'Factura registrada con éxito en el Libro de Compras (Doble Expresión Bs./USD)'
     });
   } catch (error) {
@@ -2569,11 +2605,152 @@ app.get('/api/fiscal/verificar-duplicado-compra', async (req, res) => {
   }
 });
 
+// 10.6.2 Editar / Actualizar Factura en Libro de Compras (Enmienda de Omisiones / Errores)
+app.put('/api/fiscal/libro-compras/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existingC = await db.execute({ sql: "SELECT periodo, movimiento_id FROM libro_compras WHERE id = ?", args: [id] });
+    if (existingC.rows.length === 0) {
+      return res.status(404).json({ error: 'Factura de compra no encontrada' });
+    }
+    const oldRow = existingC.rows[0];
+    const targetPeriodo = req.body.periodo || oldRow.periodo;
+    if (await isPeriodoDeclarado(targetPeriodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
+      });
+    }
+
+    const {
+      periodo, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
+      tipo_transaccion, base_imponible_bs, base_imponible_divisa,
+      alicuota, iva_bs, monto_iva_divisa, total_bs, total_divisa,
+      iva_retenido_bs, iva_retenido_divisa, tasa_bcv, fecha_tasa_bcv, moneda_divisa,
+      tipo_servicio, aplica_inventario, observaciones_cruce,
+      movimiento_id
+    } = req.body;
+
+    if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios (Período, Fecha de Factura, RIF, Proveedor, Nro Factura)' });
+    }
+
+    const cleanRif = String(rif).trim().toUpperCase();
+    const cleanRazon = String(razon_social).trim();
+
+    // VALIDACIÓN ESTRICTA ANTI-DUPLICADOS FISCALES (SENIAT Art. 75-76 RLIVA) excluyendo id actual
+    const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, id, db);
+    if (checkDup.duplicado) {
+      return res.status(409).json({
+        error: checkDup.mensaje,
+        duplicado: true,
+        tipo: checkDup.tipo,
+        factura_existente: checkDup.factura
+      });
+    }
+
+    const fechaRecepcionOp = fecha_recepcion || fecha;
+    const tasaRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaRes.rows[0]?.tasa_bcv || 889.58);
+    const fechaTasaOp = fecha_tasa_bcv || tasaRes.rows[0]?.fecha_cierre || fecha;
+    const monedaOp = moneda_divisa || 'USD';
+
+    const ali = Number(alicuota) || 0.16;
+    let baseBs = Number(base_imponible_bs) || 0.0;
+    let baseDiv = Number(base_imponible_divisa) || 0.0;
+
+    if (baseBs <= 0 && baseDiv > 0) {
+      baseBs = Number((baseDiv * tasaOp).toFixed(2));
+    } else if (baseDiv <= 0 && baseBs > 0) {
+      baseDiv = Number((baseBs / tasaOp).toFixed(2));
+    }
+
+    const ivaCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+    const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaCalc / tasaOp).toFixed(2));
+    const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc).toFixed(2));
+    const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
+    const ret = Number(iva_retenido_bs) || 0.0;
+    const retDiv = (iva_retenido_divisa !== undefined && iva_retenido_divisa !== null && iva_retenido_divisa !== '') ? Number(iva_retenido_divisa) : Number((ret / tasaOp).toFixed(2));
+
+    const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
+    const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
+    const movIdInt = movimiento_id ? Number(movimiento_id) : null;
+    const estatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : (movIdInt ? 'CONCILIADO' : 'NO_CONCILIADO');
+    const obs = observaciones_cruce || (aplicaInvInt === 0 ? `Gasto / Servicio (${cleanTipo})` : (movIdInt ? `Cruzado con Entrada de Almacén #${movIdInt}` : 'Factura cargada desde el sistema web'));
+
+    // Proveedor
+    let provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ?", args: [cleanRif] });
+    let provId = provRes.rows[0]?.id;
+    if (!provId) {
+      const newProv = await db.execute({
+        sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
+              VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+        args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt]
+      });
+      provId = newProv.rows[0]?.id;
+    }
+
+    await db.execute({
+      sql: `UPDATE libro_compras SET
+              periodo = ?, fecha = ?, fecha_recepcion = ?, rif = ?, razon_social = ?,
+              nro_factura = ?, nro_control = ?, tipo_transaccion = ?, base_imponible_bs = ?,
+              alicuota = ?, iva_bs = ?, total_bs = ?, iva_retenido_bs = ?,
+              tasa_bcv = ?, fecha_tasa_bcv = ?, moneda_divisa = ?, base_imponible_divisa = ?,
+              monto_iva_divisa = ?, total_divisa = ?, iva_retenido_divisa = ?,
+              proveedor_id = ?, tipo_servicio = ?, aplica_inventario = ?,
+              estatus_conciliacion = ?, movimiento_id = ?, observaciones_cruce = ?
+            WHERE id = ?`,
+      args: [
+        periodo, fecha, fechaRecepcionOp, cleanRif, cleanRazon,
+        nro_factura, nro_control || null, tipo_transaccion || '01-reg', baseBs,
+        ali, ivaCalc, totalCalc, ret,
+        tasaOp, fechaTasaOp, monedaOp, baseDiv,
+        ivaDivCalc, totalDivCalc, retDiv,
+        provId, cleanTipo, aplicaInvInt,
+        estatus, movIdInt, obs,
+        id
+      ]
+    });
+
+    // Desvincular movimiento anterior si cambió
+    if (oldRow.movimiento_id && Number(oldRow.movimiento_id) !== Number(movIdInt)) {
+      await db.execute({
+        sql: `UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE id = ? AND libro_compras_id = ?`,
+        args: [oldRow.movimiento_id, id]
+      }).catch(e => console.warn('Could not unlink old movement:', e.message));
+    }
+
+    // Vincular nuevo movimiento si aplica
+    if (movIdInt) {
+      await db.execute({
+        sql: `UPDATE movimientos 
+              SET libro_compras_id = ?,
+                  estatus_conciliacion = 'CONCILIADO',
+                  nro_control = COALESCE(NULLIF(nro_control, ''), ?),
+                  fecha_factura = COALESCE(fecha_factura, ?),
+                  tasa_bcv_factura = COALESCE(tasa_bcv_factura, ?)
+              WHERE id = ?`,
+        args: [id, nro_control || '', fecha, tasaOp, movIdInt]
+      }).catch(e => console.warn('Could not sync movement:', e.message));
+    }
+
+    await recalculateDeclaracionIva(periodo);
+
+    res.json({
+      success: true,
+      id: Number(id),
+      message: 'Factura actualizada con éxito en el Libro de Compras (Doble Expresión Bs./USD)'
+    });
+  } catch (error) {
+    console.error('Error actualizando factura en libro compras:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 10.7 Eliminar Factura de Compra
 app.delete('/api/fiscal/libro-compras/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const rowRes = await db.execute({ sql: "SELECT periodo FROM libro_compras WHERE id = ?", args: [id] });
+    const rowRes = await db.execute({ sql: "SELECT periodo, movimiento_id FROM libro_compras WHERE id = ?", args: [id] });
     if (rowRes.rows.length === 0) {
       return res.status(404).json({ error: 'Factura no encontrada' });
     }
@@ -2584,6 +2761,12 @@ app.delete('/api/fiscal/libro-compras/:id', async (req, res) => {
         error: `El período fiscal ${periodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite eliminar facturas de un período cerrado.`
       });
     }
+
+    // Desvincular de movimientos de almacén antes de eliminar
+    await db.execute({
+      sql: `UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE libro_compras_id = ?`,
+      args: [id]
+    }).catch(e => console.warn('Could not unlink movements on delete:', e.message));
 
     await db.execute({ sql: "DELETE FROM libro_compras WHERE id = ?", args: [id] });
     await recalculateDeclaracionIva(periodo);

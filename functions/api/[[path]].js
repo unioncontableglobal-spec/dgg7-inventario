@@ -1229,9 +1229,13 @@ export async function onRequest(context) {
 
     if (path === '/api/fiscal/libro-compras' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
+      const id = url.searchParams.get('id');
       let sql = `SELECT lc.*, p.razon_social as proveedor_registrado_nombre FROM libro_compras lc LEFT JOIN proveedores p ON lc.proveedor_id = p.id WHERE 1=1`;
       const args = [];
-      if (periodo && periodo !== 'TODOS') {
+      if (id) {
+        sql += ` AND lc.id = ?`;
+        args.push(id);
+      } else if (periodo && periodo !== 'TODOS') {
         sql += ` AND lc.periodo = ?`;
         args.push(periodo);
       }
@@ -1492,42 +1496,54 @@ export async function onRequest(context) {
       const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [String(rif).trim()] });
       const provId = provRes.rows[0]?.id || null;
 
-      let matchMovId = null;
-      let estatus = esMercancia ? 'PENDIENTE_DG67' : 'NO_APLICA_GASTO';
-      let obs = esMercancia ? 'Declarada en SENIAT. Pendiente por recibir físicamente en almacén.' : 'Gasto operativo / servicio.';
+      let matchMovId = body.movimiento_id ? Number(body.movimiento_id) : null;
+      let estatus = esMercancia ? (matchMovId ? 'CONCILIADO' : 'PENDIENTE_DG67') : 'NO_APLICA_GASTO';
+      let obs = body.observaciones_cruce || (esMercancia ? (matchMovId ? `Cruzado con Entrada #${matchMovId}` : 'Declarada en SENIAT. Pendiente por recibir físicamente en almacén.') : 'Gasto operativo / servicio.');
 
-      if (esMercancia) {
+      if (esMercancia && !matchMovId) {
         const numClean = String(nro_factura).replace(/\D/g, '');
-        if (numClean) {
-          const matchMov = await db.execute({
-            sql: `SELECT id FROM movimientos 
-                  WHERE tipo = 'ENTRADA_COMPRA' 
-                    AND (numero_factura_numerico = ? OR numero_documento LIKE ? OR numero_documento LIKE ?)
-                  LIMIT 1`,
-            args: [parseInt(numClean, 10), `%${numClean}%`, `%${nro_factura}%`]
-          });
-          if (matchMov.rows.length > 0) {
-            matchMovId = matchMov.rows[0].id;
-            estatus = 'CONCILIADO';
-            obs = 'Conciliada automáticamente con recepción física en almacén.';
+        const numInt = numClean ? parseInt(numClean, 10) : null;
+        if (numInt || nro_factura) {
+          try {
+            const matchMov = await db.execute({
+              sql: `SELECT m.id FROM movimientos m
+                    JOIN proveedores pr ON m.proveedor_id = pr.id
+                    WHERE m.tipo = 'ENTRADA_COMPRA' 
+                      AND (m.libro_compras_id IS NULL OR m.libro_compras_id = 0)
+                      AND UPPER(REPLACE(REPLACE(REPLACE(pr.rif, '-', ''), '.', ''), ' ', '')) = UPPER(REPLACE(REPLACE(REPLACE(?, '-', ''), '.', ''), ' ', ''))
+                      AND (
+                        (m.numero_factura_numerico IS NOT NULL AND m.numero_factura_numerico = ?)
+                        OR UPPER(TRIM(m.numero_documento)) = UPPER(TRIM(?))
+                        OR m.numero_documento LIKE ?
+                      )
+                    LIMIT 1`,
+              args: [cleanRif, numInt || -1, nro_factura, `%${nro_factura}%`]
+            });
+            if (matchMov.rows.length > 0) {
+              matchMovId = matchMov.rows[0].id;
+              estatus = 'CONCILIADO';
+              obs = `Conciliada automáticamente con recepción física en almacén #${matchMovId}.`;
+            }
+          } catch (e) {
+            console.warn('Error en cruce automático Cloudflare:', e.message);
           }
         }
       }
 
       const insResult = await db.execute({
         sql: `INSERT INTO libro_compras 
-              (periodo, archivo_origen, fecha, rif, razon_social, nro_factura, nro_control,
+              (periodo, archivo_origen, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
                tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
                proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
                tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
               VALUES 
-              (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?,
+              (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?,
                ?, ?, ?, ?, ?,
                ?, ?, ?, ?, ?, ?,
                ?, ?, 'USD', ?, ?, ?)
               RETURNING id`,
         args: [
-          periodo, fecha, String(rif).trim(), String(razon_social).trim(), String(nro_factura).trim(), nro_control || '00-000000',
+          periodo, fecha, body.fecha_recepcion || fecha, String(rif).trim(), String(razon_social).trim(), String(nro_factura).trim(), nro_control || '00-000000',
           tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
           provId, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
           esMercancia ? 1 : 0, estatus, matchMovId, obs,
@@ -1541,7 +1557,7 @@ export async function onRequest(context) {
         await db.execute({
           sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
           args: [lcId, matchMovId]
-        });
+        }).catch(() => {});
       }
 
       return jsonResponse({
@@ -1550,6 +1566,115 @@ export async function onRequest(context) {
         message: 'Factura registrada con éxito en Libro de Compras (Doble Vía)',
         estatus_conciliacion: estatus,
         movimiento_id: matchMovId
+      });
+    }
+
+    if (path.startsWith('/api/fiscal/libro-compras/') && method === 'PUT') {
+      const compId = parseInt(path.split('/').pop(), 10);
+      const existingC = await db.execute({ sql: "SELECT periodo, movimiento_id FROM libro_compras WHERE id = ?", args: [compId] });
+      if (existingC.rows.length === 0) {
+        return jsonResponse({ error: 'Factura de compra no encontrada' }, 404);
+      }
+      const oldRow = existingC.rows[0];
+      const body = await request.json();
+      const targetPeriodo = body.periodo || oldRow.periodo;
+      if (await isPeriodoDeclarado(targetPeriodo, db)) {
+        return jsonResponse({
+          error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
+        }, 403);
+      }
+
+      const {
+        periodo, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
+        tipo_transaccion, base_imponible_bs, base_imponible_divisa,
+        alicuota, iva_bs, monto_iva_divisa, total_bs, total_divisa,
+        iva_retenido_bs, iva_retenido_divisa, tasa_bcv, fecha_tasa_bcv, moneda_divisa,
+        tipo_servicio, aplica_inventario, observaciones_cruce,
+        movimiento_id
+      } = body;
+
+      if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
+        return jsonResponse({ error: 'Faltan campos obligatorios para el Libro de Compras' }, 400);
+      }
+
+      const cleanRif = String(rif).trim().toUpperCase();
+      const cleanRazon = String(razon_social).trim();
+
+      const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, compId, db);
+      if (checkDup.duplicado) {
+        return jsonResponse({
+          error: checkDup.mensaje,
+          duplicado: true,
+          tipo: checkDup.tipo,
+          factura_existente: checkDup.factura
+        }, 409);
+      }
+
+      const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+      const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
+      const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
+
+      const ali = Number(alicuota) || 0.16;
+      let baseBs = Number(base_imponible_bs) || 0.0;
+      let baseDiv = Number(base_imponible_divisa) || 0.0;
+      if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
+      else if (baseDiv <= 0 && baseBs > 0) baseDiv = Number((baseBs / tasaOp).toFixed(2));
+
+      const ivaBsCalc = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+      const ivaDivCalc = (monto_iva_divisa !== undefined && monto_iva_divisa !== null && monto_iva_divisa !== '') ? Number(monto_iva_divisa) : Number((ivaBsCalc / tasaOp).toFixed(2));
+      const totBsCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaBsCalc).toFixed(2));
+      const totDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totBsCalc / tasaOp).toFixed(2));
+      const retBs = Number(iva_retenido_bs) || 0.0;
+      const retDiv = (iva_retenido_divisa !== undefined && iva_retenido_divisa !== null && iva_retenido_divisa !== '') ? Number(iva_retenido_divisa) : Number((retBs / tasaOp).toFixed(2));
+
+      const esMercancia = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1');
+      const movIdInt = movimiento_id ? Number(movimiento_id) : null;
+      const estatus = esMercancia ? (movIdInt ? 'CONCILIADO' : 'PENDIENTE_DG67') : 'NO_APLICA_GASTO';
+      const obs = observaciones_cruce || (esMercancia ? (movIdInt ? `Cruzado con Entrada #${movIdInt}` : 'Pendiente en almacén') : 'Gasto operativo / servicio.');
+
+      const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [cleanRif] });
+      const provId = provRes.rows[0]?.id || null;
+
+      await db.execute({
+        sql: `UPDATE libro_compras SET
+                periodo = ?, fecha = ?, fecha_recepcion = ?, rif = ?, razon_social = ?,
+                nro_factura = ?, nro_control = ?, tipo_transaccion = ?, base_imponible_bs = ?,
+                alicuota = ?, iva_bs = ?, total_bs = ?, iva_retenido_bs = ?,
+                tasa_bcv = ?, fecha_tasa_bcv = ?, moneda_divisa = ?, base_imponible_divisa = ?,
+                monto_iva_divisa = ?, total_divisa = ?, iva_retenido_divisa = ?,
+                proveedor_id = ?, tipo_servicio = ?, aplica_inventario = ?,
+                estatus_conciliacion = ?, movimiento_id = ?, observaciones_cruce = ?
+              WHERE id = ?`,
+        args: [
+          periodo, fecha, fecha_recepcion || fecha, cleanRif, cleanRazon,
+          nro_factura, nro_control || '00-000000', tipo_transaccion || '01-reg', baseBs,
+          ali, ivaBsCalc, totBsCalc, retBs,
+          tasaOp, fechaTasaOp, moneda_divisa || 'USD', baseDiv,
+          ivaDivCalc, totDivCalc, retDiv,
+          provId, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
+          esMercancia ? 1 : 0, estatus, movIdInt, obs,
+          compId
+        ]
+      });
+
+      if (oldRow.movimiento_id && Number(oldRow.movimiento_id) !== Number(movIdInt)) {
+        await db.execute({
+          sql: "UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE id = ? AND libro_compras_id = ?",
+          args: [oldRow.movimiento_id, compId]
+        }).catch(() => {});
+      }
+
+      if (movIdInt) {
+        await db.execute({
+          sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
+          args: [compId, movIdInt]
+        }).catch(() => {});
+      }
+
+      return jsonResponse({
+        success: true,
+        id: compId,
+        message: 'Factura actualizada con éxito en Libro de Compras (Doble Expresión Bs./USD)'
       });
     }
 
@@ -1562,7 +1687,9 @@ export async function onRequest(context) {
           error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite eliminar facturas de un período cerrado.`
         }, 403);
       }
+      await db.execute({ sql: "UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE libro_compras_id = ?", args: [compId] }).catch(() => {});
       await db.execute({ sql: "DELETE FROM libro_compras WHERE id = ?", args: [compId] });
+      return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras' });
       return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras' });
     }
 

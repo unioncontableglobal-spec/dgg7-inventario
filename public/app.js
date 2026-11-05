@@ -3040,7 +3040,10 @@ function renderLibroCompras(compras) {
     const isRowCerrada = isPeriodoFiscalDeclarado(c.periodo);
     const actionsCol = isRowCerrada
       ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10.5px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;">🔒 Declarado</span>`
-      : `<button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; background:#0B2447; color:#19A7CE; font-weight:800; margin-right:3px;">
+      : `<button class="btn btn-sm btn-navy" title="Editar Factura de Compra" onclick="editarCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; font-weight:700; margin-right:3px;">
+           ✏️ Editar
+         </button>
+         <button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; background:#0B2447; color:#19A7CE; font-weight:800; margin-right:3px;">
            🧾 Ret. ISLR
          </button>
          <button class="btn btn-sm btn-secondary" title="Eliminar Factura" onclick="eliminarFacturaCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
@@ -3115,7 +3118,22 @@ let entradasTiendaPendientesFiltradas = [];
 
 function openModalNuevaCompra(modo = 'MERCANCIA') {
   document.getElementById('form-nueva-compra').reset();
+  const idInput = document.getElementById('m-comp-id');
+  if (idInput) idInput.value = '';
   document.getElementById('m-comp-movimiento-id').value = '';
+
+  const titleEl = document.getElementById('modal-compra-title');
+  if (titleEl) {
+    titleEl.textContent = 'Registrar Factura en Libro de Compras Fiscal';
+  }
+  const btnSave = document.getElementById('btn-save-compra');
+  if (btnSave) {
+    btnSave.textContent = '💾 Guardar Factura en Libro de Compras';
+    btnSave.disabled = false;
+  }
+  const bannerModo = document.getElementById('modal-compra-modo-banner');
+  if (bannerModo) bannerModo.style.display = 'none';
+
   const badge = document.getElementById('badge-entrada-vinculada');
   if (badge) badge.style.display = 'none';
 
@@ -3466,6 +3484,12 @@ function seleccionarEntradaTiendaEnCompra(idx, fromFullModal = false) {
   const item = entradasTiendaCache[idx];
   if (!item) return;
 
+  if (item.libro_compra_id) {
+    if (fromFullModal) closeModal('modal-cruce-entradas-tienda');
+    editarCompra(item.libro_compra_id);
+    return;
+  }
+
   if (fromFullModal) {
     closeModal('modal-cruce-entradas-tienda');
     openModalNuevaCompra('MERCANCIA');
@@ -3530,7 +3554,15 @@ function seleccionarEntradaTiendaEnCompra(idx, fromFullModal = false) {
 }
 
 async function openModalImportarEntradaTienda() {
-  openModalNuevaCompra('MERCANCIA');
+  const periodoActivo = document.getElementById('compras-periodo-select')?.value || 'TODOS';
+  const selPeriodo = document.getElementById('filtro-tienda-ent-periodo');
+  if (selPeriodo) {
+    selPeriodo.value = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : 'TODOS';
+  }
+  const qInput = document.getElementById('filtro-tienda-ent-q');
+  if (qInput) qInput.value = '';
+  document.getElementById('modal-cruce-entradas-tienda').style.display = 'flex';
+  await cargarTablaEntradasTiendaModal();
 }
 
 async function cargarTablaEntradasTiendaModal() {
@@ -3577,9 +3609,15 @@ async function cargarTablaEntradasTiendaModal() {
           </td>
           <td class="text-center">${statusBadge}</td>
           <td class="text-center">
-            <button class="btn btn-sm btn-emerald" onclick="seleccionarEntradaTiendaEnCompra(${idx}, true)" style="padding: 4px 10px; font-size: 11px;">
-              📥 Llamar a Libro Compras
-            </button>
+            ${yaConciliada ? `
+              <button class="btn btn-sm btn-navy" onclick="seleccionarEntradaTiendaEnCompra(${idx}, true)" style="padding: 4px 10px; font-size: 11px; font-weight:700;">
+                🔍 Verificar / Editar Compra
+              </button>
+            ` : `
+              <button class="btn btn-sm btn-emerald" onclick="seleccionarEntradaTiendaEnCompra(${idx}, true)" style="padding: 4px 10px; font-size: 11px; font-weight:700;">
+                📥 Llamar a Libro Compras
+              </button>
+            `}
           </td>
         </tr>
       `;
@@ -3655,6 +3693,7 @@ let debounceTimerCheckCompra = null;
 async function verificarFacturaCompraDuplicadaUI() {
   clearTimeout(debounceTimerCheckCompra);
   debounceTimerCheckCompra = setTimeout(async () => {
+    const editId = document.getElementById('m-comp-id')?.value || '';
     const rif = document.getElementById('m-comp-rif')?.value.trim();
     const fact = document.getElementById('m-comp-factura')?.value.trim();
     const ctrl = document.getElementById('m-comp-control')?.value.trim() || '';
@@ -3662,6 +3701,8 @@ async function verificarFacturaCompraDuplicadaUI() {
     const alertText = document.getElementById('texto-alerta-duplicado-compra');
     const btnSave = document.getElementById('btn-save-compra');
     const inputFact = document.getElementById('m-comp-factura');
+
+    const defaultBtnText = editId ? '💾 Actualizar Factura en Libro de Compras' : '💾 Guardar Factura en Libro de Compras';
 
     if (!rif || !fact) {
       if (alertBox) alertBox.style.display = 'none';
@@ -3671,7 +3712,7 @@ async function verificarFacturaCompraDuplicadaUI() {
       }
       if (btnSave) {
         btnSave.disabled = false;
-        btnSave.textContent = 'Guardar en Libro de Compras';
+        btnSave.textContent = defaultBtnText;
         btnSave.style.opacity = '1';
         btnSave.style.cursor = 'pointer';
       }
@@ -3679,7 +3720,8 @@ async function verificarFacturaCompraDuplicadaUI() {
     }
 
     try {
-      const res = await fetch(`/api/fiscal/verificar-duplicado-compra?rif=${encodeURIComponent(rif)}&nro_factura=${encodeURIComponent(fact)}&nro_control=${encodeURIComponent(ctrl)}`);
+      const urlCheck = `/api/fiscal/verificar-duplicado-compra?rif=${encodeURIComponent(rif)}&nro_factura=${encodeURIComponent(fact)}&nro_control=${encodeURIComponent(ctrl)}${editId ? `&exclude_id=${editId}` : ''}`;
+      const res = await fetch(urlCheck);
       const data = await res.json();
 
       if (data.duplicado) {
@@ -3706,7 +3748,7 @@ async function verificarFacturaCompraDuplicadaUI() {
         }
         if (btnSave) {
           btnSave.disabled = false;
-          btnSave.textContent = 'Guardar en Libro de Compras';
+          btnSave.textContent = defaultBtnText;
           btnSave.style.opacity = '1';
           btnSave.style.cursor = 'pointer';
         }
@@ -3784,9 +3826,10 @@ async function verificarEntradaAlmacenDuplicadaUI() {
 
 async function guardarNuevaCompra(e) {
   e.preventDefault();
+  const editId = document.getElementById('m-comp-id')?.value || '';
   const btn = document.getElementById('btn-save-compra');
   btn.disabled = true;
-  btn.textContent = 'Guardando...';
+  btn.textContent = editId ? 'Actualizando...' : 'Guardando...';
 
   const fFac = document.getElementById('m-comp-fecha').value;
   const fRec = document.getElementById('m-comp-fecha-recepcion')?.value || fFac;
@@ -3825,30 +3868,126 @@ async function guardarNuevaCompra(e) {
   };
 
   try {
-    const res = await fetch('/api/fiscal/libro-compras', {
-      method: 'POST',
+    const url = editId ? `/api/fiscal/libro-compras/${editId}` : '/api/fiscal/libro-compras';
+    const method = editId ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Error al guardar factura');
 
-    showToast('Factura registrada con éxito en el Libro de Compras', 'success');
+    showToast(editId ? 'Factura actualizada con éxito en el Libro de Compras' : 'Factura registrada con éxito en el Libro de Compras', 'success');
     const irAIslr = document.getElementById('m-comp-ir-islr')?.checked;
-    const newCompraId = result.id;
+    const newCompraId = editId ? Number(editId) : result.id;
     closeModal('modal-nueva-compra');
     await loadCatalogs(); // refresh supplier list
     await loadLibroCompras();
-    if (irAIslr && newCompraId) {
+    if (irAIslr && newCompraId && !editId) {
       await emitirISLRDesdeFacturaCompra(newCompraId);
     }
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Guardar en Libro de Compras';
+    btn.textContent = editId ? '💾 Actualizar Factura en Libro de Compras' : '💾 Guardar Factura en Libro de Compras';
   }
 }
+
+async function editarCompra(id) {
+  let compra = (fiscalStateNew.compras || []).find(c => Number(c.id) === Number(id));
+  if (!compra) {
+    try {
+      const res = await fetch(`/api/fiscal/libro-compras?id=${id}`);
+      if (res.ok) {
+        const rows = await res.json();
+        compra = Array.isArray(rows) ? rows.find(x => Number(x.id) === Number(id)) : rows;
+      }
+    } catch (e) {
+      console.error('Error buscando compra por id:', e);
+    }
+  }
+
+  if (!compra) {
+    showToast('No se encontró el registro de compra a editar', 'error');
+    return;
+  }
+
+  document.getElementById('form-nueva-compra').reset();
+  const idInput = document.getElementById('m-comp-id');
+  if (idInput) idInput.value = compra.id;
+  const movIdInput = document.getElementById('m-comp-movimiento-id');
+  if (movIdInput) movIdInput.value = compra.movimiento_id || '';
+
+  const titleEl = document.getElementById('modal-compra-title');
+  if (titleEl) {
+    titleEl.innerHTML = `✏️ Editar Factura de Compra <span class="badge badge-navy" style="font-size:0.7rem;">ID: #${compra.id}</span>`;
+  }
+  const btnSave = document.getElementById('btn-save-compra');
+  if (btnSave) {
+    btnSave.textContent = '💾 Actualizar Factura en Libro de Compras';
+    btnSave.disabled = false;
+  }
+
+  const modeBanner = document.getElementById('modal-compra-modo-banner');
+  if (modeBanner) {
+    modeBanner.style.display = 'block';
+    modeBanner.innerHTML = `✏️ <strong>Modo Edición / Conciliación:</strong> Modifique o complete los datos requeridos (N° Factura, N° Control, Proveedor, Fechas o Montos). Al guardar, se recalcula el Crédito Fiscal y la Conciliación con las entradas de tienda.`;
+  }
+
+  const selPer = document.getElementById('m-comp-periodo');
+  if (selPer && compra.periodo) selPer.value = compra.periodo;
+
+  if (document.getElementById('m-comp-fecha')) document.getElementById('m-comp-fecha').value = compra.fecha || '';
+  if (document.getElementById('m-comp-fecha-recepcion')) {
+    document.getElementById('m-comp-fecha-recepcion').value = compra.fecha_recepcion || compra.fecha || '';
+  }
+  if (document.getElementById('m-comp-fecha-tasa')) {
+    document.getElementById('m-comp-fecha-tasa').value = compra.fecha_tasa_bcv || compra.fecha || '';
+  }
+
+  if (document.getElementById('m-comp-factura')) document.getElementById('m-comp-factura').value = compra.nro_factura || '';
+  if (document.getElementById('m-comp-control')) document.getElementById('m-comp-control').value = compra.nro_control || '';
+  if (document.getElementById('m-comp-rif')) document.getElementById('m-comp-rif').value = compra.rif || '';
+  if (document.getElementById('m-comp-razon')) document.getElementById('m-comp-razon').value = compra.razon_social || '';
+
+  const tasaVal = Number(compra.tasa_bcv) || 889.58;
+  if (document.getElementById('m-comp-tasa-bcv')) document.getElementById('m-comp-tasa-bcv').value = tasaVal.toFixed(4);
+
+  if (document.getElementById('m-comp-base')) document.getElementById('m-comp-base').value = (Number(compra.base_imponible_bs) || 0).toFixed(2);
+  if (document.getElementById('m-comp-base-divisa')) document.getElementById('m-comp-base-divisa').value = (Number(compra.base_imponible_divisa) || 0).toFixed(2);
+  if (document.getElementById('m-comp-alicuota')) document.getElementById('m-comp-alicuota').value = compra.alicuota || 0.16;
+  if (document.getElementById('m-comp-tipo')) document.getElementById('m-comp-tipo').value = compra.tipo_servicio || 'MERCANCIA_REPUESTOS';
+  if (document.getElementById('m-comp-aplica-inv')) document.getElementById('m-comp-aplica-inv').checked = (compra.aplica_inventario === 1);
+  if (document.getElementById('m-comp-obs')) document.getElementById('m-comp-obs').value = compra.observaciones_cruce || '';
+
+  calcularIvaCompra('BS');
+
+  const badge = document.getElementById('badge-entrada-vinculada');
+  const texto = document.getElementById('texto-entrada-vinculada');
+  if (badge && texto) {
+    if (compra.movimiento_id) {
+      badge.style.display = 'flex';
+      if (compra.estatus_conciliacion === 'CONCILIADO') {
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#166534';
+        badge.style.borderColor = '#86efac';
+        texto.innerHTML = `<strong>✅ 100% CONCILIADA:</strong> Vinculada a Entrada de Almacén <strong>#${compra.movimiento_id}</strong> (Doc. ${compra.nro_factura}).`;
+      } else {
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+        badge.style.borderColor = '#fcd34d';
+        texto.innerHTML = `<strong>⏳ Entrada #${compra.movimiento_id} vinculada:</strong> Estatus: <strong>${compra.estatus_conciliacion || 'PENDIENTE'}</strong>. Al actualizar se re-verificará el cruce.`;
+      }
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  document.getElementById('modal-nueva-compra').style.display = 'flex';
+}
+window.editarCompra = editarCompra;
 
 async function eliminarFacturaCompra(id) {
   if (!confirm('¿Estás seguro de que deseas eliminar esta factura del Libro de Compras? Los totales se recalcularán automáticamente.')) {
