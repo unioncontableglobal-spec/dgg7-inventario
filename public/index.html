@@ -531,7 +531,7 @@
 
           <!-- WIDGET EJECUTIVO: TASA OFICIAL BCV DEL DÍA -->
           <div class="daily-bcv-widget">
-            <div class="daily-bcv-left">
+            <div class="daily-bcv-left" style="cursor: pointer;" onclick="abrirModalTasaBcvDia()" title="Haga clic para actualizar la Tasa Oficial BCV del día">
               <div class="daily-bcv-badge">
                 <span class="bcv-pulse-dot"></span>
                 <span class="bcv-badge-text">BCV EN TIEMPO REAL • TASA OFICIAL</span>
@@ -2082,9 +2082,18 @@
                   <select id="drawer-motivo-select" class="form-control" style="font-size:0.82rem; font-weight:700; margin-bottom:8px; padding:7px 10px; border:1.5px solid #94a3b8; color:#0f172a; cursor:pointer;">
                     <!-- Opciones inyectadas dinámicamente según si diff < 0 o diff > 0 -->
                   </select>
-                  <div>
-                    <label style="font-size:0.70rem; font-weight:700; color:#475569; display:block; margin-bottom:2px;">Soporte Legal / N° de Acta Interna / Detalle:</label>
-                    <input type="text" id="drawer-justificacion-detalle" class="form-control" placeholder="Ej: Acta de Desincorporación N° 04-2026 / Repuesto roto en almacén" style="font-size:0.78rem; padding:6px 10px;">
+                  <div style="display:grid; grid-template-columns: 1.1fr 1fr; gap:8px; margin-top:8px;">
+                    <div>
+                      <label style="font-size:0.70rem; font-weight:700; color:#0B2447; display:block; margin-bottom:2px;">📋 Acta Oficial Vinculada (Art. 177 RISLR):</label>
+                      <select id="drawer-acta-select" class="form-control font-mono font-bold" style="font-size:0.75rem; padding:5px 8px; background:#eff6ff; border-color:#93c5fd; color:#1e40af;">
+                        <option value="ACTA-INV-202610-01" selected>ACTA-INV-202610-01 (Toma Física Octubre 2026)</option>
+                        <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:0.70rem; font-weight:700; color:#475569; display:block; margin-bottom:2px;">Detalle / Justificación Física del Ajuste:</label>
+                      <input type="text" id="drawer-justificacion-detalle" class="form-control" placeholder="Ej: Repuesto dañado / Desgaste / Conteo físico" style="font-size:0.78rem; padding:5px 8px;">
+                    </div>
                   </div>
                 </div>
 
@@ -2106,28 +2115,28 @@
                 <div class="pzero-zone-title">
                   <span>💲 BLOQUE B: Estructura de Costos (Compras)</span>
                 </div>
-                <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Valoración de compras e inventario conforme al Art. 177 RISLR. Modifica el Costo S/IVA o el Costo Total para autocalcular el IVA (16%).</p>
+                <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Valoración de inventario conforme al Art. 177 RISLR. Ingrese el Costo S/IVA en Bolívares (Bs.) o el Costo Total para autocalcular el IVA (16%).</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
-                  <!-- Costo S/IVA -->
+                  <!-- Costo S/IVA Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#0B2447; display:block; margin-bottom:3px;">Costo S/IVA ($ USD):</label>
-                    <input type="number" id="drawer-costo-s-iva" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px;" oninput="calcularCostosDrawer('S_IVA')">
-                    <div class="pzero-sub-ref" id="drawer-costo-s-iva-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#0B2447; display:block; margin-bottom:3px;">Costo S/IVA (Bs.) *:</label>
+                    <input type="number" id="drawer-costo-s-iva-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px;" oninput="calcularCostosDrawer('BS_S_IVA')">
+                    <div class="pzero-sub-ref" id="drawer-costo-s-iva-usd-ref">Ref: $0.00 USD</div>
                   </div>
 
-                  <!-- Monto IVA 16% -->
+                  <!-- Monto IVA 16% Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#64748b; display:block; margin-bottom:3px;">IVA 16% ($ USD):</label>
-                    <input type="number" id="drawer-costo-iva" class="form-control font-mono" step="0.01" readonly style="font-size:0.85rem; padding:6px 8px; background:#f1f5f9; color:#64748b;">
-                    <div class="pzero-sub-ref" style="color:#64748b;" id="drawer-costo-iva-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#64748b; display:block; margin-bottom:3px;">IVA 16% (Bs.):</label>
+                    <input type="number" id="drawer-costo-iva-bs" class="form-control font-mono" step="0.01" readonly style="font-size:0.85rem; padding:6px 8px; background:#f1f5f9; color:#64748b;">
+                    <div class="pzero-sub-ref" style="color:#64748b;" id="drawer-costo-iva-usd-ref">Ref: $0.00 USD</div>
                   </div>
 
-                  <!-- Costo Total C/IVA -->
+                  <!-- Costo Total C/IVA Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#b45309; display:block; margin-bottom:3px;">Total Costo ($ USD):</label>
-                    <input type="number" id="drawer-costo-total" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px; border-color:#f59e0b;" oninput="calcularCostosDrawer('TOTAL')">
-                    <div class="pzero-sub-ref" style="color:#b45309;" id="drawer-costo-total-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#b45309; display:block; margin-bottom:3px;">Total Costo (Bs.):</label>
+                    <input type="number" id="drawer-costo-total-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px; border-color:#f59e0b;" oninput="calcularCostosDrawer('BS_TOTAL')">
+                    <div class="pzero-sub-ref" style="color:#b45309;" id="drawer-costo-total-usd-ref">Ref: $0.00 USD</div>
                   </div>
                 </div>
               </div>
@@ -2140,25 +2149,25 @@
                 <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Precios de venta sugeridos para el mostrador de DG67, salidas de tienda y facturación por máquina fiscal.</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
-                  <!-- Precio Venta S/IVA -->
+                  <!-- Precio Venta S/IVA Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#0B2447; display:block; margin-bottom:3px;">Precio Venta S/IVA ($):</label>
-                    <input type="number" id="drawer-precio-s-iva" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px;" oninput="calcularPreciosDrawer('S_IVA')">
-                    <div class="pzero-sub-ref" id="drawer-precio-s-iva-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#0B2447; display:block; margin-bottom:3px;">Precio Venta S/IVA (Bs.) *:</label>
+                    <input type="number" id="drawer-precio-s-iva-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px;" oninput="calcularPreciosDrawer('BS_S_IVA')">
+                    <div class="pzero-sub-ref" id="drawer-precio-s-iva-usd-ref">Ref: $0.00 USD</div>
                   </div>
 
-                  <!-- IVA Venta 16% -->
+                  <!-- IVA Venta 16% Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#64748b; display:block; margin-bottom:3px;">IVA Venta 16% ($):</label>
-                    <input type="number" id="drawer-precio-iva" class="form-control font-mono" step="0.01" readonly style="font-size:0.85rem; padding:6px 8px; background:#f1f5f9; color:#64748b;">
-                    <div class="pzero-sub-ref" style="color:#64748b;" id="drawer-precio-iva-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#64748b; display:block; margin-bottom:3px;">IVA Venta 16% (Bs.):</label>
+                    <input type="number" id="drawer-precio-iva-bs" class="form-control font-mono" step="0.01" readonly style="font-size:0.85rem; padding:6px 8px; background:#f1f5f9; color:#64748b;">
+                    <div class="pzero-sub-ref" style="color:#64748b;" id="drawer-precio-iva-usd-ref">Ref: $0.00 USD</div>
                   </div>
 
-                  <!-- Precio Total Venta C/IVA -->
+                  <!-- Precio Total Venta C/IVA Bs -->
                   <div>
-                    <label style="font-size:0.7rem; font-weight:700; color:#0369a1; display:block; margin-bottom:3px;">Precio Total C/IVA ($):</label>
-                    <input type="number" id="drawer-precio-total" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px; border-color:#0284c7;" oninput="calcularPreciosDrawer('TOTAL')">
-                    <div class="pzero-sub-ref" style="color:#0369a1;" id="drawer-precio-total-bs">Bs. 0,00</div>
+                    <label style="font-size:0.7rem; font-weight:700; color:#0369a1; display:block; margin-bottom:3px;">Precio Total C/IVA (Bs.):</label>
+                    <input type="number" id="drawer-precio-total-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" style="font-size:0.85rem; padding:6px 8px; border-color:#0284c7;" oninput="calcularPreciosDrawer('BS_TOTAL')">
+                    <div class="pzero-sub-ref" style="color:#0369a1;" id="drawer-precio-total-usd-ref">Ref: $0.00 USD</div>
                   </div>
                 </div>
 
@@ -2166,7 +2175,7 @@
                 <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
                   <span style="font-size:0.72rem; color:#15803d; font-weight:600;">Rentabilidad Comercial Bruta:</span>
                   <strong id="drawer-margen-display" style="font-size:0.82rem; color:#15803d; font-family:monospace;">
-                    Margen: +30.0% (Utilidad: $0.00 USD)
+                    Margen: +30.0% (Utilidad: Bs. 0,00 • $0.00 USD)
                   </strong>
                 </div>
               </div>
@@ -4765,6 +4774,61 @@
             <button type="button" class="btn btn-secondary" onclick="closeModal('modal-config-islr')">Cancelar</button>
             <button type="submit" class="btn" style="background:#0B2447; color:#FFFFFF; font-weight:800;">Guardar
               Configuración</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL FLOTANTE: TASA OFICIAL BCV DEL DÍA AL INGRESAR AL SISTEMA        -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-tasa-bcv-dia" style="display: none; z-index: 1060;">
+    <div class="modal-box" style="max-width: 520px; border-top: 5px solid #19A7CE; box-shadow: 0 10px 40px rgba(11,36,71,0.35);">
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF; padding: 16px 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🏛️</span>
+          <div>
+            <h3 style="color: #FFFFFF; font-size: 1.1rem; font-weight: 800; margin: 0;">Tasa Oficial BCV del Día</h3>
+            <div style="font-size: 0.72rem; color: #7dd3fc; font-weight: 700;">BANCO CENTRAL DE VENEZUELA • PA SNAT/2026/00093</div>
+          </div>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF; font-size: 1.5rem;" onclick="closeModal('modal-tasa-bcv-dia')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.8rem; color: #0369a1; line-height: 1.45;">
+          <strong>Vigencia y Doble Expresión Monetaria:</strong><br>
+          Verifique o actualice la tasa oficial de hoy. Aplica automáticamente a todas las operaciones de inventario, compras, ventas y conciliación fiscal en Bolívares (Bs.) y Dólares ($ USD).
+        </div>
+
+        <form id="form-popup-tasa-bcv" onsubmit="confirmarTasaBcvModalDia(event)">
+          <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; margin-bottom: 16px;">
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">📅 Fecha de Hoy *</label>
+              <input type="date" id="popup-tasa-fecha" class="form-control" style="font-size: 0.9rem; font-weight: 700; padding: 8px;" required>
+            </div>
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 4px;">💱 Tasa Oficial (Bs. / USD) *</label>
+              <div style="display: flex; align-items: center; border: 2px solid #19A7CE; border-radius: 6px; overflow: hidden; background: #fff;">
+                <span style="padding: 0 10px; font-weight: 800; color: #0B2447; background: #e0f2fe; font-size: 0.9rem;">Bs.</span>
+                <input type="number" step="any" min="0.0001" id="popup-tasa-valor" class="form-control font-mono font-bold" style="border: none; font-size: 1.15rem; color: #0B2447; padding: 8px 10px;" placeholder="Ej: 889.58" required oninput="actualizarPreviewTasaModal(this.value)">
+              </div>
+            </div>
+          </div>
+
+          <div id="popup-tasa-preview" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.78rem; color: #475569; display: flex; justify-content: space-between; align-items: center;">
+            <span>Equivalencia de referencia:</span>
+            <strong style="color: #059669; font-size: 0.85rem;" id="popup-tasa-preview-text">1.00 USD = Bs. 889,58</strong>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-tasa-bcv-dia')" style="font-weight: 600;">
+              Omitir por ahora
+            </button>
+            <button type="submit" class="btn btn-emerald" id="btn-popup-confirmar-tasa" style="font-weight: 800; padding: 8px 18px;">
+              💾 Confirmar Tasa Oficial del Día
+            </button>
           </div>
         </form>
       </div>

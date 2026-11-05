@@ -139,6 +139,11 @@ function showApp(user) {
     if (isAuditorTomaFisica) {
       setTimeout(() => switchTab('tab-punto-cero'), 100);
     }
+
+    // Modal flotante para verificar o confirmar la Tasa Oficial BCV del día
+    setTimeout(() => {
+      verificarAperturaModalTasaBcvDia();
+    }, 350);
   }
 }
 
@@ -281,6 +286,9 @@ async function initApp() {
   if (state.currentUser?.rol === 'TOMA_FISICA') {
     switchTab('tab-punto-cero');
   }
+
+  // Verificar y mostrar modal flotante de Tasa BCV del día al cargar el sistema
+  verificarAperturaModalTasaBcvDia();
 
   // Add initial rows in forms
   addEntryRow();
@@ -7378,6 +7386,103 @@ async function guardarTasaBcvDiaria(e) {
   }
 }
 
+// ======================================================================
+// MODAL FLOTANTE: TASA OFICIAL BCV DEL DÍA AL INGRESAR AL SISTEMA
+// ======================================================================
+
+function verificarAperturaModalTasaBcvDia() {
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const verificada = sessionStorage.getItem('dg67_bcv_verified_session');
+  // Se presenta al iniciar la sesión en cualquiera de los usuarios
+  if (!verificada || verificada !== hoy) {
+    abrirModalTasaBcvDia();
+  }
+}
+
+function abrirModalTasaBcvDia() {
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const fInput = document.getElementById('popup-tasa-fecha');
+  const tInput = document.getElementById('popup-tasa-valor');
+  if (fInput) fInput.value = hoy;
+
+  const tasaActual = state.tasaActiva?.tasa_bcv || (state.tasasBcv && state.tasasBcv[state.tasasBcv.length - 1]?.tasa_bcv) || 889.58;
+  if (tInput && !tInput.value) tInput.value = Number(tasaActual).toFixed(4);
+  actualizarPreviewTasaModal(tInput?.value || tasaActual);
+
+  const m = document.getElementById('modal-tasa-bcv-dia');
+  if (m) m.style.display = 'flex';
+}
+
+function actualizarPreviewTasaModal(val) {
+  const v = parseFloat(val) || 0;
+  const p = document.getElementById('popup-tasa-preview-text');
+  if (p) {
+    p.textContent = `1.00 USD = Bs. ${Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+  }
+}
+
+async function confirmarTasaBcvModalDia(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const fInput = document.getElementById('popup-tasa-fecha');
+  const tInput = document.getElementById('popup-tasa-valor');
+  const btn = document.getElementById('btn-popup-confirmar-tasa');
+
+  const numTasa = parseFloat(tInput?.value);
+  const fecha = fInput?.value || new Date().toLocaleDateString('en-CA');
+
+  if (!numTasa || numTasa <= 0) {
+    showToast('Ingrese una tasa oficial BCV válida mayor a cero.', 'error');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Guardando tasa...';
+  }
+
+  try {
+    const res = await fetch('/api/tasas-bcv/diaria', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasa_bcv: numTasa, fecha, moneda: 'USD' })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar tasa oficial BCV diaria');
+
+    sessionStorage.setItem('dg67_bcv_verified_session', fecha);
+    showToast(`✅ Tasa Oficial BCV confirmada para hoy: Bs. ${numTasa.toFixed(4)} / USD`, 'success');
+    closeModal('modal-tasa-bcv-dia');
+
+    await loadTasasBcvPeriodo();
+
+    // Sincronizar inputs si coinciden
+    const entFecha = document.getElementById('ent-fecha')?.value;
+    const salFecha = document.getElementById('sal-fecha')?.value;
+    if (entFecha === fecha) {
+      const entTasa = document.getElementById('ent-tasa');
+      if (entTasa) {
+        entTasa.value = numTasa.toFixed(4);
+        calculateEntryTotals();
+      }
+    }
+    if (salFecha === fecha) {
+      const salTasa = document.getElementById('sal-tasa');
+      if (salTasa) {
+        salTasa.value = numTasa.toFixed(4);
+        calculateExitTotals();
+      }
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Confirmar Tasa Oficial del Día';
+    }
+  }
+}
+
 // ============================================================================
 // SUB-MÓDULO DE AUDITORÍA INTERACTIVA EN TIEMPO REAL (PUNTO CERO OCTUBRE 2026)
 // ============================================================================
@@ -7639,7 +7744,7 @@ function renderizarTablaAuditoriaEnVivo() {
         </td>
         <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.descripcion}">
           <div style="font-weight:600; color:#0f172a;">${p.descripcion}</div>
-          <div style="font-size:0.7rem; color:#64748b;">${p.unidad_medida} • Ref: $${fmtUsd(p.costo_s_iva_usd)}</div>
+          <div style="font-size:0.7rem; color:#64748b;">${p.unidad_medida} • Ref: Bs. ${fmtBs(costoBs)} ($${fmtUsd(p.costo_s_iva_usd)} USD)</div>
         </td>
         <td style="font-size:0.74rem;">
           <div style="color:#0B2447; font-weight:700;">${p.almacen}</div>
@@ -7655,12 +7760,12 @@ function renderizarTablaAuditoriaEnVivo() {
           ${diffBadge}
         </td>
         <td style="text-align:right;">
-          <div style="font-weight:700; color:#0B2447;">$${fmtUsd(p.costo_s_iva_usd)}</div>
-          <div class="pzero-sub-ref">Bs. ${fmtBs(costoBs)}</div>
+          <div style="font-weight:700; color:#0B2447;">Bs. ${fmtBs(costoBs)}</div>
+          <div class="pzero-sub-ref">Ref: $${fmtUsd(p.costo_s_iva_usd)} USD</div>
         </td>
         <td style="text-align:right;">
-          <div style="font-weight:800; color:#0284c7;">$${fmtUsd(p.precio_venta_s_iva_usd)}</div>
-          <div class="pzero-sub-ref">Bs. ${fmtBs(precioBs)}</div>
+          <div style="font-weight:800; color:#0284c7;">Bs. ${fmtBs(precioBs)}</div>
+          <div class="pzero-sub-ref">Ref: $${fmtUsd(p.precio_venta_s_iva_usd)} USD</div>
         </td>
         <td style="text-align:center;">
           <button type="button" class="btn btn-sm btn-navy" style="padding:4px 8px; font-size:0.75rem; font-weight:700;" onclick="event.stopPropagation(); abrirDrawerAuditoriaPorId(${p.producto_id})">
@@ -7734,23 +7839,27 @@ function abrirDrawerAuditoria(index) {
   if (elToggleInactivo) {
     elToggleInactivo.checked = p.inactivo === 1;
   }
+  const elActa = document.getElementById('drawer-acta-select');
+  if (elActa) elActa.value = 'ACTA-INV-202610-01';
   const elJust = document.getElementById('drawer-justificacion-detalle');
   if (elJust) elJust.value = '';
   calcularDiferenciaDrawer();
 
-  // 3. Bloque B: Estructura de Costos
-  const elCostoSIVA = document.getElementById('drawer-costo-s-iva');
-  if (elCostoSIVA) {
-    elCostoSIVA.value = Number(p.costo_s_iva_usd || 0).toFixed(2);
+  // 3. Bloque B: Estructura de Costos (Moneda Principal: Bolívares Bs.)
+  const costoBs = Number(((p.costo_s_iva_usd || 0) * pzeroTasaBcv).toFixed(2));
+  const elCostoSIVABs = document.getElementById('drawer-costo-s-iva-bs');
+  if (elCostoSIVABs) {
+    elCostoSIVABs.value = costoBs.toFixed(2);
   }
-  calcularCostosDrawer('S_IVA');
+  calcularCostosDrawer('BS_S_IVA');
 
-  // 4. Bloque C: Estructura de Precios de Venta
-  const elPrecioSIVA = document.getElementById('drawer-precio-s-iva');
-  if (elPrecioSIVA) {
-    elPrecioSIVA.value = Number(p.precio_venta_s_iva_usd || 0).toFixed(2);
+  // 4. Bloque C: Estructura de Precios de Venta (Moneda Principal: Bolívares Bs.)
+  const precioBs = Number(((p.precio_venta_s_iva_usd || 0) * pzeroTasaBcv).toFixed(2));
+  const elPrecioSIVABs = document.getElementById('drawer-precio-s-iva-bs');
+  if (elPrecioSIVABs) {
+    elPrecioSIVABs.value = precioBs.toFixed(2);
   }
-  calcularPreciosDrawer('S_IVA');
+  calcularPreciosDrawer('BS_S_IVA');
 
   // Abrir Drawer
   if (drawer) drawer.classList.add('open');
@@ -7888,92 +7997,103 @@ function calcularDiferenciaDrawer() {
   }
 }
 
-// Cálculos automáticos Bloque B: Costos
+// Cálculos automáticos Bloque B: Costos (Moneda Principal: Bolívares Bs.)
 function calcularCostosDrawer(origen) {
-  const elSIVA = document.getElementById('drawer-costo-s-iva');
-  const elIVA = document.getElementById('drawer-costo-iva');
-  const elTotal = document.getElementById('drawer-costo-total');
-
-  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  let sIVA = parseFloat(elSIVA?.value || 0);
-  let total = parseFloat(elTotal?.value || 0);
-
-  if (origen === 'TOTAL') {
-    sIVA = Number((total / 1.16).toFixed(2));
-    if (elSIVA) elSIVA.value = sIVA.toFixed(2);
-  }
-
-  const iva = Number((sIVA * 0.16).toFixed(2));
-  total = Number((sIVA + iva).toFixed(2));
-
-  if (elIVA) elIVA.value = iva.toFixed(2);
-  if (origen !== 'TOTAL' && elTotal) elTotal.value = total.toFixed(2);
-
-  // Sub-referencias en Bolívares
   const elSIVABs = document.getElementById('drawer-costo-s-iva-bs');
   const elIVABs = document.getElementById('drawer-costo-iva-bs');
   const elTotalBs = document.getElementById('drawer-costo-total-bs');
 
-  if (elSIVABs) elSIVABs.textContent = `Bs. ${fmtBs(sIVA * pzeroTasaBcv)}`;
-  if (elIVABs) elIVABs.textContent = `Bs. ${fmtBs(iva * pzeroTasaBcv)}`;
-  if (elTotalBs) elTotalBs.textContent = `Bs. ${fmtBs(total * pzeroTasaBcv)}`;
+  const refSIVAUsd = document.getElementById('drawer-costo-s-iva-usd-ref');
+  const refIVAUsd = document.getElementById('drawer-costo-iva-usd-ref');
+  const refTotalUsd = document.getElementById('drawer-costo-total-usd-ref');
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+
+  let sIVABs = parseFloat(elSIVABs?.value || 0);
+  let totalBs = parseFloat(elTotalBs?.value || 0);
+
+  if (origen === 'BS_TOTAL') {
+    sIVABs = Number((totalBs / 1.16).toFixed(2));
+    if (elSIVABs) elSIVABs.value = sIVABs.toFixed(2);
+  }
+
+  const ivaBs = Number((sIVABs * 0.16).toFixed(2));
+  totalBs = Number((sIVABs + ivaBs).toFixed(2));
+
+  if (elIVABs) elIVABs.value = ivaBs.toFixed(2);
+  if (origen !== 'BS_TOTAL' && elTotalBs) elTotalBs.value = totalBs.toFixed(2);
+
+  // Equivalencias en Dólares ($ USD) calculadas según Tasa BCV
+  const sIVAUsd = Number((sIVABs / tasa).toFixed(2));
+  const ivaUsd = Number((ivaBs / tasa).toFixed(2));
+  const totalUsd = Number((totalBs / tasa).toFixed(2));
+
+  if (refSIVAUsd) refSIVAUsd.textContent = `Ref: $${fmtUsd(sIVAUsd)} USD`;
+  if (refIVAUsd) refIVAUsd.textContent = `Ref: $${fmtUsd(ivaUsd)} USD`;
+  if (refTotalUsd) refTotalUsd.textContent = `Ref: $${fmtUsd(totalUsd)} USD`;
 
   calcularMargenDrawer();
 }
 
-// Cálculos automáticos Bloque C: Precios de Venta
+// Cálculos automáticos Bloque C: Precios de Venta (Moneda Principal: Bolívares Bs.)
 function calcularPreciosDrawer(origen) {
-  const elSIVA = document.getElementById('drawer-precio-s-iva');
-  const elIVA = document.getElementById('drawer-precio-iva');
-  const elTotal = document.getElementById('drawer-precio-total');
-
-  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  let sIVA = parseFloat(elSIVA?.value || 0);
-  let total = parseFloat(elTotal?.value || 0);
-
-  if (origen === 'TOTAL') {
-    sIVA = Number((total / 1.16).toFixed(2));
-    if (elSIVA) elSIVA.value = sIVA.toFixed(2);
-  }
-
-  const iva = Number((sIVA * 0.16).toFixed(2));
-  total = Number((sIVA + iva).toFixed(2));
-
-  if (elIVA) elIVA.value = iva.toFixed(2);
-  if (origen !== 'TOTAL' && elTotal) elTotal.value = total.toFixed(2);
-
-  // Sub-referencias en Bolívares
   const elSIVABs = document.getElementById('drawer-precio-s-iva-bs');
   const elIVABs = document.getElementById('drawer-precio-iva-bs');
   const elTotalBs = document.getElementById('drawer-precio-total-bs');
 
-  if (elSIVABs) elSIVABs.textContent = `Bs. ${fmtBs(sIVA * pzeroTasaBcv)}`;
-  if (elIVABs) elIVABs.textContent = `Bs. ${fmtBs(iva * pzeroTasaBcv)}`;
-  if (elTotalBs) elTotalBs.textContent = `Bs. ${fmtBs(total * pzeroTasaBcv)}`;
+  const refSIVAUsd = document.getElementById('drawer-precio-s-iva-usd-ref');
+  const refIVAUsd = document.getElementById('drawer-precio-iva-usd-ref');
+  const refTotalUsd = document.getElementById('drawer-precio-total-usd-ref');
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+
+  let sIVABs = parseFloat(elSIVABs?.value || 0);
+  let totalBs = parseFloat(elTotalBs?.value || 0);
+
+  if (origen === 'BS_TOTAL') {
+    sIVABs = Number((totalBs / 1.16).toFixed(2));
+    if (elSIVABs) elSIVABs.value = sIVABs.toFixed(2);
+  }
+
+  const ivaBs = Number((sIVABs * 0.16).toFixed(2));
+  totalBs = Number((sIVABs + ivaBs).toFixed(2));
+
+  if (elIVABs) elIVABs.value = ivaBs.toFixed(2);
+  if (origen !== 'BS_TOTAL' && elTotalBs) elTotalBs.value = totalBs.toFixed(2);
+
+  // Equivalencias en Dólares ($ USD) calculadas según Tasa BCV
+  const sIVAUsd = Number((sIVABs / tasa).toFixed(2));
+  const ivaUsd = Number((ivaBs / tasa).toFixed(2));
+  const totalUsd = Number((totalBs / tasa).toFixed(2));
+
+  if (refSIVAUsd) refSIVAUsd.textContent = `Ref: $${fmtUsd(sIVAUsd)} USD`;
+  if (refIVAUsd) refIVAUsd.textContent = `Ref: $${fmtUsd(ivaUsd)} USD`;
+  if (refTotalUsd) refTotalUsd.textContent = `Ref: $${fmtUsd(totalUsd)} USD`;
 
   calcularMargenDrawer();
 }
 
-// Indicador de Margen Comercial de Ganancia
+// Indicador de Margen Comercial de Ganancia (Doble Expresión Bs. + USD)
 function calcularMargenDrawer() {
-  const costo = parseFloat(document.getElementById('drawer-costo-s-iva')?.value || 0);
-  const precio = parseFloat(document.getElementById('drawer-precio-s-iva')?.value || 0);
+  const costoBs = parseFloat(document.getElementById('drawer-costo-s-iva-bs')?.value || 0);
+  const precioBs = parseFloat(document.getElementById('drawer-precio-s-iva-bs')?.value || 0);
   const elMargen = document.getElementById('drawer-margen-display');
   if (!elMargen) return;
 
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
 
-  if (precio > 0) {
-    const utilidadUsd = Number((precio - costo).toFixed(2));
-    const utilidadBs = Number((utilidadUsd * pzeroTasaBcv).toFixed(2));
-    const margenPct = Number(((utilidadUsd / precio) * 100).toFixed(1));
+  if (precioBs > 0) {
+    const utilidadBs = Number((precioBs - costoBs).toFixed(2));
+    const utilidadUsd = Number((utilidadBs / tasa).toFixed(2));
+    const margenPct = Number(((utilidadBs / precioBs) * 100).toFixed(1));
 
     const color = margenPct >= 20 ? '#15803d' : (margenPct > 0 ? '#b45309' : '#b91c1c');
     elMargen.style.color = color;
-    elMargen.textContent = `Margen: ${margenPct > 0 ? '+' : ''}${margenPct}% (Utilidad: $${fmtUsd(utilidadUsd)} USD • Bs. ${fmtBs(utilidadBs)})`;
+    elMargen.textContent = `Margen: ${margenPct > 0 ? '+' : ''}${margenPct}% (Utilidad: Bs. ${fmtBs(utilidadBs)} • Ref: $${fmtUsd(utilidadUsd)} USD)`;
   } else {
     elMargen.textContent = `Margen: 0.0% (Sin precio de venta definido)`;
     elMargen.style.color = '#64748b';
@@ -7992,12 +8112,13 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   const p = pzeroProductos[pzeroProductoActualIndex];
 
   const cantFisica = parseFloat(document.getElementById('drawer-cant-fisica')?.value);
-  const costoSIVA = parseFloat(document.getElementById('drawer-costo-s-iva')?.value);
-  const precioSIVA = parseFloat(document.getElementById('drawer-precio-s-iva')?.value);
+  const costoSIVABs = parseFloat(document.getElementById('drawer-costo-s-iva-bs')?.value);
+  const precioSIVABs = parseFloat(document.getElementById('drawer-precio-s-iva-bs')?.value);
   const inactivo = document.getElementById('drawer-toggle-inactivo')?.checked ? 1 : 0;
   const fecha = document.getElementById('drawer-fecha-asiento')?.value || '2026-10-31';
 
   const motivoAjuste = document.getElementById('drawer-motivo-select')?.value || '';
+  const actaVinculada = document.getElementById('drawer-acta-select')?.value || 'ACTA-INV-202610-01';
   const justificacionDetalle = document.getElementById('drawer-justificacion-detalle')?.value?.trim() || '';
 
   if (isNaN(cantFisica) || cantFisica < 0) {
@@ -8011,22 +8132,29 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   if (btnGuardar) btnGuardar.disabled = true;
   if (btnGuardarSig) btnGuardarSig.disabled = true;
 
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+  const costoSIVAUsd = !isNaN(costoSIVABs) ? Number((costoSIVABs / tasa).toFixed(2)) : p.costo_s_iva_usd;
+  const precioSIVAUsd = !isNaN(precioSIVABs) ? Number((precioSIVABs / tasa).toFixed(2)) : p.precio_venta_s_iva_usd;
+
   try {
     const res = await fetch(`/api/auditoria/actualizar-producto/${p.producto_id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         cantidad_fisica_real: cantFisica,
-        costo_s_iva_usd: isNaN(costoSIVA) ? p.costo_s_iva_usd : costoSIVA,
-        precio_venta_s_iva_usd: isNaN(precioSIVA) ? p.precio_venta_s_iva_usd : precioSIVA,
+        costo_s_iva_bs: isNaN(costoSIVABs) ? null : costoSIVABs,
+        precio_venta_s_iva_bs: isNaN(precioSIVABs) ? null : precioSIVABs,
+        costo_s_iva_usd: costoSIVAUsd,
+        precio_venta_s_iva_usd: precioSIVAUsd,
         inactivo,
         auditado: 1,
         fecha,
-        tasa_bcv: pzeroTasaBcv,
-        usuario: 'ADMIN_DG67',
-        observaciones: `Toma física código [${p.codigo}] - Octubre 2026`,
+        tasa_bcv: tasa,
+        usuario: state.currentUser?.usuario || 'ADMIN_DG67',
+        observaciones: `Toma física código [${p.codigo}] - Octubre 2026 (${actaVinculada})`,
         motivo_ajuste: motivoAjuste,
-        justificacion_detalle: justificacionDetalle
+        justificacion_detalle: justificacionDetalle,
+        acta_vinculada: actaVinculada
       })
     });
 
@@ -8035,23 +8163,20 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
 
     showToast(`✅ [${p.codigo}] auditado y actualizado con éxito.`, 'success');
 
-    // Actualizar producto en el estado local
+    // Actualizar producto en el estado local de Toma Física
     p.stock_actual = data.producto_actualizado?.stock_actual ?? cantFisica;
     p.stock_fisico = cantFisica;
     p.diferencia = 0; // Ahora está cuadrado
-    p.costo_s_iva_usd = data.producto_actualizado?.costo_s_iva_usd ?? costoSIVA;
-    p.precio_venta_s_iva_usd = data.producto_actualizado?.precio_venta_s_iva_usd ?? precioSIVA;
+    p.costo_s_iva_usd = data.producto_actualizado?.costo_s_iva_usd ?? costoSIVAUsd;
+    p.precio_venta_s_iva_usd = data.producto_actualizado?.precio_venta_s_iva_usd ?? precioSIVAUsd;
     p.auditado = 1;
     p.inactivo = inactivo;
 
-    // Actualizar métricas globales
+    // Actualizar métricas globales de auditoría
     actualizarMetricasAuditoria(data.estadisticas);
 
-    // Refrescar fila en la tabla
+    // Refrescar fila en la tabla de auditoría en vivo
     filtrarAuditoriaEnVivo();
-
-    // Sincronizar catálogo general si está disponible
-    if (typeof loadProducts === 'function') loadProducts();
 
     if (avanzarSiguiente) {
       navegarProductoAuditoria(1);
