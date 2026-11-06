@@ -113,6 +113,11 @@ export async function getListadoAuditoriaEnVivo(db) {
 
 export async function actualizarProductoAuditoria(productoId, payload, db) {
   const {
+    codigo,
+    descripcion,
+    unidad_medida,
+    categoria,
+    almacen,
     cantidad_fisica_real,
     costo_s_iva_usd,
     precio_venta_s_iva_usd,
@@ -134,10 +139,15 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   const prodRes = await db.execute({
     sql: `
       SELECT 
-        p.id, p.codigo, p.descripcion, p.unidad_medida, p.costo_referencial_usd, p.precio_venta_usd,
-        p.inactivo, p.activo, COALESCE(v.stock_actual, 0) as stock_actual
+        p.id, p.codigo, p.descripcion, p.unidad_medida, p.categoria_id, p.almacen_id,
+        p.costo_referencial_usd, p.precio_venta_usd,
+        p.inactivo, p.activo, COALESCE(v.stock_actual, 0) as stock_actual,
+        COALESCE(c.nombre, 'GENERAL') as categoria_nombre,
+        COALESCE(a.nombre, 'AUTOPERIQUITOS') as almacen_nombre
       FROM productos p
       LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      LEFT JOIN almacenes a ON p.almacen_id = a.id
       WHERE p.id = ?
     `,
     args: [productoId]
@@ -147,7 +157,70 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
     throw new Error(`Producto con ID ${productoId} no encontrado en la base de datos.`);
   }
 
+  const periodo = fecha.slice(0, 7);
+  const estatusActa = await db.execute({
+    sql: "SELECT estatus FROM actas_toma_fisica WHERE periodo = ? LIMIT 1",
+    args: [periodo]
+  }).catch(() => ({ rows: [] }));
+  if (estatusActa.rows && estatusActa.rows[0] && estatusActa.rows[0].estatus === 'CERRADA') {
+    throw new Error(`La Toma Física del período ${periodo} está formalmente CERRADA y sellada. No se admiten modificaciones.`);
+  }
+
   const p = prodRes.rows[0];
+
+  // Actualización de código (si cambió y no colisiona)
+  let nuevoCodigo = p.codigo;
+  if (codigo && String(codigo).trim() !== '' && String(codigo).trim().toUpperCase() !== String(p.codigo).toUpperCase()) {
+    const codTrim = String(codigo).trim().toUpperCase();
+    const checkCod = await db.execute({
+      sql: 'SELECT id FROM productos WHERE UPPER(codigo) = ? AND id != ? LIMIT 1',
+      args: [codTrim, productoId]
+    });
+    if (checkCod.rows && checkCod.rows.length > 0) {
+      throw new Error(`El código "${codTrim}" ya se encuentra asignado a otro producto.`);
+    }
+    nuevoCodigo = codTrim;
+  }
+
+  const nuevaDescripcion = (descripcion && String(descripcion).trim() !== '') ? String(descripcion).trim() : p.descripcion;
+  const nuevaUnidad = (unidad_medida && String(unidad_medida).trim() !== '') ? String(unidad_medida).trim().toUpperCase() : (p.unidad_medida || 'UND');
+
+  // Categoría
+  let nuevaCatId = p.categoria_id;
+  let nuevaCatNombre = p.categoria_nombre;
+  if (categoria && String(categoria).trim() !== '') {
+    const catNom = String(categoria).trim().toUpperCase();
+    const catRes = await db.execute({
+      sql: 'SELECT id, nombre FROM categorias WHERE UPPER(nombre) = ? LIMIT 1',
+      args: [catNom]
+    });
+    if (catRes.rows && catRes.rows.length > 0) {
+      nuevaCatId = catRes.rows[0].id;
+      nuevaCatNombre = catRes.rows[0].nombre;
+    } else {
+      const insCat = await db.execute({
+        sql: 'INSERT INTO categorias (nombre) VALUES (?) RETURNING id',
+        args: [catNom]
+      });
+      nuevaCatId = Number(insCat.rows[0]?.id || insCat.lastInsertRowid);
+      nuevaCatNombre = catNom;
+    }
+  }
+
+  // Almacén
+  let nuevoAlmId = p.almacen_id;
+  let nuevoAlmNombre = p.almacen_nombre;
+  if (almacen && String(almacen).trim() !== '') {
+    const almNom = String(almacen).trim().toUpperCase();
+    const almRes = await db.execute({
+      sql: 'SELECT id, nombre FROM almacenes WHERE UPPER(codigo) = ? OR UPPER(nombre) = ? LIMIT 1',
+      args: [almNom, almNom]
+    });
+    if (almRes.rows && almRes.rows.length > 0) {
+      nuevoAlmId = almRes.rows[0].id;
+      nuevoAlmNombre = almRes.rows[0].nombre;
+    }
+  }
   const stockActual = Number(Number(p.stock_actual).toFixed(2)) || 0;
 
   const tieneFisico = (cantidad_fisica_real !== null && cantidad_fisica_real !== undefined && cantidad_fisica_real !== '' && !isNaN(Number(cantidad_fisica_real)));
@@ -298,7 +371,12 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   await db.execute({
     sql: `
       UPDATE productos 
-      SET costo_referencial_usd = ?,
+      SET codigo = ?,
+          descripcion = ?,
+          unidad_medida = ?,
+          categoria_id = COALESCE(?, categoria_id),
+          almacen_id = COALESCE(?, almacen_id),
+          costo_referencial_usd = ?,
           costo_auditado_usd = ?,
           precio_venta_usd = ?,
           stock_auditado_fisico = ?,
@@ -314,6 +392,11 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
       WHERE id = ?
     `,
     args: [
+      nuevoCodigo,
+      nuevaDescripcion,
+      nuevaUnidad,
+      nuevaCatId,
+      nuevoAlmId,
       nuevoCosto,
       nuevoCosto,
       nuevoPrecio,
@@ -346,13 +429,17 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
 
   return {
     success: true,
-    mensaje: `✅ [${p.codigo}] actualizado y marcado como Auditado.`,
+    mensaje: `✅ [${nuevoCodigo}] actualizado y marcado como Auditado.`,
     producto_id: p.id,
-    codigo: p.codigo,
+    codigo: nuevoCodigo,
     movimiento_ajuste: movimientoGenerado,
     producto_actualizado: {
       producto_id: p.id,
-      codigo: p.codigo,
+      codigo: nuevoCodigo,
+      descripcion: nuevaDescripcion,
+      unidad_medida: nuevaUnidad,
+      categoria: nuevaCatNombre,
+      almacen: nuevoAlmNombre,
       stock_actual: cantReal,
       stock_fisico: cantReal,
       diferencia: 0,
@@ -365,6 +452,278 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
       auditado: isAuditado,
       inactivo: isInactive
     },
+    estadisticas: {
+      total_productos: total,
+      auditados,
+      pendientes,
+      porcentaje_auditado: porcentaje,
+      inactivos: Number(statsRes.rows[0]?.inactivos || 0)
+    }
+  };
+}
+
+export async function crearProductoAuditoria(payload, db) {
+  const {
+    codigo,
+    descripcion,
+    unidad_medida = 'UND',
+    categoria = 'GENERAL',
+    almacen = 'AUTOPERIQUITOS',
+    cantidad_fisica_real = 0,
+    costo_s_iva_bs,
+    precio_venta_s_iva_bs,
+    costo_s_iva_usd,
+    precio_venta_s_iva_usd,
+    fecha = '2026-10-31',
+    tasa_bcv = 889.58,
+    usuario = 'ADMIN_DG67',
+    motivo_ajuste = 'SOBRANTE_AUDITORIA',
+    justificacion_detalle = '',
+    acta_vinculada = 'ACTA-INV-202610-01'
+  } = payload;
+
+  const cleanCodigo = String(codigo || '').trim().toUpperCase();
+  if (!cleanCodigo) {
+    throw new Error('El Código del repuesto es obligatorio.');
+  }
+
+  const cleanDesc = String(descripcion || '').trim();
+  if (!cleanDesc) {
+    throw new Error('El Nombre / Descripción del repuesto es obligatorio.');
+  }
+
+  const periodo = fecha.slice(0, 7);
+  const estatusActa = await db.execute({
+    sql: "SELECT estatus FROM actas_toma_fisica WHERE periodo = ? LIMIT 1",
+    args: [periodo]
+  }).catch(() => ({ rows: [] }));
+  if (estatusActa.rows && estatusActa.rows[0] && estatusActa.rows[0].estatus === 'CERRADA') {
+    throw new Error(`La Toma Física del período ${periodo} está formalmente CERRADA y sellada. No se admiten altas de repuestos.`);
+  }
+
+  // Verificar que el código no exista
+  const checkCod = await db.execute({
+    sql: "SELECT id, codigo FROM productos WHERE UPPER(codigo) = ? LIMIT 1",
+    args: [cleanCodigo]
+  });
+  if (checkCod.rows && checkCod.rows.length > 0) {
+    throw new Error(`El código "${cleanCodigo}" ya existe en el inventario.`);
+  }
+
+  const tasaNum = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : 889.58;
+  const cantReal = (!isNaN(Number(cantidad_fisica_real)) && Number(cantidad_fisica_real) >= 0)
+    ? Number(Number(cantidad_fisica_real).toFixed(2))
+    : 0;
+
+  const tieneCostoBs = (costo_s_iva_bs !== null && costo_s_iva_bs !== undefined && costo_s_iva_bs !== '' && !isNaN(Number(costo_s_iva_bs)) && Number(costo_s_iva_bs) >= 0);
+  const tieneCostoUsd = (costo_s_iva_usd !== null && costo_s_iva_usd !== undefined && costo_s_iva_usd !== '' && !isNaN(Number(costo_s_iva_usd)) && Number(costo_s_iva_usd) >= 0);
+  const nuevoCostoUsd = tieneCostoBs
+    ? Number((Number(costo_s_iva_bs) / tasaNum).toFixed(2))
+    : (tieneCostoUsd ? Number(Number(costo_s_iva_usd).toFixed(2)) : 0);
+
+  const tienePrecioBs = (precio_venta_s_iva_bs !== null && precio_venta_s_iva_bs !== undefined && precio_venta_s_iva_bs !== '' && !isNaN(Number(precio_venta_s_iva_bs)) && Number(precio_venta_s_iva_bs) > 0);
+  const tienePrecioUsd = (precio_venta_s_iva_usd !== null && precio_venta_s_iva_usd !== undefined && precio_venta_s_iva_usd !== '' && !isNaN(Number(precio_venta_s_iva_usd)) && Number(precio_venta_s_iva_usd) > 0);
+  const nuevoPrecioUsd = tienePrecioBs
+    ? Number((Number(precio_venta_s_iva_bs) / tasaNum).toFixed(2))
+    : (tienePrecioUsd ? Number(Number(precio_venta_s_iva_usd).toFixed(2)) : Number((nuevoCostoUsd * 1.30).toFixed(2)));
+
+  const cleanUnidad = (unidad_medida && String(unidad_medida).trim() !== '')
+    ? String(unidad_medida).trim().toUpperCase()
+    : 'UND';
+
+  // Categoría
+  let catId = null;
+  let catNombre = 'GENERAL';
+  if (categoria && String(categoria).trim() !== '') {
+    catNombre = String(categoria).trim().toUpperCase();
+    const catRes = await db.execute({
+      sql: "SELECT id, nombre FROM categorias WHERE UPPER(nombre) = ? LIMIT 1",
+      args: [catNombre]
+    });
+    if (catRes.rows && catRes.rows.length > 0) {
+      catId = catRes.rows[0].id;
+      catNombre = catRes.rows[0].nombre;
+    } else {
+      const insCat = await db.execute({
+        sql: "INSERT INTO categorias (nombre) VALUES (?) RETURNING id",
+        args: [catNombre]
+      });
+      catId = Number(insCat.rows[0]?.id || insCat.lastInsertRowid);
+    }
+  }
+
+  // Almacén
+  let almId = 1;
+  let almNombre = 'AUTOPERIQUITOS';
+  if (almacen && String(almacen).trim() !== '') {
+    const cleanAlm = String(almacen).trim().toUpperCase();
+    const almRes = await db.execute({
+      sql: "SELECT id, nombre FROM almacenes WHERE UPPER(codigo) = ? OR UPPER(nombre) = ? LIMIT 1",
+      args: [cleanAlm, cleanAlm]
+    });
+    if (almRes.rows && almRes.rows.length > 0) {
+      almId = almRes.rows[0].id;
+      almNombre = almRes.rows[0].nombre;
+    }
+  }
+
+  // Insertar producto
+  const insProd = await db.execute({
+    sql: `
+      INSERT INTO productos (
+        codigo, descripcion, unidad_medida, categoria_id, almacen_id,
+        stock_minimo, costo_referencial_usd, costo_auditado_usd, precio_venta_usd,
+        stock_auditado_fisico, conteo_fisico_cierre, fecha_conteo_fisico,
+        auditado, fecha_auditoria, usuario_auditoria, fecha_auditoria_punto_cero,
+        observacion_auditoria, inactivo, activo
+      ) VALUES (
+        ?, ?, ?, ?, ?,
+        1.0, ?, ?, ?,
+        ?, ?, ?,
+        1, ?, ?, ?,
+        ?, 0, 1
+      ) RETURNING id
+    `,
+    args: [
+      cleanCodigo,
+      cleanDesc,
+      cleanUnidad,
+      catId,
+      almId,
+      nuevoCostoUsd,
+      nuevoCostoUsd,
+      nuevoPrecioUsd,
+      cantReal,
+      cantReal,
+      fecha,
+      fecha,
+      usuario,
+      fecha,
+      `Alta en Toma Física (${fecha}) por ${usuario} [${acta_vinculada || 'ACTA-INV-202610-01'}]`
+    ]
+  });
+
+  const nuevoProdId = Number(insProd.rows[0]?.id || insProd.lastInsertRowid);
+
+  // Si tiene stock inicial físico > 0, registrar movimiento de ajuste en Kardex
+  let movGenerado = null;
+  const timestamp = Date.now().toString().slice(-6);
+
+  if (cantReal > 0) {
+    const docNum = `ALTA-TF-${cleanCodigo}-${timestamp}`;
+    const costoBs = Number((nuevoCostoUsd * tasaNum).toFixed(2));
+    const totalDivisa = Number((cantReal * nuevoCostoUsd).toFixed(2));
+    const totalBs = Number((cantReal * costoBs).toFixed(2));
+
+    let subtipoMov = 'AJUSTE_POSITIVO_SOBRANTE';
+    if (motivo_ajuste === 'OMISION_COMPRA') subtipoMov = 'AJUSTE_POSITIVO_OMISION';
+    else if (motivo_ajuste === 'INVENTARIO_INICIAL') subtipoMov = 'AJUSTE_POSITIVO_STOCK';
+    else if (motivo_ajuste === 'RECLASIFICACION_CODIGO') subtipoMov = 'AJUSTE_POSITIVO_RECLASIF';
+
+    const obs = `[Alta en Toma Física] [Acta: ${acta_vinculada || 'ACTA-INV-202610-01'}] - [${cleanCodigo}] ${cleanDesc}. Conteo inicial en tienda: ${cantReal} ${cleanUnidad} (Art. 177 RISLR)${justificacionDetalle ? ' - ' + justificacionDetalle : ''}`;
+
+    const movRes = await db.execute({
+      sql: `
+        INSERT INTO movimientos 
+        (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, 
+         observaciones, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, estatus_conciliacion)
+        VALUES ('AJUSTE', ?, ?, ?, 'CTRL-AUD-OCT26', ?, ?, ?, ?, 'USD', 'CPP', 'CONCILIADO')
+        RETURNING id
+      `,
+      args: [
+        subtipoMov,
+        fecha,
+        docNum,
+        usuario,
+        obs,
+        tasaNum,
+        fecha
+      ]
+    });
+
+    const movId = Number(movRes.rows[0]?.id || movRes.lastInsertRowid);
+
+    await db.execute({
+      sql: `
+        INSERT INTO movimiento_detalles 
+        (movimiento_id, producto_id, cantidad, costo_unitario_usd, costo_unitario_ves,
+         costo_unitario_divisa, costo_unitario_bs, tasa_bcv_operacion,
+         base_imponible_bs, base_imponible_divisa, total_linea_bs, total_linea_divisa)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        movId,
+        nuevoProdId,
+        cantReal,
+        nuevoCostoUsd,
+        costoBs,
+        nuevoCostoUsd,
+        costoBs,
+        tasaNum,
+        totalBs,
+        totalDivisa,
+        totalBs,
+        totalDivisa
+      ]
+    });
+
+    movGenerado = {
+      id: movId,
+      tipo: 'AJUSTE',
+      subtipo: subtipoMov,
+      numero_documento: docNum,
+      cantidad: cantReal,
+      costo_unitario_usd: nuevoCostoUsd,
+      impacto_bs: totalBs,
+      impacto_usd: totalDivisa
+    };
+  }
+
+  // Recalcular métricas globales de auditoría
+  const statsRes = await db.execute(`
+    SELECT 
+      COUNT(*) AS total,
+      SUM(CASE WHEN auditado = 1 THEN 1 ELSE 0 END) AS auditados,
+      SUM(CASE WHEN inactivo = 1 OR activo = 0 THEN 1 ELSE 0 END) AS inactivos
+    FROM productos
+  `);
+
+  const total = Number(statsRes.rows[0]?.total || 0);
+  const auditados = Number(statsRes.rows[0]?.auditados || 0);
+  const pendientes = Math.max(0, total - auditados);
+  const porcentaje = total > 0 ? Number(((auditados / total) * 100).toFixed(1)) : 0;
+
+  const costoIVA = Number((nuevoCostoUsd * 0.16).toFixed(2));
+  const costoTotal = Number((nuevoCostoUsd + costoIVA).toFixed(2));
+  const precioIVA = Number((nuevoPrecioUsd * 0.16).toFixed(2));
+  const precioTotal = Number((nuevoPrecioUsd + precioIVA).toFixed(2));
+
+  return {
+    success: true,
+    mensaje: `✅ Repuesto [${cleanCodigo}] creado y registrado en la Toma Física.`,
+    producto_creado: {
+      producto_id: nuevoProdId,
+      codigo: cleanCodigo,
+      descripcion: cleanDesc,
+      unidad_medida: cleanUnidad,
+      almacen: almNombre,
+      categoria: catNombre,
+      stock_actual: cantReal,
+      stock_fisico: cantReal,
+      diferencia: 0,
+      costo_s_iva_usd: nuevoCostoUsd,
+      costo_iva_usd: costoIVA,
+      costo_total_usd: costoTotal,
+      precio_venta_s_iva_usd: nuevoPrecioUsd,
+      precio_venta_iva_usd: precioIVA,
+      precio_venta_total_usd: precioTotal,
+      auditado: 1,
+      fecha_auditoria: fecha,
+      usuario_auditoria: usuario,
+      inactivo: 0,
+      activo: 1
+    },
+    movimiento_ajuste: movGenerado,
     estadisticas: {
       total_productos: total,
       auditados,
