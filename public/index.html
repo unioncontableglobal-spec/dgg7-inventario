@@ -180,11 +180,12 @@
               </div>
             </div>
 
-            <div class="login-options-row">
-              <label class="checkbox-remember">
-                <input type="checkbox" id="login-remember">
-                <span>Mantener sesión activa (Solo en este equipo)</span>
-              </label>
+            <div class="login-security-notice">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0B2447" stroke-width="2.2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Acceso seguro protegido. Por seguridad contable y fiscal, la sesión finaliza automáticamente al cerrar la ventana o tras 15 minutos de inactividad.</span>
             </div>
 
             <button type="submit" class="btn-login-submit" id="btn-login-submit">
@@ -468,6 +469,14 @@
         </div>
 
         <div class="topbar-right">
+          <div class="topbar-user-badge" id="topbar-user-badge" title="Sesión de trabajo activa">
+            <span class="topbar-user-avatar" id="topbar-user-avatar">AD</span>
+            <div class="topbar-user-info">
+              <span class="topbar-user-name" id="topbar-user-name">Administrador DG 67</span>
+              <span class="topbar-user-role" id="topbar-user-role">ADMIN</span>
+            </div>
+          </div>
+
           <span class="topbar-period-pill">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>

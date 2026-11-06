@@ -77,6 +77,16 @@ function registrarActividadUsuario() {
     throttleActividadTimeout = setTimeout(() => {
       throttleActividadTimeout = null;
     }, 2000);
+
+    // Mantener sincronizado el sello de actividad en sessionStorage
+    try {
+      const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        s.lastActivity = Date.now();
+        sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(s));
+      }
+    } catch (e) { }
   }
 }
 
@@ -119,6 +129,14 @@ function continuarSesionInactividad() {
   inactividadModalAbierto = false;
   const modalAdv = document.getElementById('modal-advertencia-inactividad');
   if (modalAdv) modalAdv.style.display = 'none';
+  try {
+    const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      s.lastActivity = Date.now();
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(s));
+    }
+  } catch (e) { }
   showToast('✅ Sesión activa renovada. Puede continuar trabajando.', 'success');
 }
 
@@ -127,11 +145,21 @@ function cerrarSesionPorInactividad(manual = false) {
   const modalAdv = document.getElementById('modal-advertencia-inactividad');
   if (modalAdv) modalAdv.style.display = 'none';
 
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  sessionStorage.removeItem(AUTH_STORAGE_KEY);
-  state.currentUser = null;
+  try {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.clear();
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('dg67_auth_session');
+    localStorage.removeItem('dg67_auth_token');
+  } catch (e) { }
 
+  appInitialized = false;
+  state.currentUser = null;
+  state.activeTab = 'tab-dashboard';
+
+  const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
+  if (userEl) userEl.value = '';
   if (pwdEl) pwdEl.value = '';
 
   showLogin();
@@ -159,17 +187,46 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function checkAuthSession() {
-  const sessionData = localStorage.getItem(AUTH_STORAGE_KEY) || sessionStorage.getItem(AUTH_STORAGE_KEY);
+  // 1. Limpieza preventiva y forzosa de cualquier clave persistente residual en localStorage
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('dg67_auth_session');
+    localStorage.removeItem('dg67_auth_token');
+  } catch (e) { }
+
+  // 2. Política de Seguridad Fiscal: Solo se admite sesión activa en sessionStorage (se destruye al cerrar la ventana)
+  const sessionData = sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (sessionData) {
     try {
       const session = JSON.parse(sessionData);
+      const now = Date.now();
+      const lastActive = Number(session.lastActivity || now);
+
+      // Caducidad de sesión por inactividad estricta (15 minutos)
+      if (now - lastActive > TIEMPO_INACTIVIDAD_TOTAL_MS) {
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        state.currentUser = null;
+        showLogin();
+        const alertEl = document.getElementById('login-error-alert');
+        const alertText = document.getElementById('login-error-text');
+        if (alertEl && alertText) {
+          alertEl.style.display = 'flex';
+          alertEl.style.background = '#fef2f2';
+          alertEl.style.border = '1.5px solid #f87171';
+          alertEl.style.color = '#991b1b';
+          alertText.innerHTML = '🔒 <strong>Sesión finalizada por inactividad:</strong> Ingrese sus credenciales para continuar.';
+        }
+        return;
+      }
+
       if (session && session.usuario && session.token) {
+        session.lastActivity = now;
+        sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
         showApp(session.usuario);
         initApp();
         return;
       }
     } catch (e) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
       sessionStorage.removeItem(AUTH_STORAGE_KEY);
     }
   }
@@ -188,10 +245,63 @@ function showLogin() {
   });
 
   const userInput = document.getElementById('login-username');
+  const pwdInput = document.getElementById('login-password');
   if (userInput) {
+    userInput.value = '';
     userInput.focus();
-    userInput.select();
   }
+  if (pwdInput) {
+    pwdInput.value = '';
+  }
+}
+
+function actualizarIdentidadUsuarioVisual(user) {
+  if (!user) return;
+
+  const initials = (user.nombre || user.usuario || 'DG')
+    .split(' ')
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'DG';
+
+  const roleText = (user.rol === 'TOMA_FISICA' ? 'TOMA FÍSICA' : (user.rol || 'USUARIO')).toUpperCase();
+  const userName = user.nombre || user.usuario || 'Usuario';
+
+  // 1. Sidebar Ficha
+  const nameEl = document.getElementById('user-name-display');
+  const roleEl = document.getElementById('user-role-display');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl) nameEl.textContent = userName;
+  if (roleEl) roleEl.textContent = roleText;
+  if (avatarEl) avatarEl.textContent = initials;
+
+  // 2. Topbar Ficha Superior (Siempre visible en todas las pantallas)
+  const topName = document.getElementById('topbar-user-name');
+  const topRole = document.getElementById('topbar-user-role');
+  const topAvatar = document.getElementById('topbar-user-avatar');
+  if (topName) topName.textContent = userName;
+  if (topRole) {
+    topRole.textContent = roleText;
+    if (user.rol === 'TOMA_FISICA') {
+      topRole.style.background = '#d1fae5';
+      topRole.style.color = '#065f46';
+      topRole.style.border = '1px solid #a7f3d0';
+    } else if (user.rol === 'ADMIN') {
+      topRole.style.background = '#dbeafe';
+      topRole.style.color = '#1e40af';
+      topRole.style.border = '1px solid #bfdbfe';
+    } else if (user.rol === 'AUDITOR_MASTER') {
+      topRole.style.background = '#fef3c7';
+      topRole.style.color = '#92400e';
+      topRole.style.border = '1px solid #fde68a';
+    } else {
+      topRole.style.background = '#e2e8f0';
+      topRole.style.color = '#334155';
+      topRole.style.border = '1px solid #cbd5e1';
+    }
+  }
+  if (topAvatar) topAvatar.textContent = initials;
 }
 
 function showApp(user) {
@@ -204,23 +314,8 @@ function showApp(user) {
   ultimaActividadTimestamp = Date.now();
   iniciarMonitoreoInactividad();
 
-  // Actualizar Ficha de Usuario en la Barra Lateral
   if (user) {
-    const nameEl = document.getElementById('user-name-display');
-    const roleEl = document.getElementById('user-role-display');
-    const avatarEl = document.getElementById('user-avatar');
-
-    if (nameEl) nameEl.textContent = user.nombre || user.usuario;
-    if (roleEl) roleEl.textContent = (user.rol === 'TOMA_FISICA' ? 'TOMA FÍSICA' : (user.rol || 'USUARIO')).toUpperCase();
-    if (avatarEl) {
-      const initials = (user.nombre || user.usuario || 'DG')
-        .split(' ')
-        .map(w => w[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-      avatarEl.textContent = initials || 'DG';
-    }
+    actualizarIdentidadUsuarioVisual(user);
 
     // Restricción Estricta de Rol: TOMA_FISICA (Solo acceso a Toma Física y Ajuste)
     const isAuditorTomaFisica = (user.rol === 'TOMA_FISICA');
@@ -245,12 +340,16 @@ function showApp(user) {
       bannerAuditor.style.display = isAuditorTomaFisica ? 'flex' : 'none';
     }
 
+    // ENRUTAMIENTO ESTRICTO SEGÚN ROL AUTENTICADO:
+    // - Auditor de Toma Física: va directo a su módulo de conteo en tienda
+    // - Admin / Asesor / Operador: va SIEMPRE al Dashboard Ejecutivo Principal
     if (isAuditorTomaFisica) {
-      setTimeout(() => switchTab('tab-punto-cero'), 100);
+      setTimeout(() => switchTab('tab-punto-cero'), 50);
+    } else {
+      setTimeout(() => switchTab('tab-dashboard'), 50);
     }
 
     // Modal flotante para verificar o confirmar la Tasa Oficial BCV del día
-    // Debe presentarse al entrar en cualquier usuario sin colisionar con la toma física
     setTimeout(() => {
       abrirModalTasaBcvDia();
     }, 250);
@@ -302,13 +401,18 @@ async function handleLoginSubmit(event) {
       throw new Error(data.error || 'Credenciales inválidas.');
     }
 
-    // Guardar sesión si el checkbox está activo
-    const remember = document.getElementById('login-remember')?.checked === true;
-    if (remember) {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
-    } else {
-      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
-    }
+    // SEGURIDAD CORPORATIVA: Almacenar la sesión EXCLUSIVAMENTE en sessionStorage
+    // Al cerrar la ventana o navegador, la sesión es destruida por el motor del navegador
+    data.loginTimestamp = Date.now();
+    data.lastActivity = Date.now();
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+
+    // Purgar cualquier dato residual previo de localStorage
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('dg67_auth_session');
+      localStorage.removeItem('dg67_auth_token');
+    } catch (e) { }
 
     showToast(`Bienvenido, ${data.usuario.nombre || data.usuario.usuario}`, 'success');
     showApp(data.usuario);
@@ -318,6 +422,9 @@ async function handleLoginSubmit(event) {
     if (alertEl && alertText) {
       alertText.textContent = error.message;
       alertEl.style.display = 'flex';
+      alertEl.style.background = '#fef2f2';
+      alertEl.style.border = '1px solid #fecaca';
+      alertEl.style.color = '#991b1b';
     }
     if (pwdEl) {
       pwdEl.value = '';
@@ -330,31 +437,39 @@ async function handleLoginSubmit(event) {
 }
 
 function logoutSession() {
-  // 1. Limpieza total e irrevocable de credenciales y tokens en storage
+  // 1. Limpieza total e irrevocable de credenciales en sessionStorage y localStorage
   try {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
     sessionStorage.removeItem(AUTH_STORAGE_KEY);
     sessionStorage.clear();
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('dg67_auth_session');
+    localStorage.removeItem('dg67_auth_token');
   } catch (e) {
     console.warn('Error clearing storage:', e);
   }
 
-  // 2. Resetear estados de memoria de la sesión
+  // 2. Notificar al backend el cierre de sesión formal
+  try {
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  } catch (e) { }
+
+  // 3. Resetear estados de memoria de la sesión
   appInitialized = false;
   state.currentUser = null;
+  state.activeTab = 'tab-dashboard';
   inactividadModalAbierto = false;
   if (inactividadIntervalId) {
     clearInterval(inactividadIntervalId);
     inactividadIntervalId = null;
   }
 
-  // 3. Limpiar inputs del formulario de acceso para evitar autofill residual
+  // 4. Limpiar inputs del formulario de acceso para evitar autofill residual
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
   if (userEl) userEl.value = '';
   if (pwdEl) pwdEl.value = '';
 
-  // 4. Cerrar de forma forzada todos los modales, banners y paneles laterales
+  // 5. Cerrar de forma forzada todos los modales, banners y paneles laterales
   document.querySelectorAll('.modal-overlay').forEach(m => {
     m.style.display = 'none';
   });
@@ -363,10 +478,10 @@ function logoutSession() {
   if (drawer) drawer.classList.remove('open');
   if (drawerBackdrop) drawerBackdrop.classList.remove('active');
 
-  // 5. Presentar pantalla de login
+  // 6. Presentar pantalla de login
   showLogin();
 
-  // 6. Alerta visual de confirmación de salida segura
+  // 7. Alerta visual de confirmación de salida segura
   const alertEl = document.getElementById('login-error-alert');
   const alertText = document.getElementById('login-error-text');
   if (alertEl && alertText) {
@@ -398,6 +513,9 @@ function togglePasswordVisibility() {
 }
 
 function fillQuickLogin(user, pwd) {
+  // Resetear estados previos antes de inicio rápido
+  appInitialized = false;
+  state.currentUser = null;
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
   const alertEl = document.getElementById('login-error-alert');
@@ -434,8 +552,11 @@ async function initApp() {
     loadDashboard()
   ]);
 
+  // Enrutamiento determinista por Rol
   if (state.currentUser?.rol === 'TOMA_FISICA') {
     switchTab('tab-punto-cero');
+  } else {
+    switchTab('tab-dashboard');
   }
 
   // Verificar y mostrar modal flotante de Tasa BCV del día al cargar el sistema

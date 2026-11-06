@@ -234,6 +234,10 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ ok: true, mensaje: 'Sesión finalizada y destruida con éxito.' });
+});
+
 // Endpoint para Respaldo Manual de Emergencia de la Base de Datos
 app.post('/api/backup', async (req, res) => {
   try {

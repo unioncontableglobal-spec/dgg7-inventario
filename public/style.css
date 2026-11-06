@@ -477,6 +477,57 @@ body {
   gap: 8px;
 }
 
+/* Badge de Usuario Activo en la Barra Superior */
+.topbar-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 3px 10px 3px 6px;
+  border-radius: 20px;
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.topbar-user-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0B2447;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.topbar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.topbar-user-name {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.topbar-user-role {
+  font-size: 0.60rem;
+  font-weight: 800;
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .topbar-period-pill {
   display: flex;
   align-items: center;
@@ -2328,27 +2379,23 @@ select:focus, input:focus {
   color: #0B2447;
 }
 
-.login-options-row {
+.login-security-notice {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  color: #166534;
+  line-height: 1.35;
   margin-bottom: 20px;
-  font-size: 0.8rem;
 }
 
-.checkbox-remember {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #475569;
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkbox-remember input {
-  accent-color: #0B2447;
-  width: 16px;
-  height: 16px;
+.login-security-notice svg {
+  flex-shrink: 0;
+  stroke: #16a34a;
 }
 
 .btn-login-submit {

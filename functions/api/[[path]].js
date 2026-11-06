@@ -174,6 +174,13 @@ export async function onRequest(context) {
       });
     }
 
+    if (path === '/api/auth/logout' && method === 'POST') {
+      return jsonResponse({
+        ok: true,
+        mensaje: 'Sesión finalizada y destruida con éxito.'
+      });
+    }
+
     // ----------------------------------------------------
     // DASHBOARD & KPIs
     // ----------------------------------------------------
