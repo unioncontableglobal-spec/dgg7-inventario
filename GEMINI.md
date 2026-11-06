@@ -32,4 +32,15 @@
   - Los títulos, subtítulos, etiquetas y mensajes del sistema deben ser concisos, directos y auto-descriptivos.
   - Eliminar textos explicativos redundantes, informales o de tono tutorial en la interfaz de usuario.
 
+## 4. Política de Persistencia Integral, Versionado Git y Despliegue Obligatorio
+* **Persistencia Integral de Cambios:** Al culminar cualquier desarrollo, corrección de errores, auditoría o ajuste funcional en el sistema, es de carácter obligatorio guardar, respaldar y versionar todos los cambios realizados en el repositorio Git (`git add`, `git commit` y `git push origin main`).
+* **Despliegue Continuo a Producción:** Inmediatamente tras confirmar los cambios en Git, ejecutar el despliegue automático del proyecto hacia Cloudflare Pages (`npx wrangler pages deploy public --project-name=dgg7-inventario`) para garantizar que la plataforma en línea (`https://dg67.unioncontableglobal.com`) refleje siempre la última versión estable sin retrasos ni discrepancias locales vs producción.
+* **Árbol de Trabajo Limpio (`working tree clean`):** No dejar archivos de código, hojas de cálculo de respaldo o comprobantes modificados sin confirmar en el control de versiones al finalizar las tareas.
+
+## 5. Regla de Unicidad y Continuidad del Acta de Toma Física en Ejecución
+* **No Re-solicitud de Acta en Progreso:** Mientras exista un acta de Toma Física de Inventario en ejecución (estatus `ABIERTA`), el sistema **NUNCA** debe solicitar al auditor generar una nueva acta ni desplegar ventanas modales emergentes automáticas de apertura.
+* **Continuidad del Expediente:** El sistema debe reconocer directamente el expediente activo en ejecución (`ACTA-INV-YYYYMM-01`) y mantener el Paso 1 marcado como listo (`✓ LISTO: APERTURADA`), permitiendo el trabajo directo en tienda.
+* **Bloqueo hasta Cierre Formal:** Únicamente tras el sellado y cierre formal de la toma física (estatus `CERRADA`), o previa reapertura explícita autorizada, se podrá iniciar un nuevo ciclo de levantamiento físico.
+
+
 
