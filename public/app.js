@@ -2514,6 +2514,12 @@ async function viewMovementDetail(id) {
   }
 }
 
+function openModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) modal.style.display = 'flex';
+}
+window.openModal = openModal;
+
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.style.display = 'none';
@@ -9701,9 +9707,10 @@ window.renderHistoricoTasasModal = renderHistoricoTasasModal;
 // ----------------------------------------------------------------------------
 
 function abrirModalCrearProductoTomaFisica() {
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
-  if (!isAuditor) {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está facultado para incorporar nuevos repuestos en la Toma Física.', 'warning');
+  const rol = String(state.currentUser?.rol || '').toUpperCase();
+  const isAuthorized = (rol === 'TOMA_FISICA' || rol === 'ADMIN' || rol === 'ADMINISTRADOR' || rol === 'AUDITOR');
+  if (!isAuthorized) {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda o Administrador está facultado para incorporar nuevos repuestos en la Toma Física.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -9737,7 +9744,10 @@ function abrirModalCrearProductoTomaFisica() {
   calcularCostosNuevoProd('BS');
   calcularPreciosNuevoProd('BS');
 
-  openModal('modal-crear-producto-toma-fisica');
+  const modal = document.getElementById('modal-crear-producto-toma-fisica');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
 
   setTimeout(() => {
     document.getElementById('nuevo-prod-codigo')?.focus();
@@ -9817,9 +9827,10 @@ function calcularMargenNuevoProd() {
 async function guardarNuevoProductoTomaFisica(event) {
   if (event) event.preventDefault();
 
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
-  if (!isAuditor) {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede crear repuestos.', 'warning');
+  const rol = String(state.currentUser?.rol || '').toUpperCase();
+  const isAuthorized = (rol === 'TOMA_FISICA' || rol === 'ADMIN' || rol === 'ADMINISTRADOR' || rol === 'AUDITOR');
+  if (!isAuthorized) {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda o Administrador puede crear repuestos.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
