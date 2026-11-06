@@ -814,6 +814,30 @@ function switchTab(tabId) {
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
 
+// Cliente HTTP Resiliente con Reintentos Automáticos (Protección contra microcortes y switches de Cloudflare)
+async function fetchConReintento(url, options = {}, maxReintentos = 3, esperaMs = 700) {
+  let ultimoError = null;
+  for (let intento = 1; intento <= maxReintentos; intento++) {
+    try {
+      const res = await fetch(url, options);
+      if ([502, 503, 520, 524].includes(res.status) && intento < maxReintentos) {
+        await new Promise(r => setTimeout(r, esperaMs * intento));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      ultimoError = err;
+      if (intento < maxReintentos) {
+        await new Promise(r => setTimeout(r, esperaMs * intento));
+      }
+    }
+  }
+  const msg = (ultimoError && (ultimoError.message === 'Failed to fetch' || ultimoError.name === 'TypeError'))
+    ? 'Problema temporal de conexión o micro-corte de red. Por favor verifica tu señal y pulsa nuevamente.'
+    : (ultimoError?.message || 'Error de conexión con el servidor');
+  throw new Error(msg);
+}
+
 // 2. Health & Cloud Status
 async function checkHealth() {
   try {
@@ -5556,7 +5580,7 @@ async function guardarNuevaVenta(e) {
     const url = editId ? `/api/fiscal/libro-ventas/${editId}` : '/api/fiscal/libro-ventas';
     const method = editId ? 'PUT' : 'POST';
 
-    const res = await fetch(url, {
+    const res = await fetchConReintento(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -5578,12 +5602,16 @@ async function guardarNuevaVenta(e) {
       showToast(editId ? 'Reporte Z actualizado con éxito' : 'Registro de venta agregado al Libro de Ventas', 'success');
     }
 
-    // Recarga optimizada por pestaña activa para respuesta instantánea sin congelar la pantalla
-    await loadLibroVentas();
-    if (state.activeTab === 'tab-fiscal') {
-      await loadCruceDobleVia();
-    } else if (state.activeTab === 'tab-salida') {
-      await cargarPanelCruceSalidas();
+    // Recarga en segundo plano sin interrumpir la confirmación exitosa de guardado
+    try {
+      await loadLibroVentas();
+      if (state.activeTab === 'tab-fiscal') {
+        await loadCruceDobleVia();
+      } else if (state.activeTab === 'tab-salida') {
+        await cargarPanelCruceSalidas();
+      }
+    } catch (refreshErr) {
+      console.warn('Advertencia no crítica al refrescar tablas tras guardar venta:', refreshErr.message);
     }
   } catch (err) {
     showToast(err.message, 'error');
@@ -9336,7 +9364,7 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   const precioSIVAUsd = !isNaN(precioSIVABs) ? Number((precioSIVABs / tasa).toFixed(2)) : p.precio_venta_s_iva_usd;
 
   try {
-    const res = await fetch(`/api/auditoria/actualizar-producto/${p.producto_id}`, {
+    const res = await fetchConReintento(`/api/auditoria/actualizar-producto/${p.producto_id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
