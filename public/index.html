@@ -1852,7 +1852,10 @@
                 Conciliación de existencias físicas en tiempo real, ajustes de Kardex (Octubre 2026) y actualización de costos y precios de venta.
               </p>
             </div>
-            <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button type="button" class="btn btn-sm" id="btn-crear-repuesto-top" onclick="abrirModalCrearProductoTomaFisica()" style="display:flex; align-items:center; gap:6px; font-weight:800; height:36px; padding:0 14px; background:#0284c7; border:1px solid #0284c7; border-radius:8px; color:#ffffff; box-shadow:0 1px 3px rgba(2,132,199,0.25); cursor:pointer;" title="Registrar un nuevo código o repuesto en la Toma Física">
+                <span>➕ Nuevo Repuesto</span>
+              </button>
               <button type="button" class="btn btn-secondary" onclick="descargarMatrizAuditoria()" style="display:flex; align-items:center; gap:8px; font-weight:700; height:36px; padding:0 14px; background:#fff; border:1.5px solid #cbd5e1; border-radius:8px; color:#0B2447; box-shadow:0 1px 3px rgba(0,0,0,0.05);" title="Exportar Matriz de Auditoría a Excel">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -2058,6 +2061,9 @@
               <select id="pzero-filter-alm" class="form-control" style="font-size:0.78rem; max-width:160px;" onchange="filtrarAuditoriaEnVivo()">
                 <option value="TODOS">Todos los Almacenes</option>
               </select>
+              <button type="button" class="btn btn-sm" id="btn-crear-producto-toma-fisica" onclick="abrirModalCrearProductoTomaFisica()" style="background:#0284c7; color:#ffffff; font-weight:800; font-size:0.78rem; padding:5px 14px; border-radius:6px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; border:none; box-shadow:0 1px 3px rgba(0,0,0,0.15); cursor:pointer;" title="Registrar un nuevo repuesto directamente en la Toma Física">
+                <span>➕ Nuevo Repuesto</span>
+              </button>
             </div>
           </div>
 
@@ -2145,7 +2151,7 @@
               </div>
 
               <!-- Badge de Estatus de Auditoría -->
-              <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
                 <div>
                   <span style="font-size:0.75rem; color:#64748b; font-weight:600;">Estado de Revisión:</span>
                   <div id="drawer-badge-status" style="font-size:0.85rem; font-weight:800; color:#d97706;">⏳ Pendiente de Auditoría</div>
@@ -2153,6 +2159,55 @@
                 <div style="text-align:right;">
                   <span style="font-size:0.72rem; color:#64748b;">Fecha Asiento:</span>
                   <input type="date" id="drawer-fecha-asiento" class="form-control" style="font-size:0.78rem; padding:4px 8px; width:135px; text-align:right;" value="2026-10-31">
+                </div>
+              </div>
+
+              <!-- DATOS MAESTROS Y EDICIÓN DE IDENTIFICACIÓN DEL REPUESTO -->
+              <div class="pzero-zone-card" style="background:#ffffff; border:1.5px solid #cbd5e1; border-left:4px solid #0284c7; border-radius:8px; padding:12px 14px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="font-size:0.76rem; color:#0369a1; text-transform:uppercase; letter-spacing:0.03em; display:flex; align-items:center; gap:6px;">
+                    <span>🏷️ Ficha de Identificación y Datos Maestros</span>
+                  </strong>
+                  <span style="font-size:0.68rem; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-weight:700;">ERP / CATÁLOGO</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:130px 1fr; gap:10px; margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#334155; display:block; margin-bottom:3px;">Código (OEM / Ref) *:</label>
+                    <input type="text" id="drawer-edit-codigo" class="form-control font-mono font-bold" placeholder="Código" style="font-size:0.85rem; padding:6px 8px; text-transform:uppercase;">
+                  </div>
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#334155; display:block; margin-bottom:3px;">Nombre / Descripción del Repuesto *:</label>
+                    <input type="text" id="drawer-edit-descripcion" class="form-control font-bold" placeholder="Descripción del repuesto" style="font-size:0.85rem; padding:6px 8px;">
+                  </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#334155; display:block; margin-bottom:3px;">Unidad de Medida *:</label>
+                    <select id="drawer-edit-unidad-medida" class="form-control font-bold" style="font-size:0.80rem; padding:6px 8px;">
+                      <option value="UND">UND - Unidad</option>
+                      <option value="PZA">PZA - Pieza</option>
+                      <option value="JUEGO">JUEGO - Juego</option>
+                      <option value="KIT">KIT - Kit</option>
+                      <option value="PAR">PAR - Par</option>
+                      <option value="LTR">LTR - Litro</option>
+                      <option value="KG">KG - Kilogramo</option>
+                      <option value="MTR">MTR - Metro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#334155; display:block; margin-bottom:3px;">Categoría:</label>
+                    <input type="text" id="drawer-edit-categoria" class="form-control font-bold" list="dl-categorias-drawer" placeholder="Categoría" style="font-size:0.80rem; padding:6px 8px;">
+                    <datalist id="dl-categorias-drawer"></datalist>
+                  </div>
+                  <div>
+                    <label style="font-size:0.70rem; font-weight:700; color:#334155; display:block; margin-bottom:3px;">Almacén / Ubicación:</label>
+                    <select id="drawer-edit-almacen" class="form-control font-bold" style="font-size:0.80rem; padding:6px 8px;">
+                      <option value="AUTOPERIQUITOS">AUTOPERIQUITOS</option>
+                      <option value="MULTIMARCAS">MULTIMARCAS</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -4660,6 +4715,167 @@
           </div>
         </form>
       </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: CREAR NUEVO REPUESTO / ALTA EN TOMA FÍSICA                     -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-crear-producto-toma-fisica" style="display: none; z-index: 1080;">
+    <div class="modal-box" style="max-width: 740px; width: 95%; max-height: 94vh; overflow-y: auto; border-top: 5px solid #0284c7; box-shadow: 0 10px 45px rgba(2,132,199,0.35); padding: 0;">
+      
+      <!-- Header -->
+      <div class="modal-header" style="background: #0B2447; color: #FFFFFF; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; font-weight: 700;">
+            TOMA FÍSICA Y CONCILIACIÓN • ALTA DE ARTÍCULO
+          </div>
+          <h3 style="margin: 2px 0 0 0; font-size: 1.15rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px;">
+            <span>➕ Registrar Nuevo Repuesto en Inventario</span>
+          </h3>
+        </div>
+        <button type="button" class="modal-close" style="color: #FFFFFF; font-size: 1.6rem; background: none; border: none; cursor: pointer; line-height: 1;" onclick="closeModal('modal-crear-producto-toma-fisica')">&times;</button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body" style="padding: 20px 24px;">
+        <form id="form-crear-producto-toma-fisica" onsubmit="guardarNuevoProductoTomaFisica(event)">
+          
+          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.8rem; color: #0369a1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <strong>Alta en Almacén / Toma Física Activa:</strong> Incorpora al catálogo piezas físicas encontradas durante la toma física.
+            </div>
+            <div style="font-weight: 800; color: #0c4a6e; white-space: nowrap;">
+              🏛️ Tasa BCV Cierre: <strong style="color: #0284c7;">Bs. <span id="modal-nuevo-prod-tasa-bcv">889.58</span></strong> / USD
+            </div>
+          </div>
+
+          <!-- SECCIÓN 1: DATOS MAESTROS -->
+          <div style="font-size: 0.75rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>📋 1. Identificación y Datos Maestros del Repuesto</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Código (OEM / Ref) *:</label>
+              <input type="text" id="nuevo-prod-codigo" class="form-control font-mono font-bold" required placeholder="Ej: 04891721AC" style="font-size: 0.88rem; text-transform: uppercase;">
+              <div id="nuevo-prod-codigo-error" style="font-size: 0.7rem; color: #dc2626; display: none; margin-top: 2px;"></div>
+            </div>
+            <div>
+              <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Nombre / Descripción Completa *:</label>
+              <input type="text" id="nuevo-prod-descripcion" class="form-control font-bold" required placeholder="Ej: BOMBA DE AGUA COROLLA 1.8 2002-2008" style="font-size: 0.88rem;">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Unidad de Medida *:</label>
+              <select id="nuevo-prod-unidad" class="form-control font-bold" required style="font-size: 0.82rem;">
+                <option value="UND" selected>UND - Unidad</option>
+                <option value="PZA">PZA - Pieza</option>
+                <option value="JUEGO">JUEGO - Juego</option>
+                <option value="KIT">KIT - Kit</option>
+                <option value="PAR">PAR - Par</option>
+                <option value="LTR">LTR - Litro</option>
+                <option value="KG">KG - Kilogramo</option>
+                <option value="MTR">MTR - Metro</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Categoría:</label>
+              <input type="text" id="nuevo-prod-categoria" class="form-control font-bold" list="dl-categorias-modal" placeholder="Categoría" style="font-size: 0.82rem;">
+              <datalist id="dl-categorias-modal"></datalist>
+            </div>
+            <div>
+              <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Almacén / Ubicación *:</label>
+              <select id="nuevo-prod-almacen" class="form-control font-bold" required style="font-size: 0.82rem;">
+                <option value="AUTOPERIQUITOS" selected>AUTOPERIQUITOS</option>
+                <option value="MULTIMARCAS">MULTIMARCAS</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- SECCIÓN 2: CONTEO FÍSICO INICIAL Y CAUSA LEGAL -->
+          <div style="font-size: 0.75rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>📦 2. Conteo Físico Real en Tienda y Justificación Legal</span>
+          </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+            <div style="display: grid; grid-template-columns: 160px 1fr; gap: 12px; margin-bottom: 10px;">
+              <div>
+                <label style="font-size: 0.72rem; font-weight: 800; color: #15803d; display: block; margin-bottom: 4px;">Stock Físico Contado *:</label>
+                <input type="number" id="nuevo-prod-stock-fisico" class="form-control font-mono font-bold" step="any" min="0" value="1" required style="font-size: 1.05rem; padding: 6px 10px; border: 2px solid #10b981; color: #065f46;">
+              </div>
+              <div>
+                <label style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Causa Legal de Incorporación (Art. 177 RISLR) *:</label>
+                <select id="nuevo-prod-motivo" class="form-control font-bold" style="font-size: 0.82rem; padding: 7px 10px;">
+                  <option value="SOBRANTE_AUDITORIA" selected>🔍 Sobrante Físico en Toma Física (Almacén)</option>
+                  <option value="OMISION_COMPRA">📥 Omisión Histórica de Factura de Compra</option>
+                  <option value="INVENTARIO_INICIAL">📦 Existencia Físicamente Verificada en Tienda</option>
+                  <option value="RECLASIFICACION_CODIGO">🏷️ Reclasificación de Código / Desglose de Kit</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 0.70rem; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Detalle / Observación de Auditoría:</label>
+              <input type="text" id="nuevo-prod-observacion" class="form-control" placeholder="Ej: Pieza encontrada en estante B-4 sin etiqueta previa" style="font-size: 0.78rem; padding: 5px 8px;">
+            </div>
+          </div>
+
+          <!-- SECCIÓN 3: ESTRUCTURA DE COSTOS Y PRECIOS (BIMONETARIA) -->
+          <div style="font-size: 0.75rem; font-weight: 800; color: #0B2447; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>💲 3. Estructura Monetaria: Costos (Compras) y Precios (Ventas)</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+            <!-- Costos -->
+            <div style="background: #fdfefe; border: 1.5px solid #cbd5e1; border-top: 3px solid #f59e0b; border-radius: 8px; padding: 12px;">
+              <strong style="font-size: 0.76rem; color: #b45309; display: block; margin-bottom: 8px;">COSTO UNITARIO S/IVA (COMPRAS)</strong>
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 3px;">Costo S/IVA (Bs.) *:</label>
+                <input type="number" id="nuevo-prod-costo-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" required style="font-size: 0.95rem; padding: 6px 8px;" oninput="calcularCostosNuevoProd('BS')">
+                <div class="pzero-sub-ref" id="nuevo-prod-costo-usd-ref" style="font-size: 0.75rem; margin-top: 3px;">Ref: $0.00 USD</div>
+              </div>
+              <div style="margin-top: 8px; font-size: 0.72rem; color: #64748b; display: flex; justify-content: space-between;">
+                <span>Total C/IVA 16%:</span>
+                <strong id="nuevo-prod-costo-total-bs-display" style="color: #b45309;">Bs. 0,00</strong>
+              </div>
+            </div>
+
+            <!-- Precios -->
+            <div style="background: #fdfefe; border: 1.5px solid #cbd5e1; border-top: 3px solid #0284c7; border-radius: 8px; padding: 12px;">
+              <strong style="font-size: 0.76rem; color: #0284c7; display: block; margin-bottom: 8px;">PRECIO UNITARIO S/IVA (VENTAS)</strong>
+              <div>
+                <label style="font-size: 0.70rem; font-weight: 700; color: #0B2447; display: block; margin-bottom: 3px;">Precio Venta S/IVA (Bs.) *:</label>
+                <input type="number" id="nuevo-prod-precio-bs" class="form-control font-mono font-bold" step="0.01" min="0" placeholder="0.00" required style="font-size: 0.95rem; padding: 6px 8px;" oninput="calcularPreciosNuevoProd('BS')">
+                <div class="pzero-sub-ref" id="nuevo-prod-precio-usd-ref" style="font-size: 0.75rem; margin-top: 3px;">Ref: $0.00 USD</div>
+              </div>
+              <div style="margin-top: 8px; font-size: 0.72rem; color: #64748b; display: flex; justify-content: space-between;">
+                <span>Total C/IVA 16%:</span>
+                <strong id="nuevo-prod-precio-total-bs-display" style="color: #0284c7;">Bs. 0,00</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Margen Comercial -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.74rem; color: #15803d; font-weight: 600;">Margen de Utilidad Proyectado:</span>
+            <strong id="nuevo-prod-margen-display" style="font-size: 0.82rem; color: #15803d; font-family: monospace;">
+              Margen: 0.0% (Utilidad: Bs. 0,00 • $0.00 USD)
+            </strong>
+          </div>
+
+          <!-- Footer / Acciones -->
+          <div class="modal-footer" style="padding-top: 14px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-crear-producto-toma-fisica')" style="font-weight: 700;">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-navy" id="btn-guardar-nuevo-producto" style="font-weight: 800; background: #0B2447; border-color: #0B2447; color: #ffffff;">
+              💾 Guardar y Registrar en Toma Física
+            </button>
+          </div>
+
+        </form>
+      </div>
+
     </div>
   </div>
 

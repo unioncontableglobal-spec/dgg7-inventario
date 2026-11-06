@@ -8116,6 +8116,8 @@ async function cargarAuditoriaEnVivo() {
 function poblarFiltrosAuditoria() {
   const catSelect = document.getElementById('pzero-filter-cat');
   const almSelect = document.getElementById('pzero-filter-alm');
+  const dlDrawer = document.getElementById('dl-categorias-drawer');
+  const dlModal = document.getElementById('dl-categorias-modal');
 
   const categorias = new Set();
   const almacenes = new Set();
@@ -8134,6 +8136,10 @@ function poblarFiltrosAuditoria() {
     almSelect.innerHTML = `<option value="TODOS">Todos los Almacenes</option>` +
       Array.from(almacenes).sort().map(a => `<option value="${a}">${a}</option>`).join('');
   }
+
+  const optsHtml = Array.from(categorias).sort().map(c => `<option value="${c}">`).join('');
+  if (dlDrawer) dlDrawer.innerHTML = optsHtml;
+  if (dlModal) dlModal.innerHTML = optsHtml;
 }
 
 // Actualizar barra de progreso y chips de estadísticas
@@ -8871,6 +8877,19 @@ function abrirDrawerAuditoria(index) {
     }
   }
 
+  // Ficha de Identificación y Datos Maestros ERP
+  const elEditCod = document.getElementById('drawer-edit-codigo');
+  const elEditDesc = document.getElementById('drawer-edit-descripcion');
+  const elEditUnidad = document.getElementById('drawer-edit-unidad-medida');
+  const elEditCat = document.getElementById('drawer-edit-categoria');
+  const elEditAlm = document.getElementById('drawer-edit-almacen');
+
+  if (elEditCod) elEditCod.value = p.codigo || '';
+  if (elEditDesc) elEditDesc.value = p.descripcion || '';
+  if (elEditUnidad) elEditUnidad.value = p.unidad_medida || 'UND';
+  if (elEditCat) elEditCat.value = p.categoria || 'GENERAL';
+  if (elEditAlm) elEditAlm.value = p.almacen || 'AUTOPERIQUITOS';
+
   // 2. Bloque A: Ajuste de Existencias Físicas (Cantidades & Estatus)
   const elStockTeorico = document.getElementById('drawer-stock-teorico');
   const elCantFisica = document.getElementById('drawer-cant-fisica');
@@ -8931,7 +8950,7 @@ function abrirDrawerAuditoria(index) {
   if (elAlertaCerrada) elAlertaCerrada.style.display = isCerrada ? 'block' : 'none';
   if (elAlertaConsulta) elAlertaConsulta.style.display = (!isAuditor && !isCerrada) ? 'block' : 'none';
 
-  ['drawer-cant-fisica', 'drawer-costo-s-iva-bs', 'drawer-precio-s-iva-bs', 'drawer-motivo-select', 'drawer-acta-select', 'drawer-justificacion-detalle'].forEach(id => {
+  ['drawer-edit-codigo', 'drawer-edit-descripcion', 'drawer-edit-unidad-medida', 'drawer-edit-categoria', 'drawer-edit-almacen', 'drawer-cant-fisica', 'drawer-costo-s-iva-bs', 'drawer-precio-s-iva-bs', 'drawer-motivo-select', 'drawer-acta-select', 'drawer-justificacion-detalle'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       if (isReadOnly) el.setAttribute('disabled', 'disabled');
@@ -9224,6 +9243,18 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   if (pzeroProductoActualIndex < 0) return;
   const p = pzeroProductos[pzeroProductoActualIndex];
 
+  const nuevoCodigo = document.getElementById('drawer-edit-codigo')?.value?.trim();
+  const nuevaDesc = document.getElementById('drawer-edit-descripcion')?.value?.trim();
+  const nuevaUnidad = document.getElementById('drawer-edit-unidad-medida')?.value?.trim();
+  const nuevaCat = document.getElementById('drawer-edit-categoria')?.value?.trim();
+  const nuevoAlm = document.getElementById('drawer-edit-almacen')?.value?.trim();
+
+  if (!nuevaDesc) {
+    showToast('El Nombre / Descripción del repuesto no puede estar vacío.', 'warning');
+    document.getElementById('drawer-edit-descripcion')?.focus();
+    return;
+  }
+
   const cantFisica = parseFloat(document.getElementById('drawer-cant-fisica')?.value);
   const costoSIVABs = parseFloat(document.getElementById('drawer-costo-s-iva-bs')?.value);
   const precioSIVABs = parseFloat(document.getElementById('drawer-precio-s-iva-bs')?.value);
@@ -9254,6 +9285,11 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        codigo: nuevoCodigo || p.codigo,
+        descripcion: nuevaDesc || p.descripcion,
+        unidad_medida: nuevaUnidad || p.unidad_medida || 'UND',
+        categoria: nuevaCat || p.categoria,
+        almacen: nuevoAlm || p.almacen,
         cantidad_fisica_real: cantFisica,
         costo_s_iva_bs: isNaN(costoSIVABs) ? null : costoSIVABs,
         precio_venta_s_iva_bs: isNaN(precioSIVABs) ? null : precioSIVABs,
@@ -9264,7 +9300,7 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
         fecha,
         tasa_bcv: tasa,
         usuario: state.currentUser?.usuario || 'ADMIN_DG67',
-        observaciones: `Toma física código [${p.codigo}] - Octubre 2026 (${actaVinculada})`,
+        observaciones: `Toma física código [${nuevoCodigo || p.codigo}] - Octubre 2026 (${actaVinculada})`,
         motivo_ajuste: motivoAjuste,
         justificacion_detalle: justificacionDetalle,
         acta_vinculada: actaVinculada
@@ -9274,9 +9310,15 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al guardar la auditoría');
 
-    showToast(`✅ [${p.codigo}] auditado y actualizado con éxito.`, 'success');
+    const codActualizado = data.producto_actualizado?.codigo || nuevoCodigo || p.codigo;
+    showToast(`✅ [${codActualizado}] auditado y actualizado con éxito.`, 'success');
 
     // Actualizar producto en el estado local de Toma Física
+    p.codigo = codActualizado;
+    p.descripcion = data.producto_actualizado?.descripcion ?? (nuevaDesc || p.descripcion);
+    p.unidad_medida = data.producto_actualizado?.unidad_medida ?? (nuevaUnidad || p.unidad_medida);
+    p.categoria = data.producto_actualizado?.categoria ?? (nuevaCat || p.categoria);
+    p.almacen = data.producto_actualizado?.almacen ?? (nuevoAlm || p.almacen);
     p.stock_actual = data.producto_actualizado?.stock_actual ?? cantFisica;
     p.stock_fisico = cantFisica;
     p.diferencia = 0; // Ahora está cuadrado
@@ -9285,8 +9327,15 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
     p.auditado = 1;
     p.inactivo = inactivo;
 
+    // Actualizar header del drawer
+    const elCod = document.getElementById('drawer-codigo');
+    const elDesc = document.getElementById('drawer-descripcion');
+    if (elCod) elCod.textContent = p.codigo;
+    if (elDesc) elDesc.textContent = p.descripcion;
+
     // Actualizar métricas globales de auditoría
     actualizarMetricasAuditoria(data.estadisticas);
+    poblarFiltrosAuditoria();
 
     // Refrescar fila en la tabla de auditoría en vivo
     filtrarAuditoriaEnVivo();
@@ -9646,6 +9695,247 @@ window.continuarSesionInactividad = continuarSesionInactividad;
 window.cerrarSesionPorInactividad = cerrarSesionPorInactividad;
 window.cargarHistoricoTasasModal = cargarHistoricoTasasModal;
 window.renderHistoricoTasasModal = renderHistoricoTasasModal;
+
+// ----------------------------------------------------------------------------
+// MODAL: CREAR NUEVO PRODUCTO EN TOMA FÍSICA (ALTA DE ARTÍCULO)
+// ----------------------------------------------------------------------------
+
+function abrirModalCrearProductoTomaFisica() {
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  if (!isAuditor) {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está facultado para incorporar nuevos repuestos en la Toma Física.', 'warning');
+    return;
+  }
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    showToast('🔒 La Toma Física está formalmente CERRADA y sellada. Reabra el expediente para incorporar nuevos ítems.', 'warning');
+    return;
+  }
+
+  // Reset form
+  const form = document.getElementById('form-crear-producto-toma-fisica');
+  if (form) form.reset();
+
+  const tasaSpan = document.getElementById('modal-nuevo-prod-tasa-bcv');
+  if (tasaSpan) tasaSpan.textContent = pzeroTasaBcv.toFixed(2);
+
+  const elStock = document.getElementById('nuevo-prod-stock-fisico');
+  if (elStock) elStock.value = '1';
+
+  const elUnidad = document.getElementById('nuevo-prod-unidad');
+  if (elUnidad) elUnidad.value = 'UND';
+
+  const elAlm = document.getElementById('nuevo-prod-almacen');
+  if (elAlm) elAlm.value = 'AUTOPERIQUITOS';
+
+  const elCat = document.getElementById('nuevo-prod-categoria');
+  if (elCat) elCat.value = '';
+
+  const elError = document.getElementById('nuevo-prod-codigo-error');
+  if (elError) elError.style.display = 'none';
+
+  // Recalcular costos y precios a 0 inicialmente
+  calcularCostosNuevoProd('BS');
+  calcularPreciosNuevoProd('BS');
+
+  openModal('modal-crear-producto-toma-fisica');
+
+  setTimeout(() => {
+    document.getElementById('nuevo-prod-codigo')?.focus();
+  }, 150);
+}
+
+function calcularCostosNuevoProd(origen = 'BS') {
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+  const costoBsInput = document.getElementById('nuevo-prod-costo-bs');
+  const refUsd = document.getElementById('nuevo-prod-costo-usd-ref');
+  const totalDisplay = document.getElementById('nuevo-prod-costo-total-bs-display');
+
+  const costoBs = parseFloat(costoBsInput?.value || 0);
+  const costoUsd = Number((costoBs / tasa).toFixed(2));
+  const totalBs = Number((costoBs * 1.16).toFixed(2));
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (refUsd) refUsd.textContent = `Ref: $${fmtUsd(costoUsd)} USD`;
+  if (totalDisplay) totalDisplay.textContent = `Bs. ${fmtBs(totalBs)}`;
+
+  // Sugerir precio de venta con +30% si el precio actual está en 0
+  const precioInput = document.getElementById('nuevo-prod-precio-bs');
+  if (precioInput && (!precioInput.value || parseFloat(precioInput.value) === 0) && costoBs > 0) {
+    const precioSugerido = Number((costoBs * 1.30).toFixed(2));
+    precioInput.value = precioSugerido.toFixed(2);
+    calcularPreciosNuevoProd('BS');
+  }
+
+  calcularMargenNuevoProd();
+}
+
+function calcularPreciosNuevoProd(origen = 'BS') {
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+  const precioBsInput = document.getElementById('nuevo-prod-precio-bs');
+  const refUsd = document.getElementById('nuevo-prod-precio-usd-ref');
+  const totalDisplay = document.getElementById('nuevo-prod-precio-total-bs-display');
+
+  const precioBs = parseFloat(precioBsInput?.value || 0);
+  const precioUsd = Number((precioBs / tasa).toFixed(2));
+  const totalBs = Number((precioBs * 1.16).toFixed(2));
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (refUsd) refUsd.textContent = `Ref: $${fmtUsd(precioUsd)} USD`;
+  if (totalDisplay) totalDisplay.textContent = `Bs. ${fmtBs(totalBs)}`;
+
+  calcularMargenNuevoProd();
+}
+
+function calcularMargenNuevoProd() {
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+  const costoBs = parseFloat(document.getElementById('nuevo-prod-costo-bs')?.value || 0);
+  const precioBs = parseFloat(document.getElementById('nuevo-prod-precio-bs')?.value || 0);
+  const elMargen = document.getElementById('nuevo-prod-margen-display');
+  if (!elMargen) return;
+
+  const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (precioBs > 0) {
+    const utilidadBs = Number((precioBs - costoBs).toFixed(2));
+    const utilidadUsd = Number((utilidadBs / tasa).toFixed(2));
+    const margenPct = Number(((utilidadBs / precioBs) * 100).toFixed(1));
+
+    const color = margenPct >= 20 ? '#15803d' : (margenPct > 0 ? '#b45309' : '#b91c1c');
+    elMargen.style.color = color;
+    elMargen.textContent = `Margen: ${margenPct > 0 ? '+' : ''}${margenPct}% (Utilidad: Bs. ${fmtBs(utilidadBs)} • Ref: $${fmtUsd(utilidadUsd)} USD)`;
+  } else {
+    elMargen.textContent = `Margen: 0.0% (Sin precio de venta definido)`;
+    elMargen.style.color = '#64748b';
+  }
+}
+
+async function guardarNuevoProductoTomaFisica(event) {
+  if (event) event.preventDefault();
+
+  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  if (!isAuditor) {
+    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede crear repuestos.', 'warning');
+    return;
+  }
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    showToast('🔒 La Toma Física del período está CERRADA y sellada formalmente.', 'warning');
+    return;
+  }
+
+  const codInput = document.getElementById('nuevo-prod-codigo');
+  const descInput = document.getElementById('nuevo-prod-descripcion');
+  const unidadSelect = document.getElementById('nuevo-prod-unidad');
+  const catInput = document.getElementById('nuevo-prod-categoria');
+  const almSelect = document.getElementById('nuevo-prod-almacen');
+  const stockInput = document.getElementById('nuevo-prod-stock-fisico');
+  const motivoSelect = document.getElementById('nuevo-prod-motivo');
+  const obsInput = document.getElementById('nuevo-prod-observacion');
+  const costoBsInput = document.getElementById('nuevo-prod-costo-bs');
+  const precioBsInput = document.getElementById('nuevo-prod-precio-bs');
+  const btnGuardar = document.getElementById('btn-guardar-nuevo-producto');
+
+  const codigo = String(codInput?.value || '').trim().toUpperCase();
+  const descripcion = String(descInput?.value || '').trim();
+  const unidad = String(unidadSelect?.value || 'UND').trim().toUpperCase();
+  const categoria = String(catInput?.value || 'GENERAL').trim().toUpperCase();
+  const almacen = String(almSelect?.value || 'AUTOPERIQUITOS').trim().toUpperCase();
+  const stockFisico = parseFloat(stockInput?.value || 0);
+  const motivo = motivoSelect?.value || 'SOBRANTE_AUDITORIA';
+  const observacion = String(obsInput?.value || '').trim();
+  const costoBs = parseFloat(costoBsInput?.value || 0);
+  const precioBs = parseFloat(precioBsInput?.value || 0);
+
+  if (!codigo) {
+    showToast('El Código del repuesto es obligatorio.', 'warning');
+    codInput?.focus();
+    return;
+  }
+  if (!descripcion) {
+    showToast('El Nombre / Descripción del repuesto es obligatorio.', 'warning');
+    descInput?.focus();
+    return;
+  }
+
+  // Comprobar que no exista localmente
+  const existeLocal = pzeroProductos.some(p => String(p.codigo).toUpperCase() === codigo);
+  if (existeLocal) {
+    showToast(`El código "${codigo}" ya se encuentra registrado en el inventario.`, 'error');
+    codInput?.focus();
+    return;
+  }
+
+  const tasa = pzeroTasaBcv > 0 ? pzeroTasaBcv : 889.58;
+  const costoUsd = Number((costoBs / tasa).toFixed(2));
+  const precioUsd = Number((precioBs / tasa).toFixed(2));
+
+  if (btnGuardar) btnGuardar.disabled = true;
+
+  try {
+    const res = await fetch('/api/auditoria/crear-producto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codigo,
+        descripcion,
+        unidad_medida: unidad,
+        categoria,
+        almacen,
+        cantidad_fisica_real: stockFisico,
+        costo_s_iva_bs: costoBs,
+        precio_venta_s_iva_bs: precioBs,
+        costo_s_iva_usd: costoUsd,
+        precio_venta_s_iva_usd: precioUsd,
+        fecha: '2026-10-31',
+        tasa_bcv: tasa,
+        usuario: state.currentUser?.usuario || 'ADMIN_DG67',
+        motivo_ajuste: motivo,
+        justificacion_detalle: observacion,
+        acta_vinculada: (typeof obtenerActaActiva === 'function' ? obtenerActaActiva()?.numero : 'ACTA-INV-202610-01') || 'ACTA-INV-202610-01'
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al registrar el nuevo producto');
+
+    showToast(`✅ Repuesto [${codigo}] creado y registrado en la Toma Física.`, 'success');
+
+    // Agregar el producto al inicio de la lista
+    if (data.producto_creado) {
+      pzeroProductos.unshift(data.producto_creado);
+    }
+
+    // Actualizar métricas y filtros
+    if (data.estadisticas) {
+      actualizarMetricasAuditoria(data.estadisticas);
+    } else {
+      actualizarMetricasAuditoria();
+    }
+    poblarFiltrosAuditoria();
+
+    // Cerrar modal
+    closeModal('modal-crear-producto-toma-fisica');
+
+    // Filtrar y renderizar datagrid
+    filtrarAuditoriaEnVivo();
+
+  } catch (err) {
+    console.error('Error creando nuevo producto en toma física:', err);
+    showToast(err.message, 'error');
+  } finally {
+    if (btnGuardar) btnGuardar.disabled = false;
+  }
+}
+
+window.abrirModalCrearProductoTomaFisica = abrirModalCrearProductoTomaFisica;
+window.guardarNuevoProductoTomaFisica = guardarNuevoProductoTomaFisica;
+window.calcularCostosNuevoProd = calcularCostosNuevoProd;
+window.calcularPreciosNuevoProd = calcularPreciosNuevoProd;
+window.calcularMargenNuevoProd = calcularMargenNuevoProd;
 
 
 

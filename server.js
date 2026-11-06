@@ -26,6 +26,7 @@ import {
   procesarMatrizAuditada,
   getListadoAuditoriaEnVivo,
   actualizarProductoAuditoria,
+  crearProductoAuditoria,
   toggleAuditadoProducto
 } from './lib/auditoria_punto_cero.js';
 
@@ -1145,6 +1146,17 @@ app.post('/api/auditoria/actualizar-producto/:id', async (req, res) => {
     res.json(resultado);
   } catch (error) {
     console.error('Error actualizando producto en auditoría:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3.3.5.b Creación de Nuevo Producto en Toma Física (Alta de Repuesto)
+app.post('/api/auditoria/crear-producto', async (req, res) => {
+  try {
+    const resultado = await crearProductoAuditoria(req.body, db);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error creando producto en auditoría:', error);
     res.status(500).json({ error: error.message });
   }
 });
