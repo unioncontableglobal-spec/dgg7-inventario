@@ -488,7 +488,7 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
     } else {
       // Tomar las primeras palabras significativas del encabezado
       const firstWords = cleanText.split(/RIF|R\.I\.F|NIT/i)[0] || '';
-      razonSocial = firstWords.trim().slice(0, 45) || 'PROVEEDOR POR CONFIRMAR';
+      razonSocial = firstWords.replace(/[\s\/:,-]*(?:C\.I\.?|R\.I\.?F\.?|NIT).*$/i, '').trim().slice(0, 50) || 'PROVEEDOR POR CONFIRMAR';
     }
   }
 
@@ -535,32 +535,51 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
     alertas.push('⚠️ Falta N° de Control (Verificar documento original).');
   }
 
-  // 5. Fecha de Emisión
+  // 5. Fecha de Emisión (con descarte estricto de fechas de imprenta / providencias)
   let fechaEmision = '';
-  const fechaRegex = /(?:Fecha|FECHA)(?:\s+de\s+Emisi[oó]n)?[\s:]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/;
-  const matchFecha = cleanText.match(fechaRegex);
-
-  if (matchFecha && matchFecha[1]) {
-    const rawF = matchFecha[1].replace(/\//g, '-');
-    const parts = rawF.split('-');
+  function formatearFechaStr(rawF) {
+    const cleanF = rawF.replace(/\//g, '-').replace(/\s+/g, '-');
+    const parts = cleanF.split('-');
     if (parts.length === 3) {
       const d = parts[0].padStart(2, '0');
       const m = parts[1].padStart(2, '0');
       let y = parts[2];
       if (y.length === 2) y = '20' + y;
-      fechaEmision = `${y}-${m}-${d}`;
+      return `${y}-${m}-${d}`;
+    }
+    return rawF;
+  }
+
+  // A. Prioridad 1: 'FECHA (DE )?EMISION'
+  const mEmision = cleanText.match(/FECHA\s*(?:DE\s+)?EMISI[OÓ]N\s*[:#]?\s*(\d{1,2}[\/\-\s]\d{1,2}[\/\-\s]\d{2,4})/i);
+  if (mEmision && mEmision[1]) {
+    fechaEmision = formatearFechaStr(mEmision[1]);
+  } else {
+    // B. Prioridad 2: 'FECHA FACTURA'
+    const mFacFecha = cleanText.match(/FECHA\s*(?:DE\s+(?:LA\s+)?)?FACTURA\s*[:#]?\s*(\d{1,2}[\/\-\s]\d{1,2}[\/\-\s]\d{2,4})/i);
+    if (mFacFecha && mFacFecha[1]) {
+      fechaEmision = formatearFechaStr(mFacFecha[1]);
+    } else {
+      // C. Prioridad 3: Fecha general descartando fechas de imprenta / providencias
+      const regexGen = /(?:FECHA|Fecha)\s*[:#]?\s*(\d{1,2}[\/\-\s]\d{1,2}[\/\-\s]\d{2,4})/gi;
+      let matchF;
+      while ((matchF = regexGen.exec(cleanText)) !== null) {
+        const idx = matchF.index;
+        const context = cleanText.slice(Math.max(0, idx - 60), Math.min(cleanText.length, idx + 60)).toLowerCase();
+        if (!context.includes('providencia') && !context.includes('imprenta') && !context.includes('g.o.') && !context.includes('autorizada')) {
+          fechaEmision = formatearFechaStr(matchF[1]);
+          break;
+        }
+      }
     }
   }
 
   if (!fechaEmision) {
     fechaEmision = `${periodoDefecto}-15`;
-    alertas.push('⚠️ Fecha no detectada con certeza; asignada a mediados de período.');
+    alertas.push('⚠️ Fecha de emisión no detectada con certeza; asignada a mediados de período.');
   }
 
-  // 6. Detección de Moneda y Montos (Base, IVA, Total)
-  const esDolar = /USD|\$|DOLARES|DIVISA/i.test(cleanText) && !/BOLIVARES|VES|BS\./i.test(cleanText);
-
-  // Extraer números con formato latino (1.234,56) o internacional (1,234.56)
+  // 6. Detección Inteligente de Moneda y Montos (Base Imponible, IVA 16%, Total)
   function parseMonto(str) {
     if (!str) return 0;
     let s = str.trim().replace(/[^0-9.,]/g, '');
@@ -577,53 +596,73 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
     return isNaN(val) ? 0 : val;
   }
 
-  let baseImponible = 0;
-  let ivaMonto = 0;
-  let totalMonto = 0;
-
-  // Buscar bloque de totales
-  const mTotal = cleanText.match(/(?:Total\s+(?:a\s+Pagar|Factura|General)?|TOTAL)[\s:]+([0-9.,]+)/i);
-  if (mTotal) totalMonto = parseMonto(mTotal[1]);
-
-  const mBase = cleanText.match(/(?:Base\s+Imponible|BASE\s+IMPONIBLE|Subtotal|Base\s+16%)[\s:]+([0-9.,]+)/i);
-  if (mBase) baseImponible = parseMonto(mBase[1]);
-
-  const mIva = cleanText.match(/(?:IVA|I\.V\.A\.|Impuesto)(?:\s*16%|\s*\(16%\))?[\s:]+([0-9.,]+)/i);
-  if (mIva) ivaMonto = parseMonto(mIva[1]);
-
-  // Si tenemos total y no base
-  if (totalMonto > 0 && baseImponible === 0) {
-    baseImponible = Number((totalMonto / 1.16).toFixed(2));
-    ivaMonto = Number((totalMonto - baseImponible).toFixed(2));
-  } else if (baseImponible > 0 && totalMonto === 0) {
-    ivaMonto = Number((baseImponible * 0.16).toFixed(2));
-    totalMonto = Number((baseImponible + ivaMonto).toFixed(2));
-  } else if (baseImponible > 0 && ivaMonto > 0 && totalMonto === 0) {
-    totalMonto = Number((baseImponible + ivaMonto).toFixed(2));
+  // Detectar si la factura incluye su propia Tasa BCV oficial
+  let tasaBcvFactura = tasaBcv || 889.58;
+  const mBcv = cleanText.match(/(?:Tipo\s+de\s+Cambio|Tasa)\s*BCV\s*[:#]?\s*(?:Bs\.?\s*)?([0-9.,]+)/i);
+  if (mBcv) {
+    const t = parseMonto(mBcv[1]);
+    if (t > 10) tasaBcvFactura = t;
   }
 
-  // Conversión Bimonetaria
-  let baseBs = baseImponible;
-  let ivaBs = ivaMonto;
-  let totBs = totalMonto;
-  let baseUsd = 0;
-  let totUsd = 0;
+  let baseBs = 0, ivaBs = 0, totBs = 0;
+  let baseUsd = 0, totUsd = 0;
 
-  if (esDolar) {
-    baseUsd = baseImponible;
-    totUsd = totalMonto;
-    baseBs = Number((baseUsd * tasaBcv).toFixed(2));
-    ivaBs = Number((baseBs * 0.16).toFixed(2));
+  // Intento A: Bloque explícito en Bolívares (Bs. / Bs / VES)
+  // 1. Total en Bs (descartando encabezados de ítems como 'Valor Total 001')
+  const mTotBs = cleanText.match(/Total\s+A\s+Pagar.{0,40}?(?:USD\s*[0-9.,]+\s*)?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanText.match(/(?<!Valor\s)\bTotal\s*[:=]?\s*(?:USD\s*[0-9.,]+\s*)?Total\s*[:=]?\s*Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanText.match(/(?<!Valor\s)\bTotal\s*(?:Factura|General|Facturado|Bs)?[^0-9a-zA-Z]{0,30}?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanText.match(/(?:TOTAL\s+Bs|TOTAL\s+VES|TOTAL)[\s:]+([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i);
+  if (mTotBs) totBs = parseMonto(mTotBs[1]);
+
+  // 2. Base Imponible en Bs
+  const mBaseBs = cleanText.match(/(?:Base\s+Imponible|Subtotal|BI\s+G).{0,40}?(?:USD\s*[0-9.,]+\s*)?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+               || cleanText.match(/Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})\s*(?:Base\s+Imponible|Subtotal)/i)
+               || cleanText.match(/(?:BI\s*G?16[.,0%]*\s*=\s*)([0-9.,]+)/i);
+  if (mBaseBs) baseBs = parseMonto(mBaseBs[1]);
+
+  // 3. IVA en Bs
+  const mIvaBs = cleanText.match(/(?:Alicuota\s+I\.?V\.?A|Monto\s+Total\s+del\s+IVA|Total\s+I\.?V\.?A|I\.?V\.?A\.?).{0,80}?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanText.match(/(?:IVA\s*G?16[.,0%]*\s*=\s*)([0-9.,]+)/i);
+  if (mIvaBs) ivaBs = parseMonto(mIvaBs[1]);
+
+  // Intento B: Si no encontramos Bs explícito, buscar bloque genérico pero sin caer en headers
+  if (totBs === 0) {
+    const mTotGen = cleanText.match(/(?:\bTotal\s+A\s+Pagar|\bTotal\s+Factura|\bTotal\s+Facturado|\bTOTAL)\s*[:=]?\s*(?:USD|\$)?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i);
+    if (mTotGen) {
+      const val = parseMonto(mTotGen[1]);
+      if (val < 5000 && /USD|\$|DIVISA/i.test(cleanText)) {
+        totUsd = val;
+        totBs = Number((totUsd * tasaBcvFactura).toFixed(2));
+      } else {
+        totBs = val;
+      }
+    }
+  }
+
+  // Intento C: Completar campos faltantes por relación matemática (16% IVA SENIAT)
+  if (totBs > 0 && baseBs === 0 && ivaBs === 0) {
+    baseBs = Number((totBs / 1.16).toFixed(2));
+    ivaBs = Number((totBs - baseBs).toFixed(2));
+  } else if (totBs > 0 && baseBs > 0 && ivaBs === 0) {
+    ivaBs = Number((totBs - baseBs).toFixed(2));
+  } else if (totBs > 0 && baseBs === 0 && ivaBs > 0) {
+    baseBs = Number((totBs - ivaBs).toFixed(2));
+  } else if (baseBs > 0 && totBs === 0) {
+    if (ivaBs === 0) ivaBs = Number((baseBs * 0.16).toFixed(2));
     totBs = Number((baseBs + ivaBs).toFixed(2));
-  } else {
-    baseUsd = Number((baseBs / tasaBcv).toFixed(2));
-    totUsd = Number((totBs / tasaBcv).toFixed(2));
+  }
+
+  // Contravalor en Dólares ($ USD)
+  if (totUsd === 0 && tasaBcvFactura > 0) {
+    baseUsd = Number((baseBs / tasaBcvFactura).toFixed(2));
+    totUsd = Number((totBs / tasaBcvFactura).toFixed(2));
   }
 
   // Comprobar cuadre matemático
   const delta = Math.abs((baseBs + ivaBs) - totBs);
-  if (delta > 1.5 && totBs > 0) {
-    alertas.push(`⚠️ Descuadre en totales (Base Bs. ${baseBs} + IVA Bs. ${ivaBs} ≠ Total Bs. ${totBs}).`);
+  if (delta > 2.0 && totBs > 0) {
+    alertas.push(`⚠️ Revisar cuadre de totales: Base Bs. ${baseBs} + IVA Bs. ${ivaBs} ≠ Total Bs. ${totBs}`);
   }
 
   // 7. Clasificación Contable Sugerida
@@ -668,7 +707,7 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
     total_bs: totBs,
     base_imponible_divisa: baseUsd,
     total_divisa: totUsd,
-    tasa_bcv: tasaBcv,
+    tasa_bcv: tasaBcvFactura || tasaBcv,
     estado_validacion: estado,
     alertas: alertas,
     asentado: false
