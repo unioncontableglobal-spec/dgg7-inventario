@@ -4570,23 +4570,23 @@ function imprimirLibroCompras() {
 
     rowsHtml += `
       <tr>
-        <td style="text-align:center; font-weight:700;">${c.nro_operacion || (idx + 1)}</td>
-        <td style="text-align:center; font-family:monospace;">${c.fecha || '-'}</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700;">${c.rif || 'S/RIF'}</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">${c.nro_operacion || (idx + 1)}</td>
+        <td style="text-align:center; font-family:monospace; white-space:nowrap;">${c.fecha || '-'}</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; white-space:nowrap;">${c.rif || 'S/RIF'}</td>
         <td style="font-weight:600;">${c.razon_social || '-'}</td>
-        <td style="text-align:center;">P / Domiciliado</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700;">${c.nro_factura || '-'}</td>
-        <td style="text-align:center; font-family:monospace;">${c.nro_control || '-'}</td>
-        <td style="text-align:center;">-</td>
-        <td style="text-align:center;">-</td>
-        <td style="text-align:center; font-family:monospace;">${c.tipo_transaccion || '01-reg'}</td>
-        <td style="text-align:center;">-</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700;">${fmtBs(total)}</td>
-        <td style="text-align:right; font-family:monospace;">0,00</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700;">${fmtBs(base)}</td>
-        <td style="text-align:center; font-weight:700;">16%</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700; color:#000080;">${fmtBs(iva)}</td>
-        <td style="text-align:right; font-family:monospace;">${fmtBs(ret)}</td>
+        <td style="text-align:center; white-space:nowrap;">P / Domiciliado</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; white-space:nowrap;">${c.nro_factura || '-'}</td>
+        <td style="text-align:center; font-family:monospace; white-space:nowrap;">${c.nro_control || '-'}</td>
+        <td style="text-align:center; white-space:nowrap;">-</td>
+        <td style="text-align:center; white-space:nowrap;">-</td>
+        <td style="text-align:center; font-family:monospace; white-space:nowrap;">${c.tipo_transaccion || '01-reg'}</td>
+        <td style="text-align:center; white-space:nowrap;">-</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(total)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">${fmtBs(iva)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">${fmtBs(ret)}</td>
       </tr>
     `;
   });
@@ -4596,13 +4596,12 @@ function imprimirLibroCompras() {
 
   const printHtml = `
     <div class="print-preview-container seniat-landscape">
-      <!-- Encabezado Formal SENIAT -->
+      <!-- Encabezado Formal SENIAT (Titularidad Exclusiva INVERSIONES DG 67, C.A.) -->
       <div class="seniat-official-header">
         <div class="seniat-header-left">
-          <img src="LOGOUCG.png" alt="Logo" style="height: 46px; object-fit: contain; margin-bottom:4px;">
-          <div style="font-size: 11px; font-weight: 900; color: #000080;">INVERSIONES DG 67, C.A.</div>
-          <div style="font-size: 9.5px; font-weight: 800; color: #0f172a;">RIF: J-50700865-7</div>
-          <div style="font-size: 8px; color: #475569; max-width: 280px; line-height: 1.25;">
+          <div style="font-size: 13px; font-weight: 900; color: #000080; letter-spacing: 0.02em;">INVERSIONES DG 67, C.A.</div>
+          <div style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px;">RIF: J-50700865-7</div>
+          <div style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 2px;">
             Domicilio Fiscal: Av. Sur 11 entre Esq. Bolívar y Miranda, Casa N° 112, Local S/N, San Agustín del Norte, Caracas D.C.
           </div>
         </div>
@@ -4641,23 +4640,23 @@ function imprimirLibroCompras() {
             <th colspan="4" style="text-align:center; background:#dcfce7; color:#14532d;">COMPRAS INTERNAS GRAVADAS (DERECHO A CRÉDITO FISCAL)</th>
           </tr>
           <tr>
-            <th style="width: 26px; text-align:center;">N° OP</th>
-            <th style="width: 62px; text-align:center;">FECHA FACTURA</th>
-            <th style="width: 72px; text-align:center;">RIF PROVEEDOR</th>
-            <th>NOMBRE O RAZÓN SOCIAL DEL PROVEEDOR</th>
-            <th style="width: 64px; text-align:center;">TIPO PROV.</th>
-            <th style="width: 66px; text-align:center;">N° FACTURA</th>
-            <th style="width: 68px; text-align:center;">N° CONTROL</th>
-            <th style="width: 38px; text-align:center;">N. DÉB.</th>
-            <th style="width: 38px; text-align:center;">N. CRÉD.</th>
-            <th style="width: 44px; text-align:center;">TIPO TRANS.</th>
-            <th style="width: 48px; text-align:center;">FACT. AFECT.</th>
-            <th style="width: 82px; text-align:right;">TOTAL COMPRAS INCL. IVA (BS)</th>
-            <th style="width: 70px; text-align:right;">SIN DERECHO CRÉD. / EXENTO</th>
-            <th style="width: 82px; text-align:right;">BASE IMPONIBLE INTERNA (BS)</th>
-            <th style="width: 34px; text-align:center;">% ALÍC.</th>
-            <th style="width: 78px; text-align:right;">CRÉDITO FISCAL IVA (BS)</th>
-            <th style="width: 72px; text-align:right;">IVA RETENIDO AL VENDEDOR</th>
+            <th style="width: 26px; text-align:center; white-space:nowrap;">N° OP</th>
+            <th style="width: 78px; text-align:center; white-space:nowrap;">FECHA FACTURA</th>
+            <th style="width: 82px; text-align:center; white-space:nowrap;">RIF PROVEEDOR</th>
+            <th style="white-space:nowrap;">NOMBRE O RAZÓN SOCIAL DEL PROVEEDOR</th>
+            <th style="width: 64px; text-align:center; white-space:nowrap;">TIPO PROV.</th>
+            <th style="width: 76px; text-align:center; white-space:nowrap;">N° FACTURA</th>
+            <th style="width: 76px; text-align:center; white-space:nowrap;">N° CONTROL</th>
+            <th style="width: 38px; text-align:center; white-space:nowrap;">N. DÉB.</th>
+            <th style="width: 38px; text-align:center; white-space:nowrap;">N. CRÉD.</th>
+            <th style="width: 44px; text-align:center; white-space:nowrap;">TIPO TRANS.</th>
+            <th style="width: 48px; text-align:center; white-space:nowrap;">FACT. AFECT.</th>
+            <th style="width: 95px; text-align:right; white-space:nowrap;">TOTAL COMPRAS INCL. IVA (BS)</th>
+            <th style="width: 70px; text-align:right; white-space:nowrap;">SIN DERECHO CRÉD. / EXENTO</th>
+            <th style="width: 95px; text-align:right; white-space:nowrap;">BASE IMPONIBLE INTERNA (BS)</th>
+            <th style="width: 38px; text-align:center; white-space:nowrap;">% ALÍC.</th>
+            <th style="width: 90px; text-align:right; white-space:nowrap;">CRÉDITO FISCAL IVA (BS)</th>
+            <th style="width: 80px; text-align:right; white-space:nowrap;">IVA RETENIDO AL VENDEDOR</th>
           </tr>
         </thead>
         <tbody>
@@ -4665,13 +4664,13 @@ function imprimirLibroCompras() {
         </tbody>
         <tfoot>
           <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #000080;">
-            <td colspan="11" style="text-align:right; font-size: 9px; color:#000080;">TOTALES LIBRO DE COMPRAS DEL PERÍODO (${periodo}):</td>
-            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totTotal)}</td>
-            <td style="text-align:right; font-family:monospace;">0,00</td>
-            <td style="text-align:right; font-family:monospace; color:#000080;">Bs. ${fmtBs(totBase)}</td>
-            <td style="text-align:center;">16%</td>
-            <td style="text-align:right; font-family:monospace; color:#000080;">Bs. ${fmtBs(totIva)}</td>
-            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totRet)}</td>
+            <td colspan="11" style="text-align:right; font-size: 9px; color:#000080; white-space:nowrap;">TOTALES LIBRO DE COMPRAS DEL PERÍODO (${periodo}):</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totTotal)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+            <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
+            <td style="text-align:center; white-space:nowrap;">16%</td>
+            <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totRet)}</td>
           </tr>
         </tfoot>
       </table>
@@ -5888,38 +5887,45 @@ function imprimirLibroVentas() {
   const decl = (fiscalStateNew.declaraciones || []).find(d => d.periodo === periodo) || {};
 
   let rowsHtml = '';
-  let totCant = 0, totExento = 0, totBase = 0, totIva = 0, totTotal = 0;
+  let totCant = 0, totAnul = 0, totExento = 0, totBase = 0, totIva = 0, totTotal = 0;
 
   ventas.forEach((v, idx) => {
     const cant = Number(v.cantidad_comprobantes || 1);
+    const cantAnul = Number(v.cantidad_anuladas || 0);
     const ex = Number(v.exento_bs || 0);
     const base = Number(v.base_imponible_bs || 0);
     const iva = Number(v.iva_bs || 0);
     const total = Number(v.total_bs || (base + iva + ex));
 
     totCant += cant;
+    totAnul += cantAnul;
     totExento += ex;
     totBase += base;
     totIva += iva;
     totTotal += total;
 
+    const listaAnuladas = v.facturas_anuladas_lista 
+      ? v.facturas_anuladas_lista 
+      : (cantAnul > 0 ? `${cantAnul} anul.` : '0');
+
     rowsHtml += `
       <tr>
-        <td style="text-align:center; font-weight:700;">${idx + 1}</td>
-        <td style="text-align:center; font-family:monospace;">${v.fecha || '-'}</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700; color:#000080;">ZOA0000176</td>
-        <td style="text-align:center; font-family:monospace;">${String(idx + 1).padStart(4, '0')}</td>
-        <td style="text-align:center;">CONSUMIDOR FINAL (RESUMEN DIARIO Z)</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700;">${v.factura_desde || '-'}</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700;">${v.factura_hasta || '-'}</td>
-        <td style="text-align:center; font-weight:700;">${cant}</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700;">${fmtBs(total)}</td>
-        <td style="text-align:right; font-family:monospace;">${fmtBs(ex)}</td>
-        <td style="text-align:right; font-family:monospace;">0,00</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700;">${fmtBs(base)}</td>
-        <td style="text-align:center; font-weight:700;">16%</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700; color:#0A5CF5;">${fmtBs(iva)}</td>
-        <td style="text-align:right; font-family:monospace;">0,00</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">${idx + 1}</td>
+        <td style="text-align:center; font-family:monospace; white-space:nowrap;">${v.fecha || '-'}</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">ZOA0000176</td>
+        <td style="text-align:center; font-family:monospace; white-space:nowrap;">${String(v.numero_reporte_z || (idx + 1)).padStart(4, '0')}</td>
+        <td style="text-align:center; white-space:nowrap;">CONSUMIDOR FINAL (RESUMEN DIARIO Z)</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; white-space:nowrap;">${v.factura_desde || '-'}</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; white-space:nowrap;">${v.factura_hasta || '-'}</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">${cant}</td>
+        <td style="text-align:center; font-family:monospace; font-size:8px; white-space:nowrap; color:${cantAnul > 0 ? '#b91c1c' : '#64748b'}; font-weight:${cantAnul > 0 ? '700' : '500'};">${listaAnuladas}</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(total)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">${fmtBs(ex)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; color:#0A5CF5; white-space:nowrap;">${fmtBs(iva)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
       </tr>
     `;
   });
@@ -5928,13 +5934,12 @@ function imprimirLibroVentas() {
 
   const printHtml = `
     <div class="print-preview-container seniat-landscape">
-      <!-- Encabezado Formal SENIAT -->
+      <!-- Encabezado Formal SENIAT (Titularidad Exclusiva INVERSIONES DG 67, C.A.) -->
       <div class="seniat-official-header">
         <div class="seniat-header-left">
-          <img src="LOGOUCG.png" alt="Logo" style="height: 46px; object-fit: contain; margin-bottom:4px;">
-          <div style="font-size: 11px; font-weight: 900; color: #000080;">INVERSIONES DG 67, C.A.</div>
-          <div style="font-size: 9.5px; font-weight: 800; color: #0f172a;">RIF: J-50700865-7</div>
-          <div style="font-size: 8px; color: #475569; max-width: 280px; line-height: 1.25;">
+          <div style="font-size: 13px; font-weight: 900; color: #000080; letter-spacing: 0.02em;">INVERSIONES DG 67, C.A.</div>
+          <div style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px;">RIF: J-50700865-7</div>
+          <div style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 2px;">
             Domicilio Fiscal: Av. Sur 11 entre Esq. Bolívar y Miranda, Casa N° 112, Local S/N, San Agustín del Norte, Caracas D.C.
           </div>
         </div>
@@ -5963,46 +5968,48 @@ function imprimirLibroVentas() {
         </div>
       </div>
 
-      <!-- Tabla Formal Libro de Ventas SENIAT (15 Columnas Oficiales) -->
+      <!-- Tabla Formal Libro de Ventas SENIAT (16 Columnas Oficiales con Facturas Anuladas) -->
       <table class="print-preview-table seniat-grid-table">
         <thead>
           <tr class="seniat-group-header">
-            <th colspan="8" style="text-align:center; background:#e2e8f0; color:#0f172a;">IDENTIFICACIÓN DEL REPORTE DIARIO "Z" Y NUMERACIÓN FISCAL</th>
+            <th colspan="9" style="text-align:center; background:#e2e8f0; color:#0f172a;">IDENTIFICACIÓN DEL REPORTE DIARIO "Z" Y NUMERACIÓN FISCAL</th>
             <th colspan="3" style="text-align:center; background:#dbeafe; color:#000080;">VENTAS TOTALES, EXENTAS Y EXPORTACIONES</th>
             <th colspan="4" style="text-align:center; background:#dcfce7; color:#14532d;">VENTAS INTERNAS GRAVADAS (ALÍCUOTA GENERAL 16%)</th>
           </tr>
           <tr>
-            <th style="width: 28px; text-align:center;">N° OP</th>
-            <th style="width: 64px; text-align:center;">FECHA REPORTE Z</th>
-            <th style="width: 74px; text-align:center;">SERIAL MÁQ. FISCAL</th>
-            <th style="width: 50px; text-align:center;">N° REP. Z</th>
-            <th>CONCEPTO / ADQUIRIENTE</th>
-            <th style="width: 76px; text-align:center;">DESDE FACTURA N°</th>
-            <th style="width: 76px; text-align:center;">HASTA FACTURA N°</th>
-            <th style="width: 48px; text-align:center;">CANT. COMP.</th>
-            <th style="width: 86px; text-align:right;">TOTAL VENTAS INCL. IVA (BS)</th>
-            <th style="width: 72px; text-align:right;">VENTAS EXENTAS / NO GRAV.</th>
-            <th style="width: 66px; text-align:right;">EXPORTACIONES (0%)</th>
-            <th style="width: 86px; text-align:right;">BASE IMPONIBLE INTERNA (BS)</th>
-            <th style="width: 38px; text-align:center;">% ALÍC.</th>
-            <th style="width: 82px; text-align:right;">DÉBITO FISCAL IVA (BS)</th>
-            <th style="width: 72px; text-align:right;">IVA RETENIDO POR CLIENTE</th>
+            <th style="width: 28px; text-align:center; white-space:nowrap;">N° OP</th>
+            <th style="width: 85px; text-align:center; white-space:nowrap;">FECHA REPORTE Z</th>
+            <th style="width: 82px; text-align:center; white-space:nowrap;">SERIAL MÁQ. FISCAL</th>
+            <th style="width: 55px; text-align:center; white-space:nowrap;">N° REP. Z</th>
+            <th style="white-space:nowrap;">CONCEPTO / ADQUIRIENTE</th>
+            <th style="width: 78px; text-align:center; white-space:nowrap;">DESDE FACTURA N°</th>
+            <th style="width: 78px; text-align:center; white-space:nowrap;">HASTA FACTURA N°</th>
+            <th style="width: 48px; text-align:center; white-space:nowrap;">CANT. COMP.</th>
+            <th style="width: 90px; text-align:center; white-space:nowrap;" title="Relación de comprobantes anulados (Providencia 00071)">FACTURAS ANULADAS</th>
+            <th style="width: 95px; text-align:right; white-space:nowrap;">TOTAL VENTAS INCL. IVA (BS)</th>
+            <th style="width: 75px; text-align:right; white-space:nowrap;">VENTAS EXENTAS / NO GRAV.</th>
+            <th style="width: 66px; text-align:right; white-space:nowrap;">EXPORTACIONES (0%)</th>
+            <th style="width: 95px; text-align:right; white-space:nowrap;">BASE IMPONIBLE INTERNA (BS)</th>
+            <th style="width: 38px; text-align:center; white-space:nowrap;">% ALÍC.</th>
+            <th style="width: 88px; text-align:right; white-space:nowrap;">DÉBITO FISCAL IVA (BS)</th>
+            <th style="width: 72px; text-align:right; white-space:nowrap;">IVA RETENIDO POR CLIENTE</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || '<tr><td colspan="15" style="text-align:center; padding: 14px;">Sin operaciones de venta registradas para este período impositivo.</td></tr>'}
+          ${rowsHtml || '<tr><td colspan="16" style="text-align:center; padding: 14px;">Sin operaciones de venta registradas para este período impositivo.</td></tr>'}
         </tbody>
         <tfoot>
           <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #000080;">
-            <td colspan="7" style="text-align:right; font-size: 9px; color:#000080;">TOTALES MÁQUINA FISCAL ZOA0000176 (${periodo}):</td>
-            <td style="text-align:center;">${totCant}</td>
-            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totTotal)}</td>
-            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totExento)}</td>
-            <td style="text-align:right; font-family:monospace;">0,00</td>
-            <td style="text-align:right; font-family:monospace; color:#000080;">Bs. ${fmtBs(totBase)}</td>
-            <td style="text-align:center;">16%</td>
-            <td style="text-align:right; font-family:monospace; color:#0A5CF5;">Bs. ${fmtBs(totIva)}</td>
-            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(retPeriodo)}</td>
+            <td colspan="7" style="text-align:right; font-size: 9px; color:#000080; white-space:nowrap;">TOTALES MÁQUINA FISCAL ZOA0000176 (${periodo}):</td>
+            <td style="text-align:center; white-space:nowrap;">${totCant}</td>
+            <td style="text-align:center; font-family:monospace; font-size:8.5px; white-space:nowrap; color:${totAnul > 0 ? '#b91c1c' : '#64748b'};">${totAnul > 0 ? `${totAnul} anul.` : '0'}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totTotal)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totExento)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+            <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
+            <td style="text-align:center; white-space:nowrap;">16%</td>
+            <td style="text-align:right; font-family:monospace; color:#0A5CF5; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(retPeriodo)}</td>
           </tr>
         </tfoot>
       </table>
@@ -6014,42 +6021,42 @@ function imprimirLibroVentas() {
           <table class="print-preview-table" style="margin-bottom:0; font-size: 8.5px;">
             <thead>
               <tr>
-                <th style="width: 40px; text-align:center;">ÍTEM F-30</th>
+                <th style="width: 75px; text-align:center; white-space:nowrap;">ÍTEM F-30</th>
                 <th>CONCEPTO TRIBUTARIO (VENTAS INTERNAS Y EXPORTACIONES)</th>
-                <th style="width: 130px; text-align:right;">BASE IMPONIBLE (BS)</th>
-                <th style="width: 130px; text-align:right;">DÉBITO FISCAL IVA (BS)</th>
+                <th style="width: 140px; text-align:right; white-space:nowrap;">BASE IMPONIBLE (BS)</th>
+                <th style="width: 140px; text-align:right; white-space:nowrap;">DÉBITO FISCAL IVA (BS)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td style="text-align:center; font-weight:700;">40</td>
+                <td style="text-align:center; font-weight:800; white-space:nowrap;">40</td>
                 <td>Ventas Internas No Gravadas / Exentas</td>
-                <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totExento)}</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totExento)}</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
               </tr>
               <tr>
-                <td style="text-align:center; font-weight:700;">41</td>
+                <td style="text-align:center; font-weight:800; white-space:nowrap;">41</td>
                 <td>Ventas de Exportación (Alícuota 0%)</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
               </tr>
               <tr>
-                <td style="text-align:center; font-weight:700;">42</td>
+                <td style="text-align:center; font-weight:800; white-space:nowrap;">42</td>
                 <td><strong>Ventas Internas Gravadas por Alícuota General (16%) — Contribuyentes y No Contribuyentes</strong></td>
-                <td style="text-align:right; font-family:monospace; font-weight:800;">Bs. ${fmtBs(totBase)}</td>
-                <td style="text-align:right; font-family:monospace; font-weight:800; color:#0A5CF5;">Bs. ${fmtBs(totIva)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:800; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:800; color:#0A5CF5; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
               </tr>
               <tr>
-                <td style="text-align:center; font-weight:700;">442 / 443</td>
+                <td style="text-align:center; font-weight:800; white-space:nowrap;">442 / 443</td>
                 <td>Ventas Internas Gravadas por Alícuota Adicional (31%) / Reducida (8%)</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
+                <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
               </tr>
               <tr style="background:#eff6ff; font-weight:900; color:#000080;">
-                <td style="text-align:center;">46 / 47</td>
+                <td style="text-align:center; font-weight:900; white-space:nowrap;">46 / 47</td>
                 <td>TOTAL VENTAS Y DÉBITOS FISCALES DEL PERÍODO IMPOSITIVO</td>
-                <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totBase + totExento)}</td>
-                <td style="text-align:right; font-family:monospace; color:#0A5CF5;">Bs. ${fmtBs(totIva)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:900; white-space:nowrap;">Bs. ${fmtBs(totBase + totExento)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:900; color:#0A5CF5; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
               </tr>
             </tbody>
           </table>

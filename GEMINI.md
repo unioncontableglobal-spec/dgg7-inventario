@@ -42,5 +42,12 @@
 * **Continuidad del Expediente:** El sistema debe reconocer directamente el expediente activo en ejecución (`ACTA-INV-YYYYMM-01`) y mantener el Paso 1 marcado como listo (`✓ LISTO: APERTURADA`), permitiendo el trabajo directo en tienda.
 * **Bloqueo hasta Cierre Formal:** Únicamente tras el sellado y cierre formal de la toma física (estatus `CERRADA`), o previa reapertura explícita autorizada, se podrá iniciar un nuevo ciclo de levantamiento físico.
 
+## 6. Estándar de Presentación y Formato de Libros Fiscales Oficiales (SENIAT)
+* **Formato Horizontal (Landscape) Continuo:** Los Libros Oficiales de Compras y Ventas deben presentarse y exportarse en orientación horizontal (landscape) con dimensiones optimizadas para impresión y visualización ejecutiva.
+* **Prohibición de Líneas Cortadas en Fechas y Códigos:** En las tablas oficiales, las fechas (`YYYY-MM-DD`), números de reporte Z, seriales de máquina fiscal y números correlativos de factura deben tener estrictamente `white-space: nowrap;` para garantizar que la información se lea corrida en una sola línea sin saltos de línea antiestéticos.
+* **Identidad Exclusiva de la Empresa:** Los encabezados de los libros fiscales deben mostrar únicamente la razón social, RIF y domicilio fiscal de la empresa cliente (**INVERSIONES DG 67, C.A.**), quedando prohibido incluir logotipos o marcas de la firma contable externa (UCG) en la cabecera del libro fiscal.
+* **Relación de Facturas Anuladas en Ventas:** En el Libro de Ventas, incluir siempre la columna o desglose correlativo de facturas anuladas por reporte Z (indicando los números de comprobante para control de la correlatividad según Providencia 00071, sin necesidad de colocar monto).
+
+
 
 
