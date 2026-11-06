@@ -3409,6 +3409,13 @@ async function loadLibroCompras() {
     if (!res.ok || !Array.isArray(data)) {
       throw new Error(data?.error || 'Error obteniendo Libro de Compras');
     }
+    // Ordenamiento estricto por fecha de emisión de factura (SENIAT Art. 75-76 RLIVA) y correlativo de operación
+    data.sort((a, b) => {
+      const fA = String(a.fecha || '').slice(0, 10);
+      const fB = String(b.fecha || '').slice(0, 10);
+      if (fA !== fB) return fA.localeCompare(fB);
+      return (Number(a.nro_operacion || a.id) || 0) - (Number(b.nro_operacion || b.id) || 0);
+    });
     fiscalStateNew.compras = data;
     renderLibroCompras(data);
   } catch (err) {

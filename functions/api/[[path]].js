@@ -1833,7 +1833,7 @@ export async function onRequest(context) {
         sql += ` AND lc.periodo = ?`;
         args.push(periodo);
       }
-      sql += ` ORDER BY lc.periodo ASC, lc.fecha ASC, lc.id ASC`;
+      sql += ` ORDER BY lc.fecha ASC, lc.nro_operacion ASC, lc.id ASC`;
       const res = await db.execute({ sql, args });
       return jsonResponse(res.rows);
     }

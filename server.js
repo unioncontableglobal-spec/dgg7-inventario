@@ -2105,7 +2105,7 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
       args.push(Number(aplica_inventario));
     }
 
-    sql += ` ORDER BY lc.periodo ASC, lc.fecha ASC, lc.id ASC`;
+    sql += ` ORDER BY lc.fecha ASC, lc.nro_operacion ASC, lc.id ASC`;
     const result = await db.execute({ sql, args });
     res.json(result.rows);
   } catch (error) {

@@ -8,6 +8,7 @@
 let stagingFacturasCompras = [];
 let proveedoresCache = [];
 let tasaBcvExtractor = 889.58;
+let currentDetailIndex = null;
 
 // Inicialización de proveedores y tasa
 async function initExtractorCompras() {
@@ -24,6 +25,43 @@ async function initExtractorCompras() {
   const selPer = document.getElementById('compras-periodo-select')?.value || '2026-10';
   if (typeof getTasaBcvPorFechaOPeriodo === 'function') {
     tasaBcvExtractor = Number(getTasaBcvPorFechaOPeriodo(selPer) || 889.58);
+  }
+}
+
+// Verificación asíncrona de duplicados contra el historial del Libro de Compras (SENIAT Art. 75-76 RLIVA)
+async function chequearDuplicadoFiscal(facturaData) {
+  if (!facturaData || !facturaData.rif || !facturaData.nro_factura) return;
+  try {
+    const cleanRif = String(facturaData.rif).trim();
+    const cleanFact = String(facturaData.nro_factura).trim();
+    const cleanCtrl = String(facturaData.nro_control || '').trim();
+    const url = `/api/fiscal/verificar-duplicado-compra?rif=${encodeURIComponent(cleanRif)}&nro_factura=${encodeURIComponent(cleanFact)}&nro_control=${encodeURIComponent(cleanCtrl)}`;
+    
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.duplicado) {
+        facturaData.es_duplicada = true;
+        facturaData.duplicado_info = data.factura || {};
+        facturaData.estado_validacion = 'DUPLICADA';
+        const msgAlerta = `🚫 YA EN EL LIBRO: Período ${data.factura?.periodo || 'anterior'} (Fecha: ${data.factura?.fecha || ''})`;
+        if (!Array.isArray(facturaData.alertas)) facturaData.alertas = [];
+        if (!facturaData.alertas.some(a => a.includes('YA EN EL LIBRO'))) {
+          facturaData.alertas.unshift(msgAlerta);
+        }
+      } else {
+        facturaData.es_duplicada = false;
+        facturaData.duplicado_info = null;
+        if (Array.isArray(facturaData.alertas)) {
+          facturaData.alertas = facturaData.alertas.filter(a => !a.includes('YA EN EL LIBRO'));
+        }
+        if (facturaData.estado_validacion === 'DUPLICADA') {
+          facturaData.estado_validacion = 'LISTO';
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error verificando duplicado fiscal:', e.message);
   }
 }
 
@@ -327,6 +365,9 @@ async function procesarArchivosPDFMasivos(fileList) {
           facturaData.estado_validacion = 'ADVERTENCIA';
         }
 
+        // Chequear duplicado fiscal contra historial en base de datos oficial
+        await chequearDuplicadoFiscal(facturaData);
+
         stagingFacturasCompras.push(facturaData);
         totalFacturasAgregadas++;
       }
@@ -400,7 +441,7 @@ function extraerPaginasDeArchivoPDF(file) {
 }
 
 // Carga Directa de las 11 Facturas Auditadas de Octubre 2026
-function cargarLoteAuditadoOctubreDG67() {
+async function cargarLoteAuditadoOctubreDG67() {
   const periodoActual = document.getElementById('staging-periodo-select')?.value || '2026-10';
   const tasa = tasaBcvExtractor || 889.58;
 
@@ -414,7 +455,7 @@ function cargarLoteAuditadoOctubreDG67() {
       const baseUsd = tasa > 0 ? baseBs / tasa : 0;
       const totalUsd = tasa > 0 ? totalBs / tasa : 0;
 
-      stagingFacturasCompras.push({
+      const facturaItem = {
         id: `audit-oct-${item.pagina}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         archivo_nombre: `Compras DG67 OCT26.pdf (Pág. ${item.pagina}/11)`,
         file: null,
@@ -437,7 +478,10 @@ function cargarLoteAuditadoOctubreDG67() {
         tasa_bcv: tasa,
         estado_validacion: 'LISTO',
         alertas: ['✓ Factura física auditada precargada con datos fiscales verificados.']
-      });
+      };
+
+      await chequearDuplicadoFiscal(facturaItem);
+      stagingFacturasCompras.push(facturaItem);
       agregadas++;
     }
   }
@@ -720,8 +764,9 @@ function renderBandejaStagingFacturas() {
   if (!tbody) return;
 
   const totalComps = stagingFacturasCompras.length;
-  const listos = stagingFacturasCompras.filter(f => f.estado_validacion === 'LISTO' && !f.asentado).length;
-  const alertas = stagingFacturasCompras.filter(f => f.estado_validacion === 'ADVERTENCIA' && !f.asentado).length;
+  const listos = stagingFacturasCompras.filter(f => f.estado_validacion === 'LISTO' && !f.asentado && !f.es_duplicada).length;
+  const duplicadas = stagingFacturasCompras.filter(f => f.es_duplicada && !f.asentado).length;
+  const alertas = stagingFacturasCompras.filter(f => f.estado_validacion !== 'LISTO' && !f.asentado && !f.es_duplicada).length;
   const asentados = stagingFacturasCompras.filter(f => f.asentado).length;
 
   let sumBaseBs = 0;
@@ -741,14 +786,16 @@ function renderBandejaStagingFacturas() {
   // KPIs
   if (document.getElementById('kpi-staging-total')) document.getElementById('kpi-staging-total').textContent = totalComps;
   if (document.getElementById('kpi-staging-listos')) document.getElementById('kpi-staging-listos').textContent = listos;
-  if (document.getElementById('kpi-staging-alertas')) document.getElementById('kpi-staging-alertas').textContent = alertas;
+  if (document.getElementById('kpi-staging-alertas')) {
+    document.getElementById('kpi-staging-alertas').textContent = duplicadas > 0 ? `${alertas + duplicadas} (${duplicadas} dup)` : alertas;
+  }
   if (document.getElementById('kpi-staging-tot-bs')) document.getElementById('kpi-staging-tot-bs').textContent = `Bs. ${Number(sumTotBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (document.getElementById('kpi-staging-tot-usd')) document.getElementById('kpi-staging-tot-usd').textContent = `$${Number(sumTotUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
 
   const btnAsentarTodo = document.getElementById('btn-asentar-todo-staging');
   if (btnAsentarTodo) {
-    btnAsentarTodo.disabled = (listos === 0 && alertas === 0);
-    btnAsentarTodo.innerHTML = `⚡ Asentar Todo el Lote Válido (${listos + alertas} comprobantes)`;
+    btnAsentarTodo.disabled = (listos === 0);
+    btnAsentarTodo.innerHTML = `⚡ Asentar Todo el Lote Válido (${listos} comprobantes)`;
   }
 
   if (stagingFacturasCompras.length === 0) {
@@ -766,25 +813,33 @@ function renderBandejaStagingFacturas() {
 
   tbody.innerHTML = stagingFacturasCompras.map((f, idx) => {
     const isAsentado = Boolean(f.asentado);
-    const badgeStatus = isAsentado
-      ? `<span class="badge" style="background:#10b981; color:#fff;">✓ ASENTADA</span>`
-      : (f.estado_validacion === 'LISTO'
-        ? `<span class="badge" style="background:#0284c7; color:#fff;">✅ LISTA</span>`
-        : `<span class="badge" style="background:#f59e0b; color:#fff;" title="${f.alertas.join(' • ')}">⚠️ REVISAR</span>`);
+    const isDup = Boolean(f.es_duplicada);
 
-    const rowBg = isAsentado ? '#f0fdf4' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+    let badgeStatus;
+    if (isAsentado) {
+      badgeStatus = `<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ASENTADA</span>`;
+    } else if (isDup) {
+      badgeStatus = `<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">🚫 YA EN EL LIBRO</span>`;
+    } else if (f.estado_validacion === 'LISTO') {
+      badgeStatus = `<span class="badge" style="background:#0284c7; color:#fff; font-weight:800;">✅ LISTA</span>`;
+    } else {
+      badgeStatus = `<span class="badge" style="background:#f59e0b; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">⚠️ REVISAR</span>`;
+    }
+
+    const rowBg = isAsentado ? '#f0fdf4' : (isDup ? '#fff1f2' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc'));
+    const borderStyle = isDup ? 'border-left: 4px solid #ef4444;' : (isAsentado ? 'border-left: 4px solid #10b981;' : '');
 
     return `
-      <tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem;">
+      <tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem; ${borderStyle}">
         <td style="padding: 8px 10px; font-weight: 700; color: #64748b; text-align: center;">${idx + 1}</td>
         
         <!-- Archivo y Visor -->
         <td style="padding: 8px 10px;">
-          <div style="font-weight: 700; color: #0B2447; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${f.archivo_nombre}">
+          <div style="font-weight: 700; color: #0B2447; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" onclick="abrirVisorDetalleFacturaStaging(${idx})" title="${f.archivo_nombre} - Clic para ver ficha completa">
             📄 ${f.archivo_nombre}
           </div>
-          <button type="button" class="btn-link" onclick="abrirVisorPDF(${idx})" style="font-size: 0.72rem; color: #0284c7; padding: 0; background: none; border: none; cursor: pointer; text-decoration: underline; margin-top: 2px;">
-            👁️ Ver Documento PDF
+          <button type="button" class="btn-link" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="font-size: 0.72rem; color: #0284c7; padding: 0; background: none; border: none; cursor: pointer; text-decoration: underline; margin-top: 2px;">
+            👁️ Ficha & PDF
           </button>
         </td>
 
@@ -858,20 +913,26 @@ function renderBandejaStagingFacturas() {
           ` : ''}
         </td>
 
-        <!-- Acciones -->
+        <!-- Acciones: Ficha de Detalle y Asiento Directo -->
         <td style="padding: 8px 10px; text-align: center;">
-          ${isAsentado ? `
-            <span style="color: #10b981; font-weight: 800; font-size: 0.85rem;">✓ Asentada</span>
-          ` : `
-            <div style="display: flex; gap: 4px; justify-content: center;">
+          <div style="display: flex; gap: 4px; justify-content: center; align-items: center; flex-wrap: nowrap;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="background: #0284c7; color: #fff; border-color: #0284c7; font-weight: 700; font-size: 0.75rem; padding: 4px 7px; display: inline-flex; align-items: center; gap: 3px;" title="Ver ficha contable completa y documento PDF con botón de asiento">
+              🔍 Detalle
+            </button>
+            ${isAsentado ? `
+              <span style="color: #10b981; font-weight: 800; font-size: 0.80rem; margin-left: 2px;">✓ Asentada</span>
+            ` : (isDup ? `
+              <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.70rem; padding:4px 6px; font-weight:700;" title="Esta factura ya existe en el Libro de Compras. No se permite duplicar.">🚫 Duplicada</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">✕</button>
+            ` : `
               <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" title="Dar visto bueno y asentar esta factura en el Libro de Compras">
                 ✓ Asentar
               </button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">
                 ✕
               </button>
-            </div>
-          `}
+            `)}
+          </div>
         </td>
       </tr>
     `;
@@ -891,9 +952,13 @@ function cambiarClasificacionStaging(idx, nuevoTipo) {
   renderBandejaStagingFacturas();
 }
 
-function actualizarCampoStaging(idx, campo, valor) {
+async function actualizarCampoStaging(idx, campo, valor) {
   if (!stagingFacturasCompras[idx]) return;
   stagingFacturasCompras[idx][campo] = valor;
+  if (campo === 'rif' || campo === 'nro_factura' || campo === 'nro_control') {
+    await chequearDuplicadoFiscal(stagingFacturasCompras[idx]);
+    renderBandejaStagingFacturas();
+  }
 }
 
 function recalcularMontosStaging(idx, campo, nuevoValor) {
@@ -907,7 +972,9 @@ function recalcularMontosStaging(idx, campo, nuevoValor) {
     f.base_imponible_divisa = Number((f.base_imponible_bs / f.tasa_bcv).toFixed(2));
     f.total_divisa = Number((f.total_bs / f.tasa_bcv).toFixed(2));
   }
-  f.alertas = f.alertas.filter(a => !a.includes('Descuadre'));
+  if (Array.isArray(f.alertas)) {
+    f.alertas = f.alertas.filter(a => !a.includes('Descuadre'));
+  }
   renderBandejaStagingFacturas();
 }
 
@@ -928,6 +995,11 @@ function limpiarBandejaStaging() {
 async function asentarFacturaStagingIndividual(idx) {
   const f = stagingFacturasCompras[idx];
   if (!f || f.asentado) return;
+
+  if (f.es_duplicada) {
+    showToast(`⚠️ No se puede asentar la factura [${f.nro_factura}]: ya existe registrada en el Libro de Compras.`, 'error');
+    return;
+  }
 
   if (!f.rif || !f.nro_factura) {
     showToast('La factura debe tener RIF y N° de Factura antes de asentar.', 'warning');
@@ -976,15 +1048,25 @@ async function asentarFacturaStagingIndividual(idx) {
   }
 }
 
-// Asentar Todo el Lote Válido
+// Asentar Todo el Lote Válido (Omitiendo duplicadas)
 async function asentarTodasFacturasValidadas() {
-  const pendientes = stagingFacturasCompras.filter(f => !f.asentado && f.rif && f.nro_factura);
+  const pendientes = stagingFacturasCompras.filter(f => !f.asentado && !f.es_duplicada && f.rif && f.nro_factura);
+  const duplicadasOmitidas = stagingFacturasCompras.filter(f => !f.asentado && f.es_duplicada);
+
   if (pendientes.length === 0) {
-    showToast('No hay facturas pendientes y listas para asentar en la bandeja.', 'warning');
+    if (duplicadasOmitidas.length > 0) {
+      showToast('Las facturas en la bandeja ya existen en el Libro de Compras (Duplicadas). Omitidas por normativa fiscal.', 'warning');
+    } else {
+      showToast('No hay facturas pendientes y listas para asentar en la bandeja.', 'warning');
+    }
     return;
   }
 
-  const confirmacion = confirm(`¿Estás seguro de asentar formalmente ${pendientes.length} facturas al Libro de Compras fiscal?`);
+  const confirmMsg = duplicadasOmitidas.length > 0
+    ? `¿Estás seguro de asentar formalmente ${pendientes.length} facturas válidas? (${duplicadasOmitidas.length} facturas duplicadas se omitirán para evitar duplicidad fiscal).`
+    : `¿Estás seguro de asentar formalmente ${pendientes.length} facturas al Libro de Compras fiscal?`;
+
+  const confirmacion = confirm(confirmMsg);
   if (!confirmacion) return;
 
   const btn = document.getElementById('btn-asentar-todo-staging');
@@ -1022,7 +1104,7 @@ async function asentarTodasFacturasValidadas() {
     // Marcar resultados
     if (data.resultados && Array.isArray(data.resultados)) {
       data.resultados.forEach(r => {
-        const item = stagingFacturasCompras.find(f => f.nro_factura === r.nro_factura);
+        const item = stagingFacturasCompras.find(f => f.nro_factura === r.nro_factura && f.rif === r.rif);
         if (item && r.success) {
           item.asentado = true;
           item.estado_validacion = 'ASENTADA';
@@ -1043,43 +1125,247 @@ async function asentarTodasFacturasValidadas() {
   }
 }
 
-// Visor de PDF Integrado
-function abrirVisorPDF(idx) {
+// ==============================================================================
+// VISOR Y AUDITORÍA DETALLADA DE FACTURA CON BOTÓN DE ASIENTO DIRECTO
+// ==============================================================================
+function abrirVisorDetalleFacturaStaging(idx) {
+  currentDetailIndex = idx;
   const f = stagingFacturasCompras[idx];
   if (!f) return;
 
   const modalVisor = document.getElementById('modal-visor-pdf-factura');
   const iframe = document.getElementById('iframe-visor-pdf-factura');
   const titulo = document.getElementById('visor-pdf-titulo');
+  const subtitulo = document.getElementById('visor-pdf-subtitulo');
+  const badgeStatus = document.getElementById('visor-pdf-badge-status');
+  const pageIndicator = document.getElementById('visor-pdf-page-indicator');
+  const indiceFactura = document.getElementById('detalle-factura-indice');
 
-  if (!modalVisor || !iframe) return;
+  const alertDuplicada = document.getElementById('detalle-alerta-duplicada');
+  const alertDuplicadaMsg = document.getElementById('detalle-alerta-duplicada-msg');
+  const btnAsentar = document.getElementById('btn-asentar-desde-detalle');
 
-  if (f.file) {
-    const fileUrl = URL.createObjectURL(f.file);
-    const pageHash = f.pagina ? `#page=${f.pagina}` : '';
-    iframe.src = fileUrl + pageHash;
-  } else {
-    iframe.srcdoc = `
-      <div style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #334155; text-align: center; padding: 20px;">
-        <div style="font-size: 3rem; margin-bottom: 10px;">📋</div>
-        <h3 style="margin: 0 0 8px 0; color: #0284c7;">Comprobante Físico Auditado (Pág. ${f.pagina || 1}/11)</h3>
-        <p style="max-width: 450px; font-size: 0.88rem; color: #64748b; line-height: 1.4;">
-          Factura física emitida por <strong>${f.razon_social}</strong> (RIF: ${f.rif})<br>
-          N° Factura: <strong>${f.nro_factura}</strong> | N° Control: <strong>${f.nro_control}</strong><br>
-          Base Imponible: <strong>Bs. ${Number(f.base_imponible_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong> | Total: <strong>Bs. ${Number(f.total_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong>
-        </p>
-        <span style="background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">
-          ✓ Datos validados contra el archivo original Compras DG67 OCT26.pdf
-        </span>
-      </div>`;
+  if (!modalVisor) return;
+
+  // Actualizar Títulos e Indicadores
+  if (titulo) {
+    titulo.textContent = `Ficha y Visor de Factura: ${f.nro_factura || 'S/N'} (${f.razon_social || 'Proveedor por confirmar'})`;
+  }
+  if (subtitulo) {
+    const pagTxt = f.pagina ? ` • Pág. ${f.pagina}/${f.total_paginas || 1}` : '';
+    subtitulo.textContent = `${f.archivo_nombre}${pagTxt} • Período Fiscal: ${f.periodo || '2026-10'}`;
+  }
+  if (pageIndicator) {
+    pageIndicator.textContent = `Página ${f.pagina || 1} de ${f.total_paginas || 1}`;
+  }
+  if (indiceFactura) {
+    indiceFactura.textContent = `Comprobante #${idx + 1} de ${stagingFacturasCompras.length}`;
   }
 
-  if (titulo) {
-    const pagTxt = f.pagina ? `(Pág. ${f.pagina}${f.total_paginas ? '/' + f.total_paginas : ''})` : '';
-    titulo.textContent = `Visualizando Factura: ${f.archivo_nombre} ${pagTxt} - ${f.razon_social || 'Proveedor por confirmar'}`;
+  // Cargar datos en los campos del formulario derecho
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val !== undefined && val !== null ? val : ''; };
+  setVal('det-modal-periodo', f.periodo || '2026-10');
+  setVal('det-modal-fecha', f.fecha || '');
+  setVal('det-modal-rif', f.rif || '');
+  setVal('det-modal-razon', f.razon_social || '');
+  setVal('det-modal-factura', f.nro_factura || '');
+  setVal('det-modal-control', f.nro_control || '');
+  setVal('det-modal-tipo-servicio', f.tipo_servicio || 'MERCANCIA_REPUESTOS');
+  setVal('det-modal-base', f.base_imponible_bs !== undefined ? f.base_imponible_bs : 0);
+
+  const tasa = Number(f.tasa_bcv || tasaBcvExtractor || 889.58);
+  const tasaTag = document.getElementById('det-modal-tasa-tag');
+  if (tasaTag) tasaTag.textContent = `Tasa BCV: Bs. ${tasa.toFixed(2)}`;
+
+  // Actualizar displays monetarios
+  const ivaDisplay = document.getElementById('det-modal-iva-display');
+  if (ivaDisplay) ivaDisplay.textContent = `Bs. ${Number(f.iva_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const totBsDisplay = document.getElementById('det-modal-total-bs');
+  if (totBsDisplay) totBsDisplay.textContent = `Bs. ${Number(f.total_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const totUsdDisplay = document.getElementById('det-modal-total-usd');
+  if (totUsdDisplay) totUsdDisplay.textContent = `$${Number(f.total_divisa || 0).toFixed(2)} USD`;
+
+  // Control de Duplicidad y Estatus
+  if (f.asentado) {
+    if (badgeStatus) {
+      badgeStatus.textContent = '✓ ASENTADA';
+      badgeStatus.style.background = '#10b981';
+    }
+    if (alertDuplicada) alertDuplicada.style.display = 'none';
+    if (btnAsentar) {
+      btnAsentar.disabled = true;
+      btnAsentar.style.background = '#10b981';
+      btnAsentar.innerHTML = '<span>✓ Factura ya Asentada</span>';
+    }
+  } else if (f.es_duplicada) {
+    if (badgeStatus) {
+      badgeStatus.textContent = '🚫 DUPLICADA';
+      badgeStatus.style.background = '#ef4444';
+    }
+    if (alertDuplicada) {
+      alertDuplicada.style.display = 'block';
+      const dupInfo = f.duplicado_info;
+      if (dupInfo) {
+        alertDuplicadaMsg.innerHTML = `⚠️ La factura <strong>N° ${f.nro_factura}</strong> del proveedor <strong>${f.razon_social}</strong> (${f.rif}) ya se encuentra registrada en el historial fiscal (<strong>Período: ${dupInfo.periodo || ''}</strong>, Fecha: ${dupInfo.fecha || ''}, Total: Bs. ${Number(dupInfo.total_bs || 0).toLocaleString('es-VE', {minimumFractionDigits:2})}). Por normativa SENIAT, no se permite registrar facturas duplicadas.`;
+      } else {
+        alertDuplicadaMsg.textContent = 'Esta factura ya se encuentra registrada en el historial del Libro de Compras.';
+      }
+    }
+    if (btnAsentar) {
+      btnAsentar.disabled = true;
+      btnAsentar.style.background = '#94a3b8';
+      btnAsentar.innerHTML = '<span>🚫 No se puede asentar (Duplicada)</span>';
+    }
+  } else {
+    if (badgeStatus) {
+      badgeStatus.textContent = f.estado_validacion === 'LISTO' ? 'LISTA' : 'POR REVISAR';
+      badgeStatus.style.background = f.estado_validacion === 'LISTO' ? '#0284c7' : '#f59e0b';
+    }
+    if (alertDuplicada) alertDuplicada.style.display = 'none';
+    if (btnAsentar) {
+      btnAsentar.disabled = false;
+      btnAsentar.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+      btnAsentar.innerHTML = '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
+    }
+  }
+
+  // Carga del PDF en iframe
+  if (iframe) {
+    if (f.file) {
+      const fileUrl = URL.createObjectURL(f.file);
+      const pageHash = f.pagina ? `#page=${f.pagina}` : '';
+      iframe.src = fileUrl + pageHash;
+    } else {
+      iframe.srcdoc = `
+        <div style="font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #334155; text-align: center; padding: 25px; background: #0f172a;">
+          <div style="font-size: 3.5rem; margin-bottom: 12px;">📑</div>
+          <h3 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 1.15rem;">Comprobante Físico Auditado (Pág. ${f.pagina || 1}/${f.total_paginas || 11})</h3>
+          <p style="max-width: 480px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; background: #1e293b; padding: 14px 18px; border-radius: 8px; border: 1px solid #334155;">
+            Proveedor: <strong style="color: #f8fafc;">${f.razon_social}</strong> (RIF: <span style="font-family: monospace; color: #38bdf8;">${f.rif}</span>)<br>
+            Factura N°: <strong style="color: #f8fafc;">${f.nro_factura}</strong> | N° Control: <strong style="color: #f8fafc;">${f.nro_control}</strong><br>
+            Base Imponible: <strong style="color: #34d399;">Bs. ${Number(f.base_imponible_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong> | Total: <strong style="color: #38bdf8;">Bs. ${Number(f.total_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong>
+          </p>
+          <span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 0.76rem; margin-top: 14px;">
+            ✓ Comprobante del lote físico Compras DG67 OCT26.pdf verificado
+          </span>
+        </div>`;
+    }
   }
 
   modalVisor.style.display = 'flex';
+}
+
+// Sincronización bidireccional desde la Ficha de Detalle hacia el Staging
+async function sincronizarDetalleHaciaStaging(campo, valor) {
+  if (currentDetailIndex === null || !stagingFacturasCompras[currentDetailIndex]) return;
+  const f = stagingFacturasCompras[currentDetailIndex];
+
+  if (campo === 'base') {
+    const num = parseFloat(valor) || 0;
+    f.base_imponible_bs = num;
+    f.iva_bs = Number((num * 0.16).toFixed(2));
+    f.total_bs = Number((num + f.iva_bs).toFixed(2));
+    const tasa = Number(f.tasa_bcv || tasaBcvExtractor || 889.58);
+    f.base_imponible_divisa = tasa > 0 ? Number((f.base_imponible_bs / tasa).toFixed(2)) : 0;
+    f.total_divisa = tasa > 0 ? Number((f.total_bs / tasa).toFixed(2)) : 0;
+
+    const ivaEl = document.getElementById('det-modal-iva-display');
+    if (ivaEl) ivaEl.textContent = `Bs. ${f.iva_bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const totBsEl = document.getElementById('det-modal-total-bs');
+    if (totBsEl) totBsEl.textContent = `Bs. ${f.total_bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const totUsdEl = document.getElementById('det-modal-total-usd');
+    if (totUsdEl) totUsdEl.textContent = `$${f.total_divisa.toFixed(2)} USD`;
+  } else if (campo === 'tipo_servicio') {
+    f.tipo_servicio = valor;
+    f.aplica_inventario = (valor === 'MERCANCIA_REPUESTOS') ? 1 : 0;
+  } else {
+    f[campo] = valor;
+  }
+
+  // Si cambia RIF o Número de factura, verificar duplicidad en tiempo real
+  if (campo === 'rif' || campo === 'nro_factura' || campo === 'nro_control') {
+    await chequearDuplicadoFiscal(f);
+    const alertDup = document.getElementById('detalle-alerta-duplicada');
+    const alertDupMsg = document.getElementById('detalle-alerta-duplicada-msg');
+    const btnAsentar = document.getElementById('btn-asentar-desde-detalle');
+    const badgeStatus = document.getElementById('visor-pdf-badge-status');
+
+    if (f.es_duplicada) {
+      if (alertDup) alertDup.style.display = 'block';
+      if (alertDupMsg) alertDupMsg.innerHTML = `⚠️ Factura N° <strong>${f.nro_factura}</strong> del proveedor <strong>${f.rif}</strong> ya existe en el Libro de Compras.`;
+      if (badgeStatus) {
+        badgeStatus.textContent = '🚫 DUPLICADA';
+        badgeStatus.style.background = '#ef4444';
+      }
+      if (btnAsentar) {
+        btnAsentar.disabled = true;
+        btnAsentar.style.background = '#94a3b8';
+        btnAsentar.innerHTML = '<span>🚫 No se puede asentar (Duplicada)</span>';
+      }
+    } else if (!f.asentado) {
+      if (alertDup) alertDup.style.display = 'none';
+      if (badgeStatus) {
+        badgeStatus.textContent = f.estado_validacion === 'LISTO' ? 'LISTA' : 'POR REVISAR';
+        badgeStatus.style.background = f.estado_validacion === 'LISTO' ? '#0284c7' : '#f59e0b';
+      }
+      if (btnAsentar) {
+        btnAsentar.disabled = false;
+        btnAsentar.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+        btnAsentar.innerHTML = '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
+      }
+    }
+  }
+
+  renderBandejaStagingFacturas();
+}
+
+// Asentar Factura Directamente desde el Modal de Detalle
+async function asentarDesdeDetalleModal() {
+  if (currentDetailIndex === null || !stagingFacturasCompras[currentDetailIndex]) return;
+  const f = stagingFacturasCompras[currentDetailIndex];
+
+  if (f.es_duplicada) {
+    showToast('Esta factura está identificada como duplicada en el historial fiscal. No se puede asentar.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-asentar-desde-detalle');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Asentando en Libro de Compras...</span>';
+  }
+
+  await asentarFacturaStagingIndividual(currentDetailIndex);
+
+  if (f.asentado) {
+    if (btn) {
+      btn.disabled = true;
+      btn.style.background = '#10b981';
+      btn.innerHTML = '<span>✓ Factura Asentada con Éxito</span>';
+    }
+    const badge = document.getElementById('visor-pdf-badge-status');
+    if (badge) {
+      badge.textContent = '✓ ASENTADA';
+      badge.style.background = '#10b981';
+    }
+    setTimeout(() => {
+      cerrarVisorPDF();
+    }, 800);
+  } else {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
+    }
+  }
+}
+
+// Compatibilidad con invocaciones del visor
+function abrirVisorPDF(idx) {
+  abrirVisorDetalleFacturaStaging(idx);
 }
 
 function cerrarVisorPDF() {
@@ -1090,6 +1376,7 @@ function cerrarVisorPDF() {
     iframe.src = '';
     iframe.srcdoc = '';
   }
+  currentDetailIndex = null;
 }
 
 // Exponer funciones globales
@@ -1106,4 +1393,8 @@ window.asentarFacturaStagingIndividual = asentarFacturaStagingIndividual;
 window.asentarTodasFacturasValidadas = asentarTodasFacturasValidadas;
 window.abrirVisorPDF = abrirVisorPDF;
 window.cerrarVisorPDF = cerrarVisorPDF;
+window.abrirVisorDetalleFacturaStaging = abrirVisorDetalleFacturaStaging;
+window.sincronizarDetalleHaciaStaging = sincronizarDetalleHaciaStaging;
+window.asentarDesdeDetalleModal = asentarDesdeDetalleModal;
+window.chequearDuplicadoFiscal = chequearDuplicadoFiscal;
 
