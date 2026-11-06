@@ -4115,3 +4115,82 @@ body {
   color: #a7f3d0;
 }
 
+/* ==========================================================================
+   CARGA MASIVA Y EXTRACTOR INTELIGENTE DE FACTURAS PDF (LIBRO DE COMPRAS)
+   ========================================================================== */
+
+.pdf-dropzone {
+  border: 2px dashed #0284c7;
+  border-radius: 12px;
+  background: #f0f9ff;
+  padding: 24px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.pdf-dropzone:hover,
+.pdf-dropzone.dragover {
+  background: #e0f2fe;
+  border-color: #0369a1;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.2);
+  transform: translateY(-1px);
+}
+
+.pdf-dropzone-icon {
+  font-size: 2.4rem;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.staging-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.staging-kpi-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.staging-kpi-card .kpi-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+
+.staging-kpi-card .kpi-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0B2447;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.staging-progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.staging-progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #0284c7 0%, #10b981 100%);
+  transition: width 0.2s ease;
+}
+
+

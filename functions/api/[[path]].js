@@ -2087,8 +2087,27 @@ export async function onRequest(context) {
       const totDiv = Number((totBs / tasaOp).toFixed(2));
       const esMercancia = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1');
 
-      const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [String(rif).trim()] });
-      const provId = provRes.rows[0]?.id || null;
+      const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [cleanRif] });
+      let provId = provRes.rows[0]?.id || null;
+      if (!provId) {
+        try {
+          const newProv = await db.execute({
+            sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
+                  VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+            args: [cleanRif, cleanRazon, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
+          });
+          provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
+        } catch (e) {
+          console.warn('Error auto-creando proveedor en Cloudflare:', e.message);
+        }
+      }
+
+      // Nro de Operación correlativo
+      const countRes = await db.execute({
+        sql: `SELECT COALESCE(MAX(nro_operacion), 0) + 1 as next_op FROM libro_compras WHERE periodo = ?`,
+        args: [periodo]
+      });
+      const nextOp = Number(countRes.rows[0]?.next_op || 1);
 
       let matchMovId = body.movimiento_id ? Number(body.movimiento_id) : null;
       let estatus = esMercancia ? (matchMovId ? 'CONCILIADO' : 'PENDIENTE_DG67') : 'NO_APLICA_GASTO';
@@ -2126,18 +2145,18 @@ export async function onRequest(context) {
 
       const insResult = await db.execute({
         sql: `INSERT INTO libro_compras 
-              (periodo, archivo_origen, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
+              (periodo, archivo_origen, nro_operacion, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
                tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
                proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
                tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
               VALUES 
-              (?, 'SISTEMA_WEB', ?, ?, ?, ?, ?, ?,
+              (?, ?, ?, ?, ?, ?, ?, ?, ?,
                ?, ?, ?, ?, ?,
                ?, ?, ?, ?, ?, ?,
                ?, ?, 'USD', ?, ?, ?)
               RETURNING id`,
         args: [
-          periodo, fecha, body.fecha_recepcion || fecha, String(rif).trim(), String(razon_social).trim(), String(nro_factura).trim(), nro_control || '00-000000',
+          periodo, body.archivo_origen || 'SISTEMA_WEB', nextOp, fecha, body.fecha_recepcion || fecha, cleanRif, cleanRazon, String(nro_factura).trim(), nro_control || '00-000000',
           tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
           provId, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
           esMercancia ? 1 : 0, estatus, matchMovId, obs,
@@ -2157,9 +2176,128 @@ export async function onRequest(context) {
       return jsonResponse({
         success: true,
         id: lcId,
+        nro_operacion: nextOp,
         message: 'Factura registrada con éxito en Libro de Compras (Doble Vía)',
         estatus_conciliacion: estatus,
         movimiento_id: matchMovId
+      });
+    }
+
+    if (path === '/api/fiscal/libro-compras/batch' && method === 'POST') {
+      const body = await request.json();
+      const facturas = Array.isArray(body.facturas) ? body.facturas : [];
+      if (facturas.length === 0) {
+        return jsonResponse({ error: 'Se requiere una lista de facturas a asentar' }, 400);
+      }
+
+      const resultados = [];
+      let insertadas = 0;
+      let duplicadas = 0;
+      let errores = 0;
+
+      for (const f of facturas) {
+        try {
+          const { periodo, fecha, rif, razon_social, nro_factura, nro_control } = f;
+          if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
+            resultados.push({ nro_factura: nro_factura || 'S/N', success: false, error: 'Faltan campos obligatorios' });
+            errores++;
+            continue;
+          }
+
+          if (await isPeriodoDeclarado(periodo, db)) {
+            resultados.push({ nro_factura, success: false, error: `Período ${periodo} ya declarado y cerrado` });
+            errores++;
+            continue;
+          }
+
+          const cleanRif = String(rif).trim().toUpperCase();
+          const cleanRazon = String(razon_social).trim();
+
+          const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, null, db);
+          if (checkDup.duplicado) {
+            resultados.push({ nro_factura, success: false, duplicado: true, error: checkDup.mensaje });
+            duplicadas++;
+            continue;
+          }
+
+          const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
+          const tasaOp = Number(f.tasa_bcv) > 0 ? Number(f.tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
+          const fechaTasaOp = f.fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
+
+          const ali = Number(f.alicuota) || 0.16;
+          const baseBs = Number(f.base_imponible_bs) || 0.0;
+          const ivaBs = Number(f.iva_bs) || Number((baseBs * ali).toFixed(2));
+          const totBs = Number(f.total_bs) || Number((baseBs + ivaBs).toFixed(2));
+          const baseDiv = Number((baseBs / tasaOp).toFixed(2));
+          const ivaDiv = Number((ivaBs / tasaOp).toFixed(2));
+          const totDiv = Number((totBs / tasaOp).toFixed(2));
+          const esMercancia = (f.aplica_inventario === 1 || f.aplica_inventario === true || f.aplica_inventario === '1');
+
+          const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [cleanRif] });
+          let provId = provRes.rows[0]?.id || null;
+          if (!provId) {
+            try {
+              const newProv = await db.execute({
+                sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
+                      VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+                args: [cleanRif, cleanRazon, f.tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
+              });
+              provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
+            } catch (e) { }
+          }
+
+          const countRes = await db.execute({
+            sql: `SELECT COALESCE(MAX(nro_operacion), 0) + 1 as next_op FROM libro_compras WHERE periodo = ?`,
+            args: [periodo]
+          });
+          const nextOp = Number(countRes.rows[0]?.next_op || 1);
+
+          let estatus = esMercancia ? 'PENDIENTE_DG67' : 'NO_APLICA_GASTO';
+          let obs = f.observaciones_cruce || (esMercancia ? 'Factura asentada por Carga Masiva PDF. Pendiente por recepción física.' : 'Gasto operativo / servicio asentado por Carga Masiva PDF.');
+
+          const insResult = await db.execute({
+            sql: `INSERT INTO libro_compras 
+                  (periodo, archivo_origen, nro_operacion, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
+                   tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
+                   proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
+                   tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
+                  VALUES 
+                  (?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   ?, ?, ?, ?, ?,
+                   ?, ?, ?, ?, ?, ?,
+                   ?, ?, 'USD', ?, ?, ?)
+                  RETURNING id`,
+            args: [
+              periodo, f.archivo_origen || 'CARGA_MASIVA_PDF', nextOp, fecha, f.fecha_recepcion || fecha, cleanRif, cleanRazon, String(nro_factura).trim(), nro_control || '00-000000',
+              f.tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
+              provId, f.tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
+              esMercancia ? 1 : 0, estatus, null, obs,
+              tasaOp, fechaTasaOp, baseDiv, ivaDiv, totDiv
+            ]
+          });
+
+          const lcId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
+          insertadas++;
+          resultados.push({
+            id: lcId,
+            nro_factura,
+            nro_operacion: nextOp,
+            success: true,
+            mensaje: `Factura ${nro_factura} asentada con éxito (Op #${nextOp})`
+          });
+        } catch (err) {
+          errores++;
+          resultados.push({ nro_factura: f.nro_factura || 'S/N', success: false, error: err.message });
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        total_procesadas: facturas.length,
+        insertadas,
+        duplicadas,
+        errores,
+        resultados
       });
     }
 
