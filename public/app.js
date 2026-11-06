@@ -810,13 +810,6 @@ function switchTab(tabId) {
     if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'flex' : 'none';
     if (btnConfigActa) btnConfigActa.style.display = isAuditor ? 'inline-block' : 'none';
     if (btnConcluirConteo) btnConcluirConteo.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-block' : 'none';
-
-    // Apertura secuencial controlada: EXCLUSIVA para el usuario Auditor de Tienda
-    if (isAuditor && !state.modalBcvAbierto && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
-      setTimeout(() => {
-        abrirModalAperturaActa();
-      }, 400);
-    }
   }
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
@@ -2527,13 +2520,6 @@ function closeModal(modalId) {
 
   if (modalId === 'modal-tasa-bcv-dia') {
     state.modalBcvAbierto = false;
-    // Transición secuencial: al cerrar Tasa BCV, EXCLUSIVO para usuario Auditor de Toma Física si el acta aún no está abierta
-    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
-    if (isAuditor && state.activeTab === 'tab-punto-cero' && typeof verificarActaAperturada === 'function' && !verificarActaAperturada()) {
-      setTimeout(() => {
-        abrirModalAperturaActa();
-      }, 350);
-    }
   }
 
   if (modalId === 'modal-nueva-compra') {
@@ -8383,25 +8369,36 @@ function renderizarTablaAuditoriaEnVivo() {
 let aperturaActaCallback = null;
 
 function obtenerActaActiva() {
-  try {
-    const raw = localStorage.getItem('dg67_acta_iniciada_202610');
-    if (raw) return JSON.parse(raw);
-  } catch (e) { }
   if (state.actaActiva) return state.actaActiva;
   if (state.tomaFisicaInfo?.numero_acta) {
     return {
       numero: state.tomaFisicaInfo.numero_acta,
       periodo: state.tomaFisicaInfo.periodo || '2026-10',
+      estatus: state.tomaFisicaInfo.estatus || 'ABIERTA',
       tasa_bcv: state.tomaFisicaInfo.tasa_bcv || 889.58,
       auditor_tienda: state.tomaFisicaInfo.auditor_tienda || 'Personal de Almacén / Auditor DG 67',
       gerente_dg67: state.tomaFisicaInfo.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.'
     };
   }
-  return null;
+  try {
+    const raw = localStorage.getItem('dg67_acta_iniciada_202610');
+    if (raw) return JSON.parse(raw);
+  } catch (e) { }
+
+  // Expediente activo oficial en curso para la Toma Física Octubre 2026 (En ejecución)
+  return {
+    numero: 'ACTA-INV-202610-01',
+    periodo: '2026-10',
+    estatus: 'ABIERTA',
+    tasa_bcv: 889.58,
+    auditor_tienda: 'Personal de Almacén / Auditor DG 67',
+    gerente_dg67: 'Gerencia General Inversiones DG 67, C.A.'
+  };
 }
 
 function verificarActaAperturada() {
-  return !!obtenerActaActiva();
+  const acta = obtenerActaActiva();
+  return Boolean(acta && acta.numero && acta.estatus !== 'CERRADA');
 }
 
 function abrirModalAperturaActa(callback) {
@@ -8477,6 +8474,14 @@ function guardarAperturaActa(e) {
   localStorage.setItem('dg67_acta_iniciada_202610', JSON.stringify(actaData));
   state.actaActiva = actaData;
   state.actaAperturada = true;
+
+  try {
+    fetch('/api/auditoria/toma-fisica/apertura', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(actaData)
+    }).catch(() => {});
+  } catch (e) { }
 
   actualizarBannerActaActiva();
   actualizarOpcionesDrawerActa(numero);

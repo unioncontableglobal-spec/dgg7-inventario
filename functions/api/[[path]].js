@@ -1065,11 +1065,22 @@ export async function onRequest(context) {
         args: [periodo]
       });
       if (actaRes.rows.length === 0) {
+        const numActa = `ACTA-INV-${periodo.replace('-', '')}-01`;
+        await db.execute({
+          sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+                VALUES (?, ?, 'ABIERTA', 889.58, 'Personal de Almacén / Auditor DG 67', 'Gerencia General DG 67', 'Lcda. Liliana Chacón • CPC (Unión Contable Global)', datetime('now', 'localtime'))
+                ON CONFLICT(periodo) DO NOTHING`,
+          args: [periodo, numActa]
+        }).catch(() => {});
+
         return jsonResponse({
           periodo,
           estatus: 'ABIERTA',
-          numero_acta: `ACTA-INV-${periodo.replace('-', '')}-01`,
+          numero_acta: numActa,
           tasa_bcv: 889.58,
+          auditor_tienda: 'Personal de Almacén / Auditor DG 67',
+          gerente_dg67: 'Gerencia General DG 67',
+          contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
           fecha_cierre: null,
           usuario_cierre: null
         });
@@ -1086,6 +1097,38 @@ export async function onRequest(context) {
         gerente_dg67: a.gerente_dg67,
         contador_ucg: a.contador_ucg,
         tasa_bcv: Number(a.tasa_bcv || 889.58)
+      });
+    }
+
+    if (path === '/api/auditoria/toma-fisica/apertura' && method === 'POST') {
+      const body = await request.json();
+      const {
+        periodo = '2026-10',
+        numero_acta = 'ACTA-INV-202610-01',
+        tasa_bcv = 889.58,
+        auditor_tienda = 'Personal de Almacén / Auditor DG 67',
+        gerente_dg67 = 'Gerencia General DG 67',
+        contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+      } = body || {};
+
+      await db.execute({
+        sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+              VALUES (?, ?, 'ABIERTA', ?, ?, ?, ?, datetime('now', 'localtime'))
+              ON CONFLICT(periodo) DO UPDATE SET
+                numero_acta = excluded.numero_acta,
+                tasa_bcv = excluded.tasa_bcv,
+                auditor_tienda = excluded.auditor_tienda,
+                gerente_dg67 = excluded.gerente_dg67,
+                contador_ucg = excluded.contador_ucg,
+                updated_at = datetime('now', 'localtime')`,
+        args: [periodo, numero_acta, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg]
+      });
+
+      return jsonResponse({
+        success: true,
+        periodo,
+        estatus: 'ABIERTA',
+        numero_acta
       });
     }
 
@@ -1193,11 +1236,22 @@ export async function onRequest(context) {
         args: [periodo]
       });
       if (actaRes.rows.length === 0) {
+        const numActa = `ACTA-INV-${periodo.replace('-', '')}-01`;
+        await db.execute({
+          sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+                VALUES (?, ?, 'ABIERTA', 889.58, 'Personal de Almacén / Auditor DG 67', 'Gerencia General DG 67', 'Lcda. Liliana Chacón • CPC (Unión Contable Global)', datetime('now', 'localtime'))
+                ON CONFLICT(periodo) DO NOTHING`,
+          args: [periodo, numActa]
+        }).catch(() => {});
+
         return jsonResponse({
           periodo,
           estatus: 'ABIERTA',
-          numero_acta: `ACTA-INV-${periodo.replace('-', '')}-01`,
+          numero_acta: numActa,
           tasa_bcv: 889.58,
+          auditor_tienda: 'Personal de Almacén / Auditor DG 67',
+          gerente_dg67: 'Gerencia General DG 67',
+          contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
           fecha_cierre: null,
           usuario_cierre: null
         });
@@ -1214,6 +1268,38 @@ export async function onRequest(context) {
         gerente_dg67: a.gerente_dg67,
         contador_ucg: a.contador_ucg,
         tasa_bcv: Number(a.tasa_bcv || 889.58)
+      });
+    }
+
+    if (path === '/api/auditoria/toma-fisica/apertura' && method === 'POST') {
+      const body = await request.json();
+      const {
+        periodo = '2026-10',
+        numero_acta = 'ACTA-INV-202610-01',
+        tasa_bcv = 889.58,
+        auditor_tienda = 'Personal de Almacén / Auditor DG 67',
+        gerente_dg67 = 'Gerencia General DG 67',
+        contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+      } = body || {};
+
+      await db.execute({
+        sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+              VALUES (?, ?, 'ABIERTA', ?, ?, ?, ?, datetime('now', 'localtime'))
+              ON CONFLICT(periodo) DO UPDATE SET
+                numero_acta = excluded.numero_acta,
+                tasa_bcv = excluded.tasa_bcv,
+                auditor_tienda = excluded.auditor_tienda,
+                gerente_dg67 = excluded.gerente_dg67,
+                contador_ucg = excluded.contador_ucg,
+                updated_at = datetime('now', 'localtime')`,
+        args: [periodo, numero_acta, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg]
+      });
+
+      return jsonResponse({
+        success: true,
+        periodo,
+        estatus: 'ABIERTA',
+        numero_acta
       });
     }
 
