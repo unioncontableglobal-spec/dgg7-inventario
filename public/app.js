@@ -3365,6 +3365,31 @@ async function loadLibroCompras() {
   const isCerrado = isPeriodoFiscalDeclarado(periodo);
   const bannerComprasDeclarado = document.getElementById('banner-compras-declarado');
   if (bannerComprasDeclarado) bannerComprasDeclarado.style.display = isCerrado ? 'flex' : 'none';
+
+  // Inyección y control dinámico del botón de Carga Masiva PDF en la cabecera
+  const headerBtns = document.querySelector('#tab-libro-compras .header-buttons');
+  let btnCargaMasiva = document.getElementById('btn-carga-masiva-pdf');
+  if (headerBtns && !btnCargaMasiva) {
+    btnCargaMasiva = document.createElement('button');
+    btnCargaMasiva.id = 'btn-carga-masiva-pdf';
+    btnCargaMasiva.className = 'btn';
+    btnCargaMasiva.style.background = 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)';
+    btnCargaMasiva.style.color = '#fff';
+    btnCargaMasiva.style.fontWeight = '700';
+    btnCargaMasiva.style.boxShadow = '0 2px 8px rgba(3,105,161,0.25)';
+    btnCargaMasiva.style.display = 'inline-flex';
+    btnCargaMasiva.style.alignItems = 'center';
+    btnCargaMasiva.style.gap = '6px';
+    btnCargaMasiva.title = 'Cargar lote de facturas PDF con extracción automática de datos SENIAT y visto bueno';
+    btnCargaMasiva.innerHTML = '<span style="font-size: 1.1rem;">📂</span><span>Carga Masiva PDF (Extractor)</span>';
+    btnCargaMasiva.onclick = () => { if (typeof abrirModalCargaMasivaPDF === 'function') abrirModalCargaMasivaPDF(); };
+    headerBtns.insertBefore(btnCargaMasiva, headerBtns.firstChild);
+  }
+
+  const bannerCargaMasiva = document.getElementById('banner-carga-masiva-pdf');
+  if (btnCargaMasiva) btnCargaMasiva.style.display = isCerrado ? 'none' : 'inline-flex';
+  if (bannerCargaMasiva) bannerCargaMasiva.style.display = isCerrado ? 'none' : 'flex';
+
   const btnNuevaCompra = document.querySelector('#tab-libro-compras .btn-navy');
   const btnFacturaManual = document.querySelector('#tab-libro-compras button[onclick*="openModalNuevaCompra(\'MERCANCIA\')"]');
   const btnLlamarMerc = document.querySelector('#tab-libro-compras button[onclick*="openModalImportarEntradaTienda"]');
@@ -3397,7 +3422,24 @@ function renderLibroCompras(compras) {
   if (!tbody) return;
 
   if (!Array.isArray(compras) || compras.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" class="text-center" style="padding: 24px; color: var(--text-muted);">No hay facturas registradas para el período y filtro seleccionados. Usa <strong>"+ Cargar Factura / Gasto Manual"</strong> o <strong>"🔗 Llamar Factura de Entrada (Tienda)"</strong> para registrar.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="text-center" style="padding: 28px 16px; color: var(--text-muted);">
+      <div style="font-size: 1.05rem; font-weight: 600; color: #475569; margin-bottom: 6px;">No hay facturas registradas para el período y filtro seleccionados.</div>
+      <div style="font-size: 0.82rem; margin-bottom: 14px;">Puedes cargar facturas en lote (.PDF) con extracción automática o asentar manualmente:</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center;">
+        <button type="button" class="btn btn-sm" onclick="abrirModalCargaMasivaPDF()" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 14px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(2,132,199,0.3);">
+          📂 Cargar Lote Facturas PDF (Extractor)
+        </button>
+        <button type="button" class="btn btn-sm" onclick="openModalImportarEntradaTienda()" style="background: #166534; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 14px; border: none; cursor: pointer;">
+          🔗 1. Llamar Entrada (Tienda)
+        </button>
+        <button type="button" class="btn btn-sm" onclick="openModalNuevaCompra('GASTO')" style="background: #000080; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 14px; border: none; cursor: pointer;">
+          ⚖️ 2. Cargar Gasto / Activo
+        </button>
+        <button type="button" class="btn btn-sm" onclick="openModalNuevaCompra('MERCANCIA')" style="background: #f1f5f9; color: #334155; font-weight: 700; border-radius: 6px; padding: 6px 14px; border: 1px solid #cbd5e1; cursor: pointer;">
+          + Factura Manual
+        </button>
+      </div>
+    </td></tr>`;
     document.getElementById('kpi-compras-count').textContent = '0';
     document.getElementById('kpi-compras-base').textContent = '0,00 Bs. ($0.00)';
     document.getElementById('kpi-compras-iva').textContent = '0,00 Bs. ($0.00)';

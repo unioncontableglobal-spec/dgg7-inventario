@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261101_v4">
+  <link rel="stylesheet" href="style.css?v=20261106_v6">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261106_v1"></script>
+  <script src="/extractor-compras.js?v=20261106_v6"></script>
 </head>
 
 <body>
@@ -2499,6 +2499,20 @@
               10 Oct (Manual)</button>
             <button type="button" class="btn btn-sm month-pill-btn" data-periodo="TODOS"
               onclick="seleccionarMesRapido('compras','TODOS')">📚 Todos</button>
+          </div>
+
+          <!-- Banner Ejecutivo de Carga Masiva PDF (SENIAT) -->
+          <div id="banner-carga-masiva-pdf" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1.5px solid #7dd3fc; border-radius: 10px; padding: 12px 18px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 1.8rem;">📂</span>
+              <div>
+                <strong style="color: #0369a1; font-size: 0.92rem; display: block;">Extractor Inteligente de Facturas de Compras en PDF (SENIAT)</strong>
+                <span style="color: #475569; font-size: 0.78rem;">Sube un lote de facturas (.PDF), extrae automáticamente RIF, N° Factura, Control y Montos, revisa en bandeja y asienta con visto bueno contable.</span>
+              </div>
+            </div>
+            <button type="button" class="btn" onclick="abrirModalCargaMasivaPDF()" style="background: #0284c7; color: #ffffff; font-weight: 800; font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <span>⚡ Cargar Lote de Facturas PDF</span>
+            </button>
           </div>
 
           <!-- Filters -->
@@ -5707,7 +5721,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261101_v4"></script>
+  <script src="app.js?v=20261106_v6"></script>
 </body>
 
 </html>

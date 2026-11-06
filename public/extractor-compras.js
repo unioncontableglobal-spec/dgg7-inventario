@@ -748,3 +748,4 @@ window.asentarFacturaStagingIndividual = asentarFacturaStagingIndividual;
 window.asentarTodasFacturasValidadas = asentarTodasFacturasValidadas;
 window.abrirVisorPDF = abrirVisorPDF;
 window.cerrarVisorPDF = cerrarVisorPDF;
+
