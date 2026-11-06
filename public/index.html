@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261106_v6">
+  <link rel="stylesheet" href="style.css?v=20261106_v7">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261106_v6"></script>
+  <script src="/extractor-compras.js?v=20261106_v7"></script>
 </head>
 
 <body>
@@ -5587,8 +5587,11 @@
             </div>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <input type="file" id="input-files-carga-masiva-pdf" multiple accept=".pdf" style="display: none;" onchange="procesarArchivosPDFMasivos(this.files)">
+            <button type="button" class="btn" onclick="cargarLoteAuditadoOctubreDG67()" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(4,120,87,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Cargar directamente las 11 facturas físicas auditadas de Octubre 2026 en la bandeja">
+              <span>⚡ Cargar Lote Auditado Octubre (11 Facturas)</span>
+            </button>
             <button type="button" class="btn btn-primary" onclick="document.getElementById('input-files-carga-masiva-pdf').click()" style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
               <span>📁 Seleccionar Facturas PDF</span>
             </button>
@@ -5607,7 +5610,7 @@
           <span class="pdf-dropzone-icon">📥</span>
           <strong style="color: #0369a1; font-size: 0.95rem; display: block;">Arrastra y suelta aquí tus facturas en formato PDF</strong>
           <span style="font-size: 0.76rem; color: #64748b; margin-top: 2px; display: block;">
-            Puedes arrastrar múltiples archivos simultáneamente. El motor extraerá RIF, N° Factura, N° Control, Fecha, Bases e IVA.
+            Soporta archivos individuales y archivos PDF multipágina (cada página se desglosa automáticamente como un comprobante independiente con visor).
           </span>
         </div>
 
@@ -5721,7 +5724,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261106_v6"></script>
+  <script src="app.js?v=20261106_v7"></script>
 </body>
 
 </html>
