@@ -223,20 +223,25 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   }
   const stockActual = Number(Number(p.stock_actual).toFixed(2)) || 0;
 
-  const tieneFisico = (cantidad_fisica_real !== null && cantidad_fisica_real !== undefined && cantidad_fisica_real !== '' && !isNaN(Number(cantidad_fisica_real)));
-  const cantReal = tieneFisico ? Number(Number(cantidad_fisica_real).toFixed(2)) : stockActual;
+  const rawCantActualizar = payload.cantidad_fisica_real ?? payload.cant_real ?? payload.stock_fisico ?? cantidad_fisica_real;
+  const tieneFisico = (rawCantActualizar !== null && rawCantActualizar !== undefined && rawCantActualizar !== '' && !isNaN(Number(rawCantActualizar)));
+  const cantReal = tieneFisico ? Number(Number(rawCantActualizar).toFixed(2)) : stockActual;
 
-  const tieneCostoBs = (costo_s_iva_bs !== null && costo_s_iva_bs !== undefined && costo_s_iva_bs !== '' && !isNaN(Number(costo_s_iva_bs)) && Number(costo_s_iva_bs) >= 0);
-  const tieneCostoUsd = (costo_s_iva_usd !== null && costo_s_iva_usd !== undefined && costo_s_iva_usd !== '' && !isNaN(Number(costo_s_iva_usd)) && Number(costo_s_iva_usd) >= 0);
+  const rawCostoBsAct = payload.costo_s_iva_bs ?? payload.costo_bs ?? costo_s_iva_bs;
+  const rawCostoUsdAct = payload.costo_s_iva_usd ?? payload.costo_usd ?? costo_s_iva_usd;
+  const tieneCostoBs = (rawCostoBsAct !== null && rawCostoBsAct !== undefined && rawCostoBsAct !== '' && !isNaN(Number(rawCostoBsAct)) && Number(rawCostoBsAct) >= 0);
+  const tieneCostoUsd = (rawCostoUsdAct !== null && rawCostoUsdAct !== undefined && rawCostoUsdAct !== '' && !isNaN(Number(rawCostoUsdAct)) && Number(rawCostoUsdAct) >= 0);
   const nuevoCosto = tieneCostoBs
-    ? Number((Number(costo_s_iva_bs) / tasaNum).toFixed(2))
-    : (tieneCostoUsd ? Number(Number(costo_s_iva_usd).toFixed(2)) : Number(p.costo_referencial_usd || 0));
+    ? Number((Number(rawCostoBsAct) / tasaNum).toFixed(2))
+    : (tieneCostoUsd ? Number(Number(rawCostoUsdAct).toFixed(2)) : Number(p.costo_referencial_usd || 0));
 
-  const tienePrecioBs = (precio_venta_s_iva_bs !== null && precio_venta_s_iva_bs !== undefined && precio_venta_s_iva_bs !== '' && !isNaN(Number(precio_venta_s_iva_bs)) && Number(precio_venta_s_iva_bs) > 0);
-  const tienePrecioUsd = (precio_venta_s_iva_usd !== null && precio_venta_s_iva_usd !== undefined && precio_venta_s_iva_usd !== '' && !isNaN(Number(precio_venta_s_iva_usd)) && Number(precio_venta_s_iva_usd) > 0);
+  const rawPrecioBsAct = payload.precio_venta_s_iva_bs ?? payload.precio_bs ?? precio_venta_s_iva_bs;
+  const rawPrecioUsdAct = payload.precio_venta_s_iva_usd ?? payload.precio_usd ?? precio_venta_s_iva_usd;
+  const tienePrecioBs = (rawPrecioBsAct !== null && rawPrecioBsAct !== undefined && rawPrecioBsAct !== '' && !isNaN(Number(rawPrecioBsAct)) && Number(rawPrecioBsAct) > 0);
+  const tienePrecioUsd = (rawPrecioUsdAct !== null && rawPrecioUsdAct !== undefined && rawPrecioUsdAct !== '' && !isNaN(Number(rawPrecioUsdAct)) && Number(rawPrecioUsdAct) > 0);
   const nuevoPrecio = tienePrecioBs
-    ? Number((Number(precio_venta_s_iva_bs) / tasaNum).toFixed(2))
-    : (tienePrecioUsd ? Number(Number(precio_venta_s_iva_usd).toFixed(2)) : Number(p.precio_venta_usd || (nuevoCosto * 1.30)));
+    ? Number((Number(rawPrecioBsAct) / tasaNum).toFixed(2))
+    : (tienePrecioUsd ? Number(Number(rawPrecioUsdAct).toFixed(2)) : Number(p.precio_venta_usd || (nuevoCosto * 1.30)));
 
   const isInactive = Number(inactivo) === 1 ? 1 : 0;
   const isActivo = isInactive === 1 ? 0 : 1;
