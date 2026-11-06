@@ -909,6 +909,7 @@ export async function onRequest(context) {
               d.producto_id,
               p.codigo,
               p.descripcion,
+              p.unidad_medida,
               d.cantidad,
               d.costo_unitario_usd,
               d.costo_unitario_ves,
@@ -917,7 +918,7 @@ export async function onRequest(context) {
             FROM movimientos m
             JOIN movimiento_detalles d ON m.id = d.movimiento_id
             JOIN productos p ON d.producto_id = p.id
-            WHERE m.tipo IN ('ENTRADA_AJUSTE', 'SALIDA_AJUSTE')
+            WHERE (m.tipo IN ('ENTRADA_AJUSTE', 'SALIDA_AJUSTE') OR m.tipo = 'AJUSTE')
               AND strftime('%Y-%m', m.fecha) = ?
             ORDER BY m.fecha ASC, p.codigo ASC
           `,
@@ -945,7 +946,16 @@ export async function onRequest(context) {
 
       if (movsRes.rows && movsRes.rows.length > 0) {
         for (const m of movsRes.rows) {
-          const isBaja = m.tipo === 'SALIDA_AJUSTE';
+          const isBaja = m.tipo === 'SALIDA_AJUSTE' || 
+            (m.tipo === 'AJUSTE' && (
+              String(m.subtipo || '').includes('NEGATIVO') || 
+              String(m.subtipo || '').includes('SALIDA') || 
+              String(m.subtipo || '').includes('FALTANTE') || 
+              String(m.subtipo || '').includes('MERMA') || 
+              String(m.subtipo || '').includes('DANO') ||
+              String(m.subtipo || '').includes('OBSOLESCENCIA') ||
+              String(m.subtipo || '').includes('AUTOCONSUMO')
+            ));
           const qty = Number(m.cantidad || 0);
           const cUsd = Number(m.costo_unitario_usd || 0);
           const cBs = Number(m.costo_unitario_ves || (cUsd * tasaBcv));
@@ -964,10 +974,11 @@ export async function onRequest(context) {
 
           itemsAjustados.push({
             id: m.movimiento_id,
+            producto_id: m.producto_id,
             tipo_movimiento: m.tipo,
             codigo: m.codigo,
             descripcion: m.descripcion,
-            unidad_medida: 'UND',
+            unidad_medida: m.unidad_medida || 'UND',
             diferencia: isBaja ? -qty : qty,
             causa_legal: m.subtipo || (isBaja ? 'MERMA_DANO' : 'SOBRANTE_AUDITORIA'),
             observaciones: m.observaciones || '',
