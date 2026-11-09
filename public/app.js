@@ -3474,35 +3474,37 @@ function renderLibroCompras(compras) {
     document.getElementById('kpi-compras-count').textContent = '0';
     document.getElementById('kpi-compras-base').textContent = '0,00 Bs. ($0.00)';
     document.getElementById('kpi-compras-iva').textContent = '0,00 Bs. ($0.00)';
-    document.getElementById('kpi-compras-ret').textContent = '0,00 Bs. ($0.00)';
+    if (document.getElementById('kpi-compras-total')) document.getElementById('kpi-compras-total').textContent = '0,00 Bs. ($0.00)';
+    if (document.getElementById('kpi-compras-ret')) document.getElementById('kpi-compras-ret').textContent = '0,00 Bs. ($0.00)';
     document.getElementById('tot-compras-base').textContent = '0,00';
     document.getElementById('tot-compras-iva').textContent = '0,00';
     document.getElementById('tot-compras-total').textContent = '0,00';
-    document.getElementById('tot-compras-ret').textContent = '0,00';
+    if (document.getElementById('tot-compras-islr')) document.getElementById('tot-compras-islr').textContent = '0,00';
+    if (document.getElementById('tot-compras-ret')) document.getElementById('tot-compras-ret').textContent = '0,00';
     return;
   }
 
   let totBase = 0, totBaseUsd = 0;
   let totIva = 0, totIvaUsd = 0;
   let totTotal = 0, totTotalUsd = 0;
-  let totRet = 0, totRetUsd = 0;
+  let totIslr = 0, totIslrUsd = 0;
 
   tbody.innerHTML = compras.map((c, index) => {
     const baseBs = Number(c.base_imponible_bs || 0);
     const ivaBs = Number(c.iva_bs || 0);
-    const totalBs = Number(c.total_bs || 0);
-    const retBs = Number(c.iva_retenido_bs || 0);
+    const totalBs = Number(c.total_bs || (baseBs + ivaBs));
+    const islrBs = Number(c.islr_retenido_bs || 0);
     const tasa = Number(c.tasa_bcv || c.tasa_bcv_cierre || 68.50);
 
     const baseUsd = Number(c.base_imponible_divisa || (tasa > 0 ? baseBs / tasa : 0));
     const ivaUsd = Number(c.monto_iva_divisa || (tasa > 0 ? ivaBs / tasa : 0));
     const totalUsd = Number(c.total_divisa || (tasa > 0 ? totalBs / tasa : 0));
-    const retUsd = Number(c.iva_retenido_divisa || (tasa > 0 ? retBs / tasa : 0));
+    const islrUsd = Number(c.islr_retenido_divisa || (tasa > 0 ? islrBs / tasa : 0));
 
     totBase += baseBs; totBaseUsd += baseUsd;
     totIva += ivaBs; totIvaUsd += ivaUsd;
     totTotal += totalBs; totTotalUsd += totalUsd;
-    totRet += retBs; totRetUsd += retUsd;
+    totIslr += islrBs; totIslrUsd += islrUsd;
 
     const isGastos = c.aplica_inventario === 0;
     const isConciliado = c.estatus_conciliacion === 'CONCILIADO' || Boolean(c.movimiento_id);
@@ -3548,11 +3550,16 @@ function renderLibroCompras(compras) {
         </td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${totalUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#059669; font-weight:600;">($${totalUsd.toFixed(2)})</div>
         </td>
         <td class="text-right font-mono font-bold">
-          <div>Bs. ${retBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${retUsd.toFixed(2)})</div>
+          ${islrBs > 0 ? `
+            <div style="color:#1e3a8a;">Bs. ${islrBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+            <div style="font-size:0.68rem; color:#1e40af; font-weight:700;">🧾 ISLR Dto. 1.808 ($${islrUsd.toFixed(2)})</div>
+          ` : `
+            <div style="color:#64748b;">0,00 Bs.</div>
+            <div style="font-size:0.68rem; color:#94a3b8; font-weight:500;">No Aplica</div>
+          `}
         </td>
         <td>${tipoBadge}</td>
         <td class="text-center" style="white-space:nowrap;">
@@ -3565,12 +3572,20 @@ function renderLibroCompras(compras) {
   document.getElementById('kpi-compras-count').textContent = compras.length.toString();
   document.getElementById('kpi-compras-base').innerHTML = `Bs. ${totBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })} <span style="font-size:0.78rem; color:#0369a1;">($${totBaseUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>`;
   document.getElementById('kpi-compras-iva').innerHTML = `Bs. ${totIva.toLocaleString('es-VE', { minimumFractionDigits: 2 })} <span style="font-size:0.78rem; color:#166534;">($${totIvaUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>`;
-  document.getElementById('kpi-compras-ret').innerHTML = `Bs. ${totRet.toLocaleString('es-VE', { minimumFractionDigits: 2 })} <span style="font-size:0.78rem; color:#b45309;">($${totRetUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>`;
+  
+  const elTotKpi = document.getElementById('kpi-compras-total') || document.getElementById('kpi-compras-ret');
+  if (elTotKpi) {
+    elTotKpi.innerHTML = `Bs. ${totTotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })} <span style="font-size:0.78rem; color:#0f766e;">($${totTotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>`;
+  }
 
   document.getElementById('tot-compras-base').innerHTML = `<div>Bs. ${totBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#0369a1;">($${totBaseUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
   document.getElementById('tot-compras-iva').innerHTML = `<div>Bs. ${totIva.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#166534;">($${totIvaUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
   document.getElementById('tot-compras-total').innerHTML = `<div>Bs. ${totTotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#059669;">($${totTotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
-  document.getElementById('tot-compras-ret').innerHTML = `<div>Bs. ${totRet.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#b45309;">($${totRetUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
+  
+  const elTotIslr = document.getElementById('tot-compras-islr') || document.getElementById('tot-compras-ret');
+  if (elTotIslr) {
+    elTotIslr.innerHTML = `<div>Bs. ${totIslr.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div><div style="font-size:0.72rem; color:#1e3a8a;">($${totIslrUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>`;
+  }
 }
 
 function filterLibroComprasLocal() {
@@ -4108,7 +4123,7 @@ function calcularIvaCompra(editedField = 'BS') {
   const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || getTasaBcvPorFechaOPeriodo(fFac);
   const fechaTasa = document.getElementById('m-comp-fecha-tasa')?.value || fFac;
   const ali = parseFloat(document.getElementById('m-comp-alicuota')?.value) || 0.16;
-  const retPct = parseFloat(document.getElementById('m-comp-ret-pct')?.value) || 0.75;
+  const retPct = parseFloat(document.getElementById('m-comp-ret-pct')?.value) || 0.00;
 
   const baseBsInput = document.getElementById('m-comp-base');
   const baseDivInput = document.getElementById('m-comp-base-divisa');
@@ -4586,7 +4601,7 @@ function imprimirLibroCompras() {
         <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
         <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">${fmtBs(iva)}</td>
-        <td style="text-align:right; font-family:monospace; white-space:nowrap;">${fmtBs(ret)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
       </tr>
     `;
   });
@@ -4623,7 +4638,7 @@ function imprimirLibroCompras() {
 
         <div class="seniat-header-right">
           <div style="font-weight: 800; color: #000080;">CONTRIBUYENTE ORDINARIO</div>
-          <div>Sujeto a Retención: 75%</div>
+          <div style="color: #475569; font-weight: 700;">No Retenedor de IVA (Prov. SNAT/2015/0049)</div>
           <div>Fecha Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
           <div>Total Operaciones: ${compras.length}</div>
           <div>Folio: Pág. 1 de 1</div>
@@ -4656,7 +4671,7 @@ function imprimirLibroCompras() {
             <th style="width: 95px; text-align:right; white-space:nowrap;">BASE IMPONIBLE INTERNA (BS)</th>
             <th style="width: 38px; text-align:center; white-space:nowrap;">% ALÍC.</th>
             <th style="width: 90px; text-align:right; white-space:nowrap;">CRÉDITO FISCAL IVA (BS)</th>
-            <th style="width: 80px; text-align:right; white-space:nowrap;">IVA RETENIDO AL VENDEDOR</th>
+            <th style="width: 80px; text-align:right; white-space:nowrap;">IVA RETENIDO (NO APLICA)</th>
           </tr>
         </thead>
         <tbody>
@@ -4670,10 +4685,15 @@ function imprimirLibroCompras() {
             <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
             <td style="text-align:center; white-space:nowrap;">16%</td>
             <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
-            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totRet)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
           </tr>
         </tfoot>
       </table>
+
+      <!-- Nota Legal de Contribuyente Ordinario del IVA -->
+      <div style="margin-top: 6px; margin-bottom: 8px; font-size: 8px; color: #334155; line-height: 1.3; padding: 5px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px;">
+        <strong>NOTA FISCAL SENIAT:</strong> INVERSIONES DG 67, C.A. ostenta la calificación de <strong>Contribuyente Ordinario del Impuesto al Valor Agregado (IVA)</strong>. De conformidad con la Providencia Administrativa SENIAT SNAT/2015/0049, la empresa <strong>NO actúa como Agente de Retención del IVA</strong> en compras a proveedores. Las retenciones practicadas por la empresa corresponden de forma exclusiva al Impuesto Sobre la Renta (ISLR) según el Decreto Ejecutivo N° 1.808 (Honorarios Profesionales y Servicios Técnicos/Administrativos).
+      </div>
 
       <!-- Cuadro Oficial de Resumen del Libro de Compras (Cruce Forma 30 SENIAT) -->
       <div class="seniat-summary-boxes">
@@ -6359,7 +6379,7 @@ function imprimirDeclaracionForma30() {
             <td style="background:#f1f5f9; font-weight:800;">3. RAZÓN SOCIAL:</td>
             <td style="font-weight:900; color:#0f172a;">INVERSIONES DG 67, C.A.</td>
             <td style="background:#f1f5f9; font-weight:800;">4. TIPO CONTRIBUYENTE:</td>
-            <td style="font-weight:800;">ORDINARIO DEL IVA (SUJETO RET. 75%)</td>
+            <td style="font-weight:800;">CONTRIBUYENTE ORDINARIO (NO RETENEDOR DE IVA)</td>
           </tr>
           <tr>
             <td style="background:#f1f5f9; font-weight:800;">5. DOMICILIO FISCAL:</td>
@@ -6628,7 +6648,7 @@ function renderProveedoresDirectorio(proveedores) {
           </select>
         </td>
         <td class="text-center">${invBadge}</td>
-        <td class="text-center font-bold font-mono" style="color: var(--ucg-navy);">${p.porcentaje_retencion || 75}%</td>
+        <td class="text-center font-bold font-mono" style="color: var(--ucg-navy);">${Number(p.porcentaje_retencion || 0)}%</td>
         <td class="text-center" style="white-space:nowrap;">
           <button class="btn btn-sm btn-secondary" onclick="openModalNuevoProveedor(${p.id})" style="padding: 4px 10px; font-size: 11px;">
             ✏️ Editar

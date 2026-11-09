@@ -398,7 +398,7 @@ export async function onRequest(context) {
           p.id, p.rif, p.razon_social,
           COALESCE(p.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
           COALESCE(p.aplica_inventario, 1) as aplica_inventario,
-          COALESCE(p.porcentaje_retencion, 75.0) as porcentaje_retencion,
+          COALESCE(p.porcentaje_retencion, 0.0) as porcentaje_retencion,
           COALESCE(p.tipo_persona, CASE WHEN p.rif LIKE 'V%' OR p.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
           COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
           COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
@@ -423,7 +423,7 @@ export async function onRequest(context) {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
         args: [
           cleanRif, cleanRazon, b.tipo_servicio || 'MERCANCIA_REPUESTOS',
-          b.aplica_inventario ? 1 : 0, Number(b.porcentaje_retencion) || 75.0,
+          b.aplica_inventario ? 1 : 0, Number(b.porcentaje_retencion) || 0.0,
           b.telefono || null, b.email || null,
           b.tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D'),
           b.direccion_fiscal || '', b.codigo_concepto_islr || '055'
@@ -473,7 +473,7 @@ export async function onRequest(context) {
       const cleanRazon = razon_social ? String(razon_social).trim() : null;
       const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
       const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-      const retencionNum = Number(porcentaje_retencion) || 75.0;
+      const retencionNum = Number(porcentaje_retencion) || 0.0;
 
       await db.execute({
         sql: `UPDATE proveedores 
@@ -1782,7 +1782,7 @@ export async function onRequest(context) {
           COALESCE(pr.razon_social, 'Proveedor General') as razon_social,
           COALESCE(pr.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
           COALESCE(pr.aplica_inventario, 1) as aplica_inventario,
-          COALESCE(pr.porcentaje_retencion, 75.0) as porcentaje_retencion,
+          COALESCE(pr.porcentaje_retencion, 0.0) as porcentaje_retencion,
           COUNT(md.id) as total_items,
           COALESCE(SUM(md.cantidad), 0) as total_unidades,
           COALESCE(SUM(COALESCE(md.base_imponible_bs, md.total_linea_bs, 0)), 0) as base_imponible_bs,
@@ -1855,12 +1855,22 @@ export async function onRequest(context) {
     if (path === '/api/fiscal/libro-compras' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
       const id = url.searchParams.get('id');
+      
+      // Auto-sanación fiscal: DG 67 es Contribuyente Ordinario del IVA (No Retenedor de IVA en compras)
+      try {
+        await db.execute("UPDATE libro_compras SET iva_retenido_bs = 0.0, iva_retenido_divisa = 0.0 WHERE iva_retenido_bs > 0");
+      } catch (e) {
+        console.error('Error auto-sanando iva_retenido_bs:', e);
+      }
+
       let sql = `
         SELECT 
           lc.*, 
           p.razon_social as proveedor_registrado_nombre,
           ri.id as retencion_islr_id,
-          ri.nro_comprobante as comprobante_islr_emitido
+          ri.nro_comprobante as comprobante_islr_emitido,
+          COALESCE(rid.monto_retenido_bs, ri.monto_retenido_bs, 0) as islr_retenido_bs,
+          COALESCE(rid.monto_retenido_divisa, 0) as islr_retenido_divisa
         FROM libro_compras lc 
         LEFT JOIN proveedores p ON lc.proveedor_id = p.id 
         LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
@@ -2135,7 +2145,7 @@ export async function onRequest(context) {
         try {
           const newProv = await db.execute({
             sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
-                  VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+                  VALUES (?, ?, ?, ?, 0.0) RETURNING id`,
             args: [cleanRif, cleanRazon, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
           });
           provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
@@ -2187,7 +2197,7 @@ export async function onRequest(context) {
 
       const retBs = body.iva_retenido_bs !== undefined && body.iva_retenido_bs !== null && body.iva_retenido_bs !== ''
         ? Number(body.iva_retenido_bs)
-        : Number((ivaBs * 0.75).toFixed(2));
+        : 0.0;
       const retDiv = Number((retBs / tasaOp).toFixed(2));
 
       const insResult = await db.execute({
@@ -2289,7 +2299,7 @@ export async function onRequest(context) {
             try {
               const newProv = await db.execute({
                 sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
-                      VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+                      VALUES (?, ?, ?, ?, 0.0) RETURNING id`,
                 args: [cleanRif, cleanRazon, f.tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
               });
               provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
@@ -2307,7 +2317,7 @@ export async function onRequest(context) {
 
           const retBs = f.iva_retenido_bs !== undefined && f.iva_retenido_bs !== null && f.iva_retenido_bs !== ''
             ? Number(f.iva_retenido_bs)
-            : Number((ivaBs * 0.75).toFixed(2));
+            : 0.0;
           const retDiv = Number((retBs / tasaOp).toFixed(2));
 
           const insResult = await db.execute({

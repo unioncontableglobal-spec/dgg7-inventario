@@ -1241,7 +1241,7 @@ app.get('/api/proveedores', async (req, res) => {
         p.razon_social,
         COALESCE(p.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
         COALESCE(p.aplica_inventario, 1) as aplica_inventario,
-        COALESCE(p.porcentaje_retencion, 75.0) as porcentaje_retencion,
+        COALESCE(p.porcentaje_retencion, 0.0) as porcentaje_retencion,
         COALESCE(p.tipo_persona, CASE WHEN p.rif LIKE 'V%' OR p.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
         COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
         COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
@@ -1270,7 +1270,7 @@ app.post('/api/proveedores', async (req, res) => {
     const cleanRazon = String(razon_social).trim();
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-    const retencionNum = Number(porcentaje_retencion) || 75.0;
+    const retencionNum = Number(porcentaje_retencion) || 0.0;
     const cleanTipoPers = tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
 
     const result = await db.execute({
@@ -1300,7 +1300,7 @@ app.put('/api/proveedores/:id', async (req, res) => {
     const cleanRazon = razon_social ? String(razon_social).trim() : null;
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
-    const retencionNum = Number(porcentaje_retencion) || 75.0;
+    const retencionNum = Number(porcentaje_retencion) || 0.0;
 
     await db.execute({
       sql: `UPDATE proveedores 
@@ -2071,6 +2071,10 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
         COALESCE(NULLIF(lc.monto_iva_divisa, 0), ROUND(lc.iva_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as monto_iva_divisa,
         COALESCE(NULLIF(lc.total_divisa, 0), ROUND(lc.total_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as total_divisa,
         COALESCE(NULLIF(lc.iva_retenido_divisa, 0), ROUND(lc.iva_retenido_bs / COALESCE(NULLIF(lc.tasa_bcv, 0), t.tasa_bcv, 68.50), 2)) as iva_retenido_divisa,
+        COALESCE(rid.monto_retenido_bs, ri.monto_retenido_bs, 0) as islr_retenido_bs,
+        COALESCE(rid.monto_retenido_divisa, 0) as islr_retenido_divisa,
+        ri.id as retencion_islr_id,
+        ri.nro_comprobante as comprobante_islr_emitido,
         lc.tipo_servicio,
         lc.aplica_inventario,
         lc.estatus_conciliacion,
@@ -2080,6 +2084,8 @@ app.get('/api/fiscal/libro-compras', async (req, res) => {
       FROM libro_compras lc
       LEFT JOIN proveedores p ON lc.proveedor_id = p.id
       LEFT JOIN tasas_bcv_periodo t ON t.periodo = lc.periodo
+      LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
+      LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
       WHERE 1=1
     `;
     const args = [];
@@ -2309,7 +2315,7 @@ app.get('/api/fiscal/entradas-tienda', async (req, res) => {
         COALESCE(pr.razon_social, 'Proveedor General') as razon_social,
         COALESCE(pr.tipo_servicio, 'MERCANCIA_REPUESTOS') as tipo_servicio,
         COALESCE(pr.aplica_inventario, 1) as aplica_inventario,
-        COALESCE(pr.porcentaje_retencion, 75.0) as porcentaje_retencion,
+        COALESCE(pr.porcentaje_retencion, 0.0) as porcentaje_retencion,
         COUNT(md.id) as total_items,
         COALESCE(SUM(md.cantidad), 0) as total_unidades,
         COALESCE(SUM(COALESCE(md.base_imponible_bs, md.total_linea_bs, 0)), 0) as base_imponible_bs,
@@ -2569,7 +2575,7 @@ app.post('/api/fiscal/libro-compras', async (req, res) => {
     if (!provId) {
       const newProv = await db.execute({
         sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
-              VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+              VALUES (?, ?, ?, ?, 0.0) RETURNING id`,
         args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt]
       });
       provId = newProv.rows[0]?.id;
@@ -2683,7 +2689,7 @@ app.post('/api/fiscal/libro-compras/batch', async (req, res) => {
           try {
             const newProv = await db.execute({
               sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
-                    VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+                    VALUES (?, ?, ?, ?, 0.0) RETURNING id`,
               args: [cleanRif, cleanRazon, f.tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
             });
             provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
@@ -2839,7 +2845,7 @@ app.put('/api/fiscal/libro-compras/:id', async (req, res) => {
     if (!provId) {
       const newProv = await db.execute({
         sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
-              VALUES (?, ?, ?, ?, 75.0) RETURNING id`,
+              VALUES (?, ?, ?, ?, 0.0) RETURNING id`,
         args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt]
       });
       provId = newProv.rows[0]?.id;

@@ -80,7 +80,7 @@
             </div>
             <div class="fiscal-row">
               <span class="fiscal-label">Condición IVA:</span>
-              <span class="fiscal-value">Contribuyente Ordinario (Retención 75%)</span>
+              <span class="fiscal-value">Contribuyente Ordinario (No Retenedor de IVA)</span>
             </div>
             <div class="fiscal-row">
               <span class="fiscal-label">Domicilio Fiscal:</span>
@@ -266,7 +266,7 @@
         </div>
         <div class="client-box-details">
           <span class="sidebar-client-rif font-mono">J-50700865-7</span>
-          <span class="client-tag-pill">IVA Ord. 75%</span>
+          <span class="client-tag-pill">Contribuyente Ordinario</span>
         </div>
       </div>
 
@@ -2458,10 +2458,10 @@
               <div class="kpi-value" id="kpi-compras-iva">0,00 Bs.</div>
               <div class="kpi-sub">Crédito deducible ante el SENIAT</div>
             </div>
-            <div class="kpi-card card-amber">
-              <div class="kpi-label">IVA RETENIDO (BS)</div>
-              <div class="kpi-value" id="kpi-compras-ret">0,00 Bs.</div>
-              <div class="kpi-sub">Retenciones soportadas (75% / 100%)</div>
+            <div class="kpi-card card-blue">
+              <div class="kpi-label">TOTAL FACTURADO (BS)</div>
+              <div class="kpi-value" id="kpi-compras-total">0,00 Bs.</div>
+              <div class="kpi-sub" id="kpi-compras-total-sub">Base Imponible + Crédito Fiscal (16%)</div>
             </div>
           </div>
 
@@ -2546,6 +2546,16 @@
             </div>
           </div>
 
+          <!-- Banner Informativo de Condición Fiscal Ordinaria -->
+          <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <div style="font-size:0.78rem; color:#166534; font-weight:700;">
+              ⚖️ RÉGIMEN FISCAL: INVERSIONES DG 67, C.A. es Contribuyente Ordinario del IVA (No Sujeto a Retención de IVA en Compras según Prov. SNAT/2015/0049). Aplican retenciones de ISLR bajo Decreto 1.808 (Honorarios y Servicios).
+            </div>
+            <div style="font-size:0.75rem; color:#15803d; font-weight:800;">
+              ✓ IVA 100% Pagado al Proveedor
+            </div>
+          </div>
+
           <!-- Table -->
           <div class="panel-card table-panel">
             <div class="table-responsive table-scroll">
@@ -2562,7 +2572,7 @@
                     <th class="text-center">ALÍCUOTA</th>
                     <th class="text-right">IVA (BS)</th>
                     <th class="text-right">TOTAL FACTURA (BS)</th>
-                    <th class="text-right">IVA RETENIDO (BS)</th>
+                    <th class="text-right">RET. ISLR (BS)</th>
                     <th>CLASIFICACIÓN</th>
                     <th class="text-center">ACCIÓN</th>
                   </tr>
@@ -2579,7 +2589,7 @@
                     <td></td>
                     <td class="text-right" id="tot-compras-iva">0,00</td>
                     <td class="text-right" id="tot-compras-total">0,00</td>
-                    <td class="text-right" id="tot-compras-ret">0,00</td>
+                    <td class="text-right" id="tot-compras-islr">0,00</td>
                     <td colspan="2"></td>
                   </tr>
                 </tfoot>
@@ -3576,7 +3586,7 @@
                 <div><strong>Razón Social:</strong> INVERSIONES DG 67, C.A.</div>
                 <div><strong>Número de RIF:</strong> <span class="font-mono font-bold"
                     style="color: #0369a1;">J-50700865-7</span></div>
-                <div><strong>Condición Tributaria:</strong> Contribuyente Ordinario del IVA (Retención 75%)</div>
+                <div><strong>Condición Tributaria:</strong> Contribuyente Ordinario del IVA (No Retenedor de IVA - Prov. SNAT/2015/0049)</div>
                 <div><strong>Sede Tributaria:</strong> Gerencia Regional de Tributos Internos Libertador - SENIAT</div>
                 <div><strong>Domicilio Fiscal:</strong> Av. Sur 11 Entre las Esquinas Bolívar y Miranda, Casa N° 112,
                   San Agustín del Norte, Caracas, Zona Postal 1010.</div>
@@ -3952,14 +3962,13 @@
               </div>
               <div class="form-group"
                 style="margin: 0; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
-                <label style="font-weight: 800; color: #0B2447; font-size: 0.82rem;">Retención de IVA (PA
-                  SNAT/2026/00093):</label>
+                <label style="font-weight: 800; color: #0B2447; font-size: 0.82rem;">Retención IVA en Compras:</label>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <select id="m-comp-ret-pct" class="form-control" style="width: 105px; font-weight: 700;"
+                  <select id="m-comp-ret-pct" class="form-control" style="width: 155px; font-weight: 700;"
                     onchange="calcularIvaCompra()">
-                    <option value="0.75" selected>75% Ord.</option>
-                    <option value="1.00">100% Esp.</option>
-                    <option value="0.00">0% Sin Ret.</option>
+                    <option value="0.00" selected>0% (No Retenedor)</option>
+                    <option value="0.75">75% (Sujeto Especial)</option>
+                    <option value="1.00">100% (Retención Total)</option>
                   </select>
                   <input type="number" step="0.01" id="m-comp-ret" class="form-control font-mono" placeholder="0.00"
                     readonly style="background: #f8fafc; font-weight: 700; color: #dc2626; border: 1px solid #cbd5e1;">
@@ -4298,11 +4307,11 @@
               </select>
             </div>
             <div class="form-group">
-              <label>% Retención IVA Aplicable:</label>
+              <label>Retención IVA en Compras:</label>
               <select id="m-prov-ret-pct" class="form-control">
-                <option value="75.0" selected>75% (Contribuyente Ordinario)</option>
+                <option value="0.0" selected>0% (No Aplica - DG 67 es Contribuyente Ordinario)</option>
+                <option value="75.0">75% (Sólo si fuere Sujeto Pasivo Especial)</option>
                 <option value="100.0">100% (Retención Total)</option>
-                <option value="0.0">0% (Sin Retención)</option>
               </select>
             </div>
           </div>

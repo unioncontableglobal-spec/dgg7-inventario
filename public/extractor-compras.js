@@ -1093,8 +1093,8 @@ async function asentarFacturaStagingIndividual(idx) {
     alicuota: 0.16,
     iva_bs: f.iva_bs,
     total_bs: f.total_bs,
-    iva_retenido_bs: Number((f.iva_bs * 0.75).toFixed(2)),
-    porcentaje_retencion: 75.0,
+    iva_retenido_bs: 0.0,
+    porcentaje_retencion: 0.0,
     tasa_bcv: f.tasa_bcv,
     archivo_origen: f.archivo_nombre
   };
@@ -1162,8 +1162,8 @@ async function asentarTodasFacturasValidadas() {
       alicuota: 0.16,
       iva_bs: f.iva_bs,
       total_bs: f.total_bs,
-      iva_retenido_bs: Number((f.iva_bs * 0.75).toFixed(2)),
-      porcentaje_retencion: 75.0,
+      iva_retenido_bs: 0.0,
+      porcentaje_retencion: 0.0,
       tasa_bcv: f.tasa_bcv,
       archivo_origen: f.archivo_nombre
     }))
