@@ -6609,10 +6609,15 @@ function renderProveedoresDirectorio(proveedores) {
         </td>
         <td class="text-center">${invBadge}</td>
         <td class="text-center font-bold font-mono" style="color: var(--ucg-navy);">${p.porcentaje_retencion || 75}%</td>
-        <td class="text-center">
+        <td class="text-center" style="white-space:nowrap;">
           <button class="btn btn-sm btn-secondary" onclick="openModalNuevoProveedor(${p.id})" style="padding: 4px 10px; font-size: 11px;">
             ✏️ Editar
           </button>
+          ${Number(p.total_facturas_asociadas || 0) === 0 ? `
+            <button class="btn btn-sm btn-secondary" onclick="eliminarProveedorDirecto(${p.id}, '${escapeHtml(p.razon_social)}')" style="padding: 4px 8px; font-size: 11px; color:#be123c; margin-left:4px;" title="Eliminar registro sin facturas ni movimientos">
+              🗑️
+            </button>
+          ` : ''}
         </td>
       </tr>
     `;
@@ -6636,6 +6641,22 @@ function filterProveedoresPanel() {
   }
   renderProveedoresDirectorio(filtered);
 }
+
+async function eliminarProveedorDirecto(id, razonSocial) {
+  if (!confirm(`¿Deseas eliminar definitivamente el registro del proveedor "${razonSocial}"?\n\nEsta acción solo está permitida para registros que no tengan facturas ni movimientos contables asociados.`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/proveedores/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al eliminar proveedor');
+    showToast(`Proveedor "${razonSocial}" eliminado exitosamente.`, 'success');
+    await loadProveedoresDirectorio();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+window.eliminarProveedorDirecto = eliminarProveedorDirecto;
 
 function openModalNuevoProveedor(id = null) {
   const form = document.getElementById('form-nuevo-proveedor');

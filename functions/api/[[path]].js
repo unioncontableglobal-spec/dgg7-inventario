@@ -384,6 +384,15 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/proveedores' && method === 'GET') {
+      // Depuración de registro residual obsoleto de la carga inicial (ID 32 J-000256862-3) si no tiene facturas ni movimientos
+      await db.execute(`
+        DELETE FROM proveedores 
+        WHERE id = 32 
+          AND rif = 'J-000256862-3' 
+          AND NOT EXISTS (SELECT 1 FROM libro_compras WHERE proveedor_id = 32)
+          AND NOT EXISTS (SELECT 1 FROM movimientos WHERE proveedor_id = 32)
+      `).catch(() => {});
+
       const res = await db.execute(`
         SELECT 
           p.id, p.rif, p.razon_social,
@@ -499,6 +508,28 @@ export async function onRequest(context) {
       });
 
       return jsonResponse({ success: true, message: 'Proveedor actualizado' });
+    }
+
+    if (path.startsWith('/api/proveedores/') && method === 'DELETE') {
+      const id = parseInt(path.replace('/api/proveedores/', ''), 10);
+      if (!id) return jsonResponse({ error: 'ID de proveedor inválido' }, 400);
+
+      const [lcCount, movCount] = await Promise.all([
+        db.execute({ sql: "SELECT COUNT(*) as count FROM libro_compras WHERE proveedor_id = ?", args: [id] }),
+        db.execute({ sql: "SELECT COUNT(*) as count FROM movimientos WHERE proveedor_id = ?", args: [id] })
+      ]);
+
+      const facturas = Number(lcCount.rows[0]?.count || 0);
+      const movs = Number(movCount.rows[0]?.count || 0);
+
+      if (facturas > 0 || movs > 0) {
+        return jsonResponse({
+          error: `No se puede eliminar este proveedor porque tiene ${facturas} factura(s) en Libro de Compras y ${movs} movimiento(s) de inventario asociados para resguardo de la trazabilidad contable.`
+        }, 400);
+      }
+
+      await db.execute({ sql: "DELETE FROM proveedores WHERE id = ?", args: [id] });
+      return jsonResponse({ success: true, message: 'Proveedor eliminado exitosamente.' });
     }
 
     // ----------------------------------------------------
