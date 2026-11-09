@@ -6853,6 +6853,13 @@ async function loadComprobantesISLR() {
   const subEl = document.getElementById('kpi-islr-periodo-sub');
   if (subEl) subEl.textContent = periodo === 'TODOS' ? 'Histórico Consolidado 2026' : `Período Fiscal: ${periodo.replace('-', ' - ')}`;
 
+  const isCerrado = isPeriodoFiscalDeclarado(periodo);
+  const bannerIslrDeclarado = document.getElementById('banner-islr-declarado');
+  if (bannerIslrDeclarado) bannerIslrDeclarado.style.display = isCerrado ? 'flex' : 'none';
+
+  const btnNuevoComp = document.getElementById('btn-nuevo-comprobante-islr');
+  if (btnNuevoComp) btnNuevoComp.style.display = isCerrado ? 'none' : 'inline-flex';
+
   try {
     const params = new URLSearchParams();
     if (periodo) params.append('periodo', periodo);
@@ -6936,12 +6943,13 @@ function renderComprobantesISLR(rows) {
         <td class="text-right font-mono" style="color: #6B7280;">Bs. ${fmtBs(sustBs)}</td>
         <td class="text-right font-mono font-bold" style="color: #0B2447; font-size: 0.85rem;">Bs. ${fmtBs(retBs)}</td>
         <td class="text-center" style="white-space: nowrap;">
-          <button class="btn btn-sm" style="background: #0B2447; color: #FFFFFF; border: 1px solid #19A7CE; padding: 4px 9px; font-size: 11px; font-weight: 700;" onclick="verComprobanteISLRPDF(${r.id})" title="Ver e Imprimir Comprobante Oficial PA SNAT/2026/00093">
+          <button class="btn btn-sm" style="background: #0B2447; color: #FFFFFF; border: 1px solid #19A7CE; padding: 4px 9px; font-size: 11px; font-weight: 700; margin-right: 3px;" onclick="verComprobanteISLRPDF(${r.id})" title="Ver e Imprimir Comprobante Oficial PA SNAT/2026/00093">
             🖨️ PDF Oficial
           </button>
-          <button class="btn btn-sm btn-secondary" style="padding: 4px 7px; font-size: 11px; color: #be123c;" onclick="eliminarComprobanteISLR(${r.id})" title="Eliminar Comprobante">
-            ✕
-          </button>
+          ${isPeriodoFiscalDeclarado(r.periodo)
+            ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;" title="Período fiscal declarado ante el SENIAT. Retención protegida contra modificaciones o eliminación.">🔒 Cerrado</span>`
+            : `<button class="btn btn-sm btn-secondary" style="padding: 4px 7px; font-size: 11px; color: #be123c;" onclick="eliminarComprobanteISLR(${r.id})" title="Eliminar Comprobante">✕</button>`
+          }
         </td>
       </tr>
     `;
@@ -7014,6 +7022,19 @@ async function openModalEmitirRetencionISLR() {
   const periodoActivo = document.getElementById('islr-periodo-select')?.value;
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-islr-periodo').value = targetPeriodo;
+
+  const isCerrado = isPeriodoFiscalDeclarado(targetPeriodo);
+  if (btnEmitir) {
+    if (isCerrado) {
+      btnEmitir.disabled = true;
+      btnEmitir.style.background = '#94a3b8';
+      btnEmitir.textContent = `🔒 Período ${targetPeriodo} Cerrado (Forma 30 Declarada)`;
+    } else {
+      btnEmitir.disabled = false;
+      btnEmitir.style.background = '';
+      btnEmitir.textContent = '✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)';
+    }
+  }
 
   const tasaOficial = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(targetPeriodo) : 880.12;
   const elTasa = document.getElementById('m-islr-tasa-bcv');
@@ -7173,11 +7194,20 @@ async function cargarFacturaDirectaEnModalISLR(f) {
     modalEl.dataset.esExistente = esExistente ? 'true' : 'false';
   }
 
+  const isCerrado = isPeriodoFiscalDeclarado(periodo);
   const btnEmitir = document.querySelector('#modal-emitir-islr button[type="submit"]');
   if (btnEmitir) {
-    btnEmitir.textContent = esExistente
-      ? `💾 Guardar Corrección del Comprobante N° ${nroCompAsignado}`
-      : `✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)`;
+    if (isCerrado) {
+      btnEmitir.disabled = true;
+      btnEmitir.style.background = '#94a3b8';
+      btnEmitir.textContent = `🔒 Período ${periodo} Cerrado (Forma 30 Declarada)`;
+    } else {
+      btnEmitir.disabled = false;
+      btnEmitir.style.background = '';
+      btnEmitir.textContent = esExistente
+        ? `💾 Guardar Corrección del Comprobante N° ${nroCompAsignado}`
+        : `✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)`;
+    }
   }
 
   // Sincronizar Tasa BCV Oficial: tomar tasa_bcv de la factura (ej. 880.12) o la del período
@@ -7473,6 +7503,13 @@ async function guardarComprobanteISLR(e) {
     detalles
   };
 
+  const periodoVal = document.getElementById('m-islr-periodo')?.value || '2026-10';
+  if (isPeriodoFiscalDeclarado(periodoVal)) {
+    showToast(`🔒 El período fiscal ${periodoVal} se encuentra DECLARADO y CERRADO formalmente ante el SENIAT (Forma 30). Las retenciones de este mes no admiten modificaciones.`, 'error');
+    btn.disabled = false;
+    return;
+  }
+
   try {
     const res = await fetch('/api/islr/comprobantes', {
       method: 'POST',
@@ -7504,6 +7541,11 @@ async function guardarComprobanteISLR(e) {
 }
 
 async function eliminarComprobanteISLR(id) {
+  const comp = (islrState.comprobantes || []).find(x => Number(x.id) === Number(id));
+  if (comp && isPeriodoFiscalDeclarado(comp.periodo)) {
+    showToast(`🔒 El período fiscal ${comp.periodo} está DECLARADO y CERRADO formalmente ante el SENIAT. No se permite eliminar retenciones de un período cerrado.`, 'error');
+    return;
+  }
   if (!confirm('¿Estás seguro de eliminar este Comprobante de Retención de ISLR?')) return;
   try {
     const res = await fetch(`/api/islr/comprobantes/${id}`, { method: 'DELETE' });

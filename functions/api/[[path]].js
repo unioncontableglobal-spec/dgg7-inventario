@@ -2967,6 +2967,13 @@ export async function onRequest(context) {
         detalles
       } = body;
 
+      const targetPeriodo = periodo || '2026-10';
+      if (await isPeriodoDeclarado(targetPeriodo, db)) {
+        return jsonResponse({
+          error: `El período fiscal ${targetPeriodo} se encuentra DECLARADO y CERRADO formalmente ante el SENIAT (Forma 30). Las retenciones de ISLR correspondientes a este mes están cerradas y no admiten nuevas emisiones ni modificaciones.`
+        }, 403);
+      }
+
       const cleanNroComp = String(nro_comprobante || '').trim();
       if (!/^\d{14}$/.test(cleanNroComp)) {
         return jsonResponse({
@@ -3254,6 +3261,16 @@ export async function onRequest(context) {
 
     if (path.startsWith('/api/islr/comprobantes/') && method === 'DELETE') {
       const id = path.split('/')[4];
+      const compRes = await db.execute({
+        sql: "SELECT periodo FROM retenciones_islr WHERE id = ? LIMIT 1",
+        args: [id]
+      });
+      const targetPeriodo = compRes.rows[0]?.periodo;
+      if (targetPeriodo && await isPeriodoDeclarado(targetPeriodo, db)) {
+        return jsonResponse({
+          error: `El período fiscal ${targetPeriodo} se encuentra DECLARADO y CERRADO formalmente ante el SENIAT. No se permite eliminar comprobantes de retención de un período cerrado.`
+        }, 403);
+      }
       await db.execute({ sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?", args: [id] });
       await db.execute({ sql: "DELETE FROM retenciones_islr WHERE id = ?", args: [id] });
       return jsonResponse({ success: true, message: 'Comprobante eliminado con éxito.' });

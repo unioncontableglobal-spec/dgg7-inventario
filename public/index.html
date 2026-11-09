@@ -3320,12 +3320,13 @@
           <div class="islr-brand-banner"
             style="background: linear-gradient(135deg, #0B2447 0%, #3F5B8F 100%); color: #FFFFFF; border-bottom: 3px solid #19A7CE; border-radius: 10px; padding: 14px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; box-shadow: 0 4px 14px rgba(11, 36, 71, 0.16);">
             <div style="display: flex; align-items: center; gap: 14px;">
-              <img src="LOGOUCG.png" alt="Unión Contable Global"
-                style="height: 46px; background: #FFFFFF; padding: 4px 8px; border-radius: 6px; border: 1.5px solid #19A7CE;">
+              <div style="background: rgba(255,255,255,0.12); border: 1.5px solid #19A7CE; padding: 6px 12px; border-radius: 6px; font-weight: 900; color: #FFFFFF; font-size: 1.1rem; letter-spacing: 1px;">
+                DG 67
+              </div>
               <div>
                 <div
                   style="font-size: 0.72rem; font-weight: 800; color: #19A7CE; letter-spacing: 0.08em; text-transform: uppercase;">
-                  UNIÓN CONTABLE GLOBAL, ASESORES CONTABLES • «UNIMOS NÚMEROS, CONTAMOS ÉXITOS»
+                  INVERSIONES DG 67, C.A. • RIF: J-50700865-7
                 </div>
                 <h1 style="font-size: 1.18rem; font-weight: 800; color: #FFFFFF; margin: 2px 0;">
                   Comprobantes de Retención ISLR
@@ -3336,7 +3337,7 @@
               </div>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="btn" style="background: #19A7CE; color: #FFFFFF; font-weight: 800; border: none;"
+              <button id="btn-nuevo-comprobante-islr" class="btn" style="background: #19A7CE; color: #FFFFFF; font-weight: 800; border: none;"
                 onclick="openModalEmitirRetencionISLR()">
                 + Emitir Comprobante ISLR
               </button>
@@ -3352,6 +3353,14 @@
               <button class="btn btn-action-excel" onclick="exportarExcelISLR()">
                 📊 Exportar Excel
               </button>
+            </div>
+          </div>
+
+          <!-- Banner Informativo de Período ISLR Declarado / Cerrado -->
+          <div id="banner-islr-declarado" style="display:none; background:#f1f5f9; border:1.5px solid #cbd5e1; border-left:5px solid #475569; padding:10px 16px; border-radius:6px; margin-bottom:14px; align-items:center; gap:12px;">
+            <span style="font-size:1.3rem;">🔒</span>
+            <div style="font-size:0.82rem; color:#334155;">
+              <strong>PERÍODO FISCAL DECLARADO Y CERRADO ANTE EL SENIAT (FORMA 30):</strong> Las retenciones de ISLR de este mes se encuentran formalmente cerradas y protegidas en modo de solo lectura para consulta y reimpresión de comprobantes oficiales.
             </div>
           </div>
 
@@ -5873,7 +5882,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261109_v8"></script>
+  <script src="app.js?v=20261109_v9"></script>
 </body>
 
 </html>

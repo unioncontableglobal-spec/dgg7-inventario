@@ -57,6 +57,17 @@
 * **Autocálculo Matemático Inmediato:** El sistema debe ejecutar de forma instantánea el cálculo de la retención (base × tarifa legal - sustraendo si aplica) y proyectar el monto retenido y el total neto a pagar en los campos y en el pie de totales.
 * **Principio de Operación en Un Solo Clic:** La pantalla no debe exigir recapturas ni cálculos manuales redundantes; el usuario solo debe verificar los datos y presionar el botón de aprobación y emisión final.
 
+### 7.1. Inmutabilidad y Anclaje Unívoco del Correlativo de Retención por Factura
+* **Anclaje Unívoco Factura ↔ Comprobante:** Una vez emitido o asociado un comprobante oficial de retención (14 dígitos `YYYYMMXXXXXXXX`) a una factura del Libro de Compras, dicho número queda **estrictamente anclado e inmutable** a dicha operación.
+* **Prohibición de Re-incremento en Correcciones y Reimpresiones:** Toda reapertura, edición, recálculo de montos o reimpresión de una retención existente debe actualizar el registro original (`UPDATE`) manteniendo invariable el número de comprobante asignado. El sistema tiene estrictamente prohibido generar nuevos números correlativos o duplicar registros en base de datos para una misma factura.
+* **Condición Exclusiva para Nuevos Correlativos:** El correlativo legal secuencial (`nextSeq`) únicamente se incrementará cuando se procese la emisión de una retención para una **nueva factura de compra** que no tenga comprobante previo emitido.
+
+### 7.2. Bloqueo y Cierre Automático de Retenciones con la Forma 30
+* **Cierre Simultáneo con la Forma 30:** Al finalizar y aprobarse la Declaración de IVA (Forma 30) de un período fiscal ante el SENIAT (estatus `DECLARADO`), los comprobantes y retenciones de ISLR de ese mismo mes quedan **automáticamente cerrados y protegidos contra modificaciones, nuevas emisiones o eliminaciones**.
+* **Modo Exclusivo de Consulta y Reimpresión Oficial:** En períodos cerrados, el módulo de retenciones opera estrictamente en modo de solo lectura, permitiendo visualizar e imprimir los comprobantes en PDF oficial (`PA SNAT/2026/00093`) sin alterar la contabilidad ni la base imponible declarada.
+* **Reapertura Autorizada:** Únicamente previa reapertura formal del período fiscal (`EN_PROCESO`) para tramitar una rectificativa fiscal, se habilitará la edición controlada de los comprobantes.
+
+
 
 
 
