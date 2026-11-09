@@ -3679,15 +3679,20 @@ app.get('/api/islr/config', async (req, res) => {
       agente_rif: 'J-50700865-7',
       agente_direccion: 'AV. SUR 11 ENTRE LAS ESQUINAS BOLÍVAR Y MIRANDA, CASA NRO. 112, LOCAL S/N, URB. SAN AGUSTÍN DEL NORTE, CARACAS',
       agente_telefono: '0212-5771122',
-      agente_email: 'administracion@inversionesdg67.com.ve',
+      agente_email: 'dg67contable@gmail.com',
       valor_ut_bs: Number(process.env.VALOR_UT_BS || 43.00),
       factor_sustraendo: 83.3334,
-      aplica_imprenta_digital: 1,
-      imprenta_razon_social: 'UNIÓN CONTABLE GLOBAL SISTEMAS DIGITALES, C.A.',
-      imprenta_rif: 'J-50714716-9',
-      imprenta_providencia: 'SNAT/2026/00093-AUT-00418',
-      imprenta_fecha_asignacion: '01/01/2026 08:00:00'
+      aplica_imprenta_digital: 0,
+      imprenta_razon_social: '',
+      imprenta_rif: '',
+      imprenta_providencia: '',
+      imprenta_fecha_asignacion: ''
     };
+    if (rs.rows[0]) {
+      await db.execute("UPDATE config_fiscal_islr SET aplica_imprenta_digital = 0, agente_email = 'dg67contable@gmail.com' WHERE id = 1").catch(() => {});
+      row.aplica_imprenta_digital = 0;
+      row.agente_email = 'dg67contable@gmail.com';
+    }
     res.json(row);
   } catch (error) {
     res.status(500).json({ error: error.message });

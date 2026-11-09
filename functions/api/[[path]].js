@@ -2763,8 +2763,9 @@ export async function onRequest(context) {
     if (path === '/api/islr/config' && method === 'GET') {
       await db.execute(`
         UPDATE config_fiscal_islr 
-        SET agente_email = 'dg67contable@gmail.com' 
-        WHERE id = 1 AND (agente_email IS NULL OR agente_email LIKE '%inversionesdg67.com.ve%')
+        SET agente_email = 'dg67contable@gmail.com',
+            aplica_imprenta_digital = 0
+        WHERE id = 1
       `).catch(() => {});
       await db.execute(`
         UPDATE empresas 

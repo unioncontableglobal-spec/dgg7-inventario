@@ -6808,11 +6808,11 @@ const islrState = {
     agente_email: 'dg67contable@gmail.com',
     valor_ut_bs: 43.00,
     factor_sustraendo: 83.3334,
-    aplica_imprenta_digital: 1,
-    imprenta_razon_social: 'UNIÓN CONTABLE GLOBAL SISTEMAS DIGITALES, C.A.',
-    imprenta_rif: 'J-50714716-9',
-    imprenta_providencia: 'SNAT/2026/00093-AUT-00418',
-    imprenta_fecha_asignacion: '01/01/2026 08:00:00'
+    aplica_imprenta_digital: 0,
+    imprenta_razon_social: '',
+    imprenta_rif: '',
+    imprenta_providencia: '',
+    imprenta_fecha_asignacion: ''
   }
 };
 
@@ -7723,19 +7723,6 @@ async function verComprobanteISLRPDF(id) {
       </div>
     `;
 
-    // Sección Parametrizable de Imprenta Digital Autorizada (PA SNAT/2026/00093)
-    const imprentaHtml = cfg.aplica_imprenta_digital ? `
-      <div style="margin-top: 8px; border: 1px solid #3F5B8F; background: #F3F4F6; border-radius: 4px; padding: 5px 10px; font-size: 7.8px; color: #0B2447; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <strong>TRAZABILIDAD DE IMPRENTA DIGITAL AUTORIZADA (PA SNAT/2026/00093):</strong>
-          ${cfg.imprenta_razon_social || 'SISTEMAS DIGITALES TRIBUTARIOS, C.A.'} • <strong>RIF:</strong> ${cfg.imprenta_rif || 'J-50714716-9'}
-        </div>
-        <div style="font-family: monospace; font-weight: 800;">
-          Providencia: ${cfg.imprenta_providencia || 'SNAT/2026/00093-AUT-00418'} • Asignación: ${cfg.imprenta_fecha_asignacion || `${r.fecha_emision} ${r.hora_emision}`}
-        </div>
-      </div>
-    ` : '';
-
     const printHtml = `
       <div class="print-preview-container islr-official-sheet" style="max-width: 1040px; padding: 18px 22px; border-top: 5px solid #0B2447;">
         <!-- 1. ENCABEZADO FISCAL AGENTE DE RETENCIÓN & NUMERACIÓN PA SNAT/2026/00093 -->
@@ -7873,12 +7860,10 @@ async function verComprobanteISLRPDF(id) {
         <!-- 4. BLOQUE MULTIMONEDAS (TASA BCV Y EQUIVALENTES EN DIVISAS) -->
         ${multimonedaHtml}
 
-        <!-- 5. PIE DE PÁGINA LEGAL OBLIGATORIO Y TRAZABILIDAD DE IMPRENTA DIGITAL -->
+        <!-- 5. PIE DE PÁGINA LEGAL OBLIGATORIO -->
         <div style="border: 1px solid #cbd5e1; border-left: 4px solid #0B2447; background: #FFFFFF; padding: 6px 10px; border-radius: 4px; font-size: 8px; color: #0B2447; text-align: justify; line-height: 1.35;">
           <strong>LEYENDA LEGAL OBLIGATORIA:</strong> <em>"Comprobante emitido conforme a lo establecido en la Providencia Administrativa SNAT/2026/00093 (Gaceta Oficial N° 43.484) y el Decreto 1.808 en materia de Retenciones de ISLR."</em> El monto retenido será enterado oportunamente ante el Tesoro Nacional a nombre del Sujeto Retenido.
         </div>
-
-        ${imprentaHtml}
 
         <!-- 6. FIRMAS Y SELLOS OFICIALES (AGENTE DE RETENCIÓN Y SUJETO RETENIDO) -->
         <div class="print-footer-signatures" style="margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; text-align: center;">
