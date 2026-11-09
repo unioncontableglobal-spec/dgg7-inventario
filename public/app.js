@@ -6919,9 +6919,12 @@ function renderComprobantesISLR(rows) {
 
 async function emitirISLRDesdeFacturaCompra(libroCompraId) {
   // 1. Localizar la factura seleccionada del Libro de Compras en memoria
-  let factura = (state.libroCompras || []).find(c => Number(c.id) === Number(libroCompraId));
+  let factura = (fiscalStateNew.compras || []).find(c => Number(c.id) === Number(libroCompraId));
   if (!factura) {
     factura = (islrState.facturasDisponibles || []).find(f => Number(f.id) === Number(libroCompraId));
+  }
+  if (!factura) {
+    factura = (state.purchases || []).find(p => Number(p.id) === Number(libroCompraId));
   }
 
   // 2. Si no estuviera en memoria (p. ej. tras refrescar), consultar BD
@@ -6981,7 +6984,7 @@ async function openModalEmitirRetencionISLR() {
     const provs = await provRes.json();
     const facs = await facRes.json();
     state.suppliers = provs;
-    islrState.facturasDisponibles = Array.isArray(facs) ? facs : [];
+    islrState.facturasDisponibles = (Array.isArray(facs) && facs.length > 0) ? facs : (fiscalStateNew.compras || []);
 
     const selProv = document.getElementById('m-islr-select-proveedor');
     if (selProv && Array.isArray(provs)) {
@@ -6990,9 +6993,9 @@ async function openModalEmitirRetencionISLR() {
     }
 
     const selFac = document.getElementById('islr-select-factura-compra');
-    if (selFac && Array.isArray(facs)) {
-      selFac.innerHTML = `<option value="">-- Seleccionar factura del Libro de Compras (${facs.length} disponibles) --</option>` +
-        facs.map((f, i) => {
+    if (selFac && Array.isArray(islrState.facturasDisponibles)) {
+      selFac.innerHTML = `<option value="">-- Seleccionar factura del Libro de Compras (${islrState.facturasDisponibles.length} disponibles) --</option>` +
+        islrState.facturasDisponibles.map((f, i) => {
           const tagTipo = f.aplica_inventario === 0 ? '⚖️ SERVICIO/GASTO' : '📦 COMPRA';
           const yaEmitido = f.comprobante_islr_emitido ? ` [Ya Retenido: ${f.comprobante_islr_emitido}]` : '';
           return `<option value="${i}">[${f.periodo}] ${tagTipo} • ${f.razon_social} • Fact: ${f.nro_factura || 'S/N'} • Base: Bs. ${fmtBs(f.base_imponible_bs)}${yaEmitido}</option>`;
@@ -7085,24 +7088,22 @@ function cargarFacturaDirectaEnModalISLR(f) {
   }
 
   // 4. Datos del Sujeto Retenido (Proveedor)
-  document.getElementById('m-islr-rif').value = f.rif || '';
+  const cleanRif = String(f.rif || '').trim().toUpperCase();
+  document.getElementById('m-islr-rif').value = cleanRif;
   document.getElementById('m-islr-razon').value = f.razon_social || '';
 
-  const cleanRif = String(f.rif || '').toUpperCase();
   const tipoPers = f.tipo_persona || ((cleanRif.startsWith('V') || cleanRif.startsWith('E')) ? 'PN-R' : 'PJ-D');
   document.getElementById('m-islr-tipo-persona').value = tipoPers;
 
-  if (cleanRif.includes('50714716')) {
-    document.getElementById('m-islr-direccion').value = 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS';
-    document.getElementById('m-islr-email').value = 'facturacion@unioncontableglobal.com';
-    document.getElementById('m-islr-concepto-general').value = 'ASESORIA ADMINISTRATIVA';
-  } else {
-    document.getElementById('m-islr-direccion').value = f.direccion_fiscal || 'CARACAS, DISTRITO CAPITAL';
-    document.getElementById('m-islr-email').value = f.email || 'administracion@proveedor.com';
-    document.getElementById('m-islr-concepto-general').value = f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES'
-      ? 'ASESORIA ADMINISTRATIVA'
-      : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
-  }
+  const prov = (state.suppliers || []).find(p => p.rif === cleanRif || (f.proveedor_id && p.id === f.proveedor_id));
+  const dirFiscal = f.direccion_fiscal || prov?.direccion_fiscal || (cleanRif.includes('50714716') ? 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS' : 'CARACAS, DISTRITO CAPITAL');
+  const emailProv = f.email || prov?.email || (cleanRif.includes('50714716') ? 'facturacion@unioncontableglobal.com' : 'administracion@proveedor.com');
+
+  document.getElementById('m-islr-direccion').value = dirFiscal;
+  document.getElementById('m-islr-email').value = emailProv;
+  document.getElementById('m-islr-concepto-general').value = (cleanRif.includes('50714716') || f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES')
+    ? 'ASESORIA ADMINISTRATIVA'
+    : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
 
   // 5. Configurar concepto según Decreto 1808 (Concepto 055 para PJ-D, 2% sobre base imponible)
   const codConcepto = f.codigo_concepto_islr || (cleanRif.includes('50714716') ? '055' : (tipoPers === 'PN-R' ? '001' : '055'));
@@ -7110,7 +7111,11 @@ function cargarFacturaDirectaEnModalISLR(f) {
     ? 'ASESORIA 360 GLOBAL - CFT'
     : (f.observaciones_cruce || (f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'EJECUCIÓN DE OBRAS Y SUMINISTROS' : 'PRESTACIÓN DE SERVICIOS'));
 
-  // 6. Renglón de detalle de factura objeto de retención con Base y Total correctos
+  // 6. Base y Total con soporte para total_bs / monto_total_bs
+  const totBs = Number(f.total_bs !== undefined && f.total_bs !== null && f.total_bs !== '' ? f.total_bs : (f.monto_total_bs || 0));
+  const baseBs = Number(f.base_imponible_bs !== undefined && f.base_imponible_bs !== null && f.base_imponible_bs !== '' ? f.base_imponible_bs : (totBs > 0 ? (totBs / 1.16) : 0));
+
+  // 7. Renglón de detalle de factura objeto de retención con Base y Total correctos
   const tbodyItems = document.getElementById('tbody-modal-islr-items');
   if (tbodyItems) tbodyItems.innerHTML = '';
 
@@ -7121,11 +7126,11 @@ function cargarFacturaDirectaEnModalISLR(f) {
     nro_control: f.nro_control || '00-00000015',
     codigo_concepto: codConcepto,
     descripcion_concepto: descConcepto,
-    monto_total_bs: Number(f.total_bs || 0),
-    base_imponible_bs: Number(f.base_imponible_bs || 0)
+    monto_total_bs: totBs,
+    base_imponible_bs: baseBs
   });
 
-  // 7. Forzar recálculo inmediato de retenciones y totales
+  // 8. Forzar recálculo inmediato de retenciones y totales
   recalcularLineasISLR();
 
   if (typeof showToast === 'function') {
@@ -7147,6 +7152,7 @@ async function emitirRetencionDirectaDesdeFactura(f) {
   cargarFacturaDirectaEnModalISLR(f);
 }
 window.emitirRetencionDirectaDesdeFactura = emitirRetencionDirectaDesdeFactura;
+window.cargarFacturaDirectaEnModalISLR = cargarFacturaDirectaEnModalISLR;
 window.cargarFacturaDirectaEnModalISLR = cargarFacturaDirectaEnModalISLR;
 
 function toggleBloqueMultimonedaISLR() {

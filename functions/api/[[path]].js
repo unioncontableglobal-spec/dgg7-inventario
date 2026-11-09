@@ -2317,6 +2317,15 @@ export async function onRequest(context) {
       });
     }
 
+    if (path.startsWith('/api/fiscal/libro-compras/') && method === 'GET') {
+      const compId = parseInt(path.split('/').pop(), 10);
+      const res = await db.execute({ sql: "SELECT * FROM libro_compras WHERE id = ?", args: [compId] });
+      if (res.rows.length === 0) {
+        return jsonResponse({ error: 'Factura de compra no encontrada' }, 404);
+      }
+      return jsonResponse(res.rows[0]);
+    }
+
     if (path.startsWith('/api/fiscal/libro-compras/') && method === 'PUT') {
       const compId = parseInt(path.split('/').pop(), 10);
       const existingC = await db.execute({ sql: "SELECT periodo, movimiento_id FROM libro_compras WHERE id = ?", args: [compId] });
