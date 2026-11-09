@@ -8,27 +8,27 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Colores Corporativos Oficiales Unión Contable Global */
-  --ucg-navy: #000080;
-  /* Azul Marino Principal Institucional */
-  --ucg-navy-dark: #07153a;
-  /* Azul Marino Profundo */
-  --ucg-blue-accent: #0A5CF5;
-  /* Azul Real Vibrante */
+  /* Colores Corporativos Ejecutivos Oficiales (Estándar Google / SAP Fiori Horizon) */
+  --ucg-navy: #1e3a8a;
+  /* Navy Corporativo Ejecutivo */
+  --ucg-navy-dark: #0f172a;
+  /* Slate 900 Oscuro */
+  --ucg-blue-accent: #2563eb;
+  /* Azul Profesional */
   --ucg-blue-light: #eff6ff;
   /* Fondo Azul Muy Claro */
-  --ucg-blue-border: #bfdbfe;
+  --ucg-blue-border: #dbeafe;
   /* Borde Azul Tenue */
 
   /* Colores Neutros y Fondos Blancos */
   --bg-body: #f8fafc;
   --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
+  --bg-card-hover: #f8fafc;
   --bg-input: #ffffff;
 
   --border-light: #e2e8f0;
   --border-subtle: #cbd5e1;
-  --border-focus: #0A5CF5;
+  --border-focus: #2563eb;
 
   --text-primary: #0f172a;
   /* Slate 900 (Lectura óptima) */
@@ -38,17 +38,17 @@
   /* Slate 500 */
 
   /* Estados Funcionales Contables */
-  --accent-emerald: #166534;
+  --accent-emerald: #059669;
   /* Verde Contable Institucional */
-  --accent-emerald-bg: #f0fdf4;
-  --accent-emerald-border: #bbf7d0;
+  --accent-emerald-bg: #ecfdf5;
+  --accent-emerald-border: #a7f3d0;
 
-  --accent-rose: #be123c;
+  --accent-rose: #dc2626;
   /* Rojo Alerta / Salidas */
-  --accent-rose-bg: #fff1f2;
-  --accent-rose-border: #fecdd3;
+  --accent-rose-bg: #fef2f2;
+  --accent-rose-border: #fecaca;
 
-  --accent-amber: #b45309;
+  --accent-amber: #d97706;
   /* Ámbar Alertas Stock Mínimo */
   --accent-amber-bg: #fffbeb;
   --accent-amber-border: #fde68a;
@@ -192,19 +192,19 @@ body {
 
 /* 1.2 Ficha Fiscal Compacta del Contribuyente */
 .sidebar-client-box {
-  margin: 6px 10px;
-  padding: 7px 10px;
-  background: linear-gradient(145deg, #f8fafc 0%, #eff6ff 100%);
-  border: 1px solid #bfdbfe;
-  border-left: 3px solid var(--ucg-navy);
+  margin: 8px 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 128, 0.03);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition: all 0.15s ease;
 }
 
 .sidebar-client-box:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 2px 6px rgba(0, 0, 128, 0.06);
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
 }
 
 .client-box-top {
@@ -342,37 +342,43 @@ body {
 }
 
 .sidebar-nav .nav-tab:hover {
-  background: #eff6ff;
-  color: var(--ucg-navy);
-  border-color: #dbeafe;
-  transform: translateX(2px);
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #e2e8f0;
+  transform: none;
 }
 
 .sidebar-nav .nav-tab:hover svg {
-  stroke: var(--ucg-blue-accent);
+  stroke: var(--ucg-navy);
 }
 
 .sidebar-nav .nav-tab.active {
-  background: linear-gradient(135deg, var(--ucg-navy) 0%, #0A5CF5 100%);
-  color: #ffffff;
-  border-color: var(--ucg-navy);
-  box-shadow: 0 2px 8px rgba(0, 0, 128, 0.2);
-  transform: none;
-  font-weight: 700;
+  background: #eff6ff !important;
+  color: #1e3a8a !important;
+  border-color: transparent !important;
+  border-left: 3px solid #2563eb !important;
+  box-shadow: none !important;
+  transform: none !important;
+  font-weight: 700 !important;
 }
 
 .sidebar-nav .nav-tab.active svg {
-  stroke: #ffffff;
+  stroke: #2563eb !important;
 }
 
 .nav-badge-pill {
-  font-size: 0.54rem;
-  font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 9999px;
+  font-size: 0.56rem;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-left: auto;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
   flex-shrink: 0;
   background: #dbeafe;
   color: var(--ucg-blue-accent);
@@ -4423,4 +4429,310 @@ body {
   width: 0%;
   background: linear-gradient(90deg, #0284c7 0%, #10b981 100%);
   transition: width 0.2s ease;
+}
+
+/* ==========================================================================
+   ENTERPRISE UI REFRESH (SISTEMA ESTÁNDAR TIPO GOOGLE / SAP FIORI HORIZON)
+   ========================================================================== */
+
+/* 1. Normalización de Encabezados de Tablas (Cero Fondos Negros/Navy Pesados) */
+.data-table thead tr,
+.data-table th,
+.items-entry-table thead tr,
+.items-entry-table th,
+.pzero-table thead tr,
+.pzero-table th,
+table thead tr[style*="#0B2447"],
+table th[style*="#0B2447"],
+table tr[style*="#0B2447"] {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-weight: 700 !important;
+  font-size: 0.70rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  border-top: none !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 10px 12px !important;
+  text-shadow: none !important;
+}
+
+/* 2. Normalización de Encabezados de Modales (Limpios, Blancos, Despejados) */
+.modal-header,
+.modal-header[style*="#0B2447"],
+.modal-header[style*="linear-gradient"] {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 14px 20px !important;
+}
+
+.modal-header h2,
+.modal-header h3,
+.modal-header strong,
+.modal-header .modal-title,
+.modal-header div[style*="color: #ffffff"],
+.modal-header div[style*="color:#fff"] {
+  color: #0f172a !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.modal-header span[style*="color: #e0f2fe"],
+.modal-header span[style*="color:#e0f2fe"],
+.modal-header div[style*="color: #e0f2fe"],
+.modal-header div[style*="color:#e0f2fe"],
+.modal-header div[style*="color: #cbd5e1"] {
+  color: #64748b !important;
+}
+
+.modal-header .modal-close,
+.modal-header button[onclick*="closeModal"] {
+  color: #64748b !important;
+  background: transparent !important;
+  border: none !important;
+  font-size: 1.25rem !important;
+  cursor: pointer !important;
+}
+
+.modal-header .modal-close:hover,
+.modal-header button[onclick*="closeModal"]:hover {
+  color: #0f172a !important;
+}
+
+/* 3. Normalización de Tarjetas y Paneles (Sin Bordes Superiores Gruesos Multicolores) */
+.panel-card,
+.forma30-card,
+.pzero-summary-card,
+div[style*="border-top: 4px solid"] {
+  border-top: 1px solid #e2e8f0 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+
+.modal-box {
+  border-top: none !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* 4. Widget de Tasa BCV Oficial en Dashboard (Refresco Ejecutivo Blanco) */
+.daily-bcv-widget {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  border-radius: 10px !important;
+  padding: 16px 22px !important;
+  margin-bottom: 18px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+
+.daily-bcv-badge {
+  background: #eff6ff !important;
+  border: 1px solid #dbeafe !important;
+  border-radius: 6px !important;
+  padding: 2px 8px !important;
+}
+
+.bcv-badge-text {
+  color: #1d4ed8 !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+}
+
+.bcv-pulse-dot {
+  background: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+
+.daily-bcv-title {
+  color: #475569 !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+}
+
+.daily-bcv-rate {
+  color: #0f172a !important;
+  font-size: 1.65rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.daily-bcv-date {
+  color: #64748b !important;
+  font-size: 0.74rem !important;
+}
+
+.daily-bcv-desc {
+  color: #64748b !important;
+  font-size: 0.74rem !important;
+}
+
+.daily-input-group {
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.daily-input-prefix {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.daily-bcv-input {
+  color: #0f172a !important;
+}
+
+.btn-daily-bcv {
+  background: #1e3a8a !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+}
+
+.btn-daily-bcv:hover {
+  background: #1d4ed8 !important;
+}
+
+/* 5. 5 KPI Cards Ejecutivos del Dashboard */
+.kpi-card-rich {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+  position: relative !important;
+}
+
+.kpi-card-rich::before {
+  display: none !important;
+}
+
+.kpi-rich-top {
+  margin-bottom: 6px !important;
+}
+
+.kpi-rich-label {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.kpi-rich-icon {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  font-size: 0.85rem !important;
+}
+
+.kpi-rich-val {
+  font-size: 1.45rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.02em !important;
+  margin-bottom: 2px !important;
+}
+
+.kpi-rich-sub {
+  font-size: 0.74rem !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+/* 6. Botones Corporativos Unificados (Cero Efectos Neón / Estilo SAP) */
+.btn-navy,
+button[style*="background:#0B2447"],
+button[style*="background: #0B2447"],
+button[style*="background:linear-gradient(135deg, #0B2447"],
+button[style*="background: linear-gradient(135deg, #0B2447"] {
+  background: #1e3a8a !important;
+  color: #ffffff !important;
+  border: 1px solid #1e3a8a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+}
+
+.btn-navy:hover,
+button[style*="background:#0B2447"]:hover,
+button[style*="background: #0B2447"]:hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+
+/* Botón Retención ISLR / IVA */
+button[onclick*="emitirISLR"],
+button[onclick*="emitirRetencion"],
+button[title*="Retención ISLR"] {
+  background: #1e3a8a !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 4px !important;
+  font-weight: 600 !important;
+}
+
+button[onclick*="emitirISLR"]:hover,
+button[onclick*="emitirRetencion"]:hover {
+  background: #1d4ed8 !important;
+}
+
+/* 7. Banners Informativos Tipo Enterprise Toolbar */
+#banner-carga-masiva-pdf,
+div[style*="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"] {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+#banner-carga-masiva-pdf strong {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+#banner-carga-masiva-pdf button,
+button[onclick*="abrirModalCargaMasivaPDF"] {
+  background: #1e3a8a !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* 8. Píldoras de Meses (Filtros de Período) */
+.month-pill-btn {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  font-size: 0.72rem !important;
+  padding: 4px 10px !important;
+  transition: all 0.15s ease !important;
+}
+
+.month-pill-btn:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* 9. Normalización de Cifras Bimonetarias en Tablas */
+.sub-ref-usd,
+.data-table td div[style*="color:#0369a1"],
+.data-table td div[style*="color: #0369a1"],
+.data-table td div[style*="color:#059669"],
+.data-table td div[style*="color: #059669"],
+.data-table td div[style*="color:#166534"],
+.data-table td div[style*="color: #166534"],
+.data-table td div[style*="color:#92400e"],
+.data-table td div[style*="color: #92400e"] {
+  color: #64748b !important;
+  font-weight: 500 !important;
 }

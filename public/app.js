@@ -962,22 +962,22 @@ function renderDashboardMonthly(data) {
 
     return `
       <tr>
-        <td style="padding: 12px 14px;">
-          <div class="font-bold" style="color: #0B2447; font-size: 0.88rem;">${labelMes}</div>
-          <div style="font-size: 0.72rem; color: #64748b;">Período ${m.periodo}</div>
+        <td style="padding: 10px 14px;">
+          <div class="font-bold" style="color: #0f172a; font-size: 0.86rem;">${labelMes}</div>
+          <div style="font-size: 0.70rem; color: #64748b;">Período ${m.periodo}</div>
         </td>
-        <td class="text-right font-mono font-bold" style="padding: 12px 14px; color: #0284c7; font-size: 0.85rem;">
+        <td class="text-right font-mono font-bold" style="padding: 10px 14px; color: #0f172a; font-size: 0.82rem;">
           Bs. ${Number(m.tasa_bcv || 0).toFixed(2)}
         </td>
-        <td class="text-right font-mono" style="padding: 12px 14px;">
-          <div class="font-bold" style="color: #0369a1; font-size: 0.90rem;">Bs. ${fmtBs(comprasBs)}</div>
-          <div style="font-size: 0.74rem; color: #166534; font-family: monospace;">${subCompText}</div>
+        <td class="text-right font-mono" style="padding: 10px 14px;">
+          <div class="font-bold" style="color: #0f172a; font-size: 0.86rem;">Bs. ${fmtBs(comprasBs)}</div>
+          <div style="font-size: 0.70rem; color: #64748b; font-family: var(--font-mono);">${subCompText}</div>
         </td>
-        <td class="text-right font-mono" style="padding: 12px 14px;">
-          <div class="font-bold" style="color: #059669; font-size: 0.90rem;">Bs. ${fmtBs(ventasBs)}</div>
-          <div style="font-size: 0.74rem; color: #166534; font-family: monospace;">$${fmtUsd(ventasUsd)} USD • ${undsVent.toLocaleString()} unds</div>
+        <td class="text-right font-mono" style="padding: 10px 14px;">
+          <div class="font-bold" style="color: #0f172a; font-size: 0.86rem;">Bs. ${fmtBs(ventasBs)}</div>
+          <div style="font-size: 0.70rem; color: #64748b; font-family: var(--font-mono);">$${fmtUsd(ventasUsd)} USD • ${undsVent.toLocaleString()} unds</div>
         </td>
-        <td class="text-center" style="padding: 12px 14px;">
+        <td class="text-center" style="padding: 10px 14px;">
           ${badgeHtml}
         </td>
       </tr>
@@ -3516,13 +3516,13 @@ function renderLibroCompras(compras) {
     const isRowCerrada = isPeriodoFiscalDeclarado(c.periodo);
     const actionsCol = isRowCerrada
       ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10.5px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;">🔒 Declarado</span>`
-      : `<button class="btn btn-sm btn-navy" title="Editar Factura de Compra" onclick="editarCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; font-weight:700; margin-right:3px;">
+      : `<button class="btn btn-sm btn-secondary" title="Editar Factura de Compra" onclick="editarCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; font-weight:600; margin-right:3px;">
            ✏️ Editar
          </button>
-         <button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 10.5px; background:#0B2447; color:#19A7CE; font-weight:800; margin-right:3px;">
+         <button class="btn btn-sm" title="Emitir Comprobante de Retención ISLR (PA SNAT/2026/00093) a esta factura" onclick="emitirISLRDesdeFacturaCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; background:#1e3a8a; color:#ffffff; font-weight:700; border-radius:4px; border:none; margin-right:3px;">
            🧾 Ret. ISLR
          </button>
-         <button class="btn btn-sm btn-secondary" title="Eliminar Factura" onclick="eliminarFacturaCompra(${c.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
+         <button class="btn btn-sm btn-secondary" title="Eliminar Factura" onclick="eliminarFacturaCompra(${c.id})" style="padding: 3px 7px; font-size: 11px; color:#dc2626;">
            ✕
          </button>`;
 
@@ -3530,29 +3530,29 @@ function renderLibroCompras(compras) {
       <tr>
         <td class="text-center font-bold">${c.nro_operacion || (index + 1)}</td>
         <td>
-          <div>${c.fecha || '-'}</div>
+          <div style="font-weight:600;">${c.fecha || '-'}</div>
           <div style="font-size:0.68rem; color:#64748b;">BCV: Bs. ${tasa.toFixed(2)}</div>
         </td>
-        <td class="font-mono font-bold" style="color: var(--ucg-navy);">${c.rif}</td>
+        <td class="font-mono font-bold" style="color: #0f172a;">${c.rif}</td>
         <td><strong>${c.razon_social}</strong></td>
         <td class="font-mono font-bold">${c.nro_factura || '-'}</td>
-        <td class="font-mono">${c.nro_control || '-'}</td>
+        <td class="font-mono text-muted">${c.nro_control || '-'}</td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${baseBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#0369a1;">($${baseUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${baseUsd.toFixed(2)})</div>
         </td>
         <td class="text-center font-mono">16%</td>
-        <td class="text-right font-mono" style="color: #166534; font-weight: 700;">
+        <td class="text-right font-mono font-bold">
           <div>Bs. ${ivaBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#64748b;">($${ivaUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${ivaUsd.toFixed(2)})</div>
         </td>
-        <td class="text-right font-mono font-bold" style="color: var(--ucg-navy);">
+        <td class="text-right font-mono font-bold">
           <div>Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#059669;">($${totalUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${totalUsd.toFixed(2)})</div>
         </td>
-        <td class="text-right font-mono" style="color: #b45309;">
+        <td class="text-right font-mono font-bold">
           <div>Bs. ${retBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#92400e;">($${retUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${retUsd.toFixed(2)})</div>
         </td>
         <td>${tipoBadge}</td>
         <td class="text-center" style="white-space:nowrap;">
@@ -4839,10 +4839,10 @@ function renderLibroVentas(ventas) {
     const isRowCerrada = isPeriodoFiscalDeclarado(v.periodo);
     const actionsCol = isRowCerrada
       ? `<span class="badge" style="background:#f1f5f9; color:#475569; font-size:10.5px; padding:3px 7px; border:1px solid #cbd5e1; font-weight:700;">🔒 Declarado</span>`
-      : `<button class="btn btn-sm btn-navy" title="Editar / Completar Reporte Z" onclick="editarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; margin-right: 4px; font-weight:700;">
+      : `<button class="btn btn-sm btn-secondary" title="Editar / Completar Reporte Z" onclick="editarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; margin-right: 4px; font-weight:600;">
            ✏️ Editar
          </button>
-         <button class="btn btn-sm btn-secondary" title="Eliminar Registro" onclick="eliminarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; color:#be123c;">
+         <button class="btn btn-sm btn-secondary" title="Eliminar Registro" onclick="eliminarVenta(${v.id})" style="padding: 3px 8px; font-size: 11px; color:#dc2626;">
            ✕
          </button>`;
 
@@ -4850,28 +4850,28 @@ function renderLibroVentas(ventas) {
       <tr>
         <td class="text-center font-bold">${index + 1}</td>
         <td>
-          <div style="font-weight:700;">${v.fecha || '-'}</div>
-          <div style="font-size:0.72rem; font-family:monospace; color:#0369a1; font-weight:700; margin-top:2px;">
-            ${v.numero_reporte_z ? `Z: ${v.numero_reporte_z} • ${v.serial_impresora || 'Z0A0000176'}` : `<span style="color:#dc2626; background:#fee2e2; padding:1px 5px; border-radius:4px; font-weight:800;">⚠️ S/Z (Editar)</span>`}
+          <div style="font-weight:600;">${v.fecha || '-'}</div>
+          <div style="font-size:0.70rem; font-family:var(--font-mono); color:#1e40af; font-weight:600; margin-top:2px;">
+            ${v.numero_reporte_z ? `Z: ${v.numero_reporte_z} • ${v.serial_impresora || 'Z0A0000176'}` : `<span style="color:#dc2626; background:#fee2e2; padding:1px 5px; border-radius:4px; font-weight:700;">⚠️ S/Z</span>`}
           </div>
           <div style="font-size:0.68rem; color:#64748b;">BCV: Bs. ${tasa.toFixed(2)}</div>
         </td>
-        <td class="font-mono font-bold" style="color: var(--ucg-navy);">${v.factura_desde || '00000001'}</td>
-        <td class="font-mono font-bold" style="color: var(--ucg-navy);">${v.factura_hasta || '00000001'}</td>
+        <td class="font-mono font-bold" style="color: #0f172a;">${v.factura_desde || '00000001'}</td>
+        <td class="font-mono font-bold" style="color: #0f172a;">${v.factura_hasta || '00000001'}</td>
         <td class="text-center font-bold">${v.cantidad_comprobantes || 1}</td>
         <td class="text-right font-mono">Bs. ${Number(v.exento_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${baseBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#0369a1;">($${baseUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${baseUsd.toFixed(2)})</div>
         </td>
         <td class="text-center font-mono">16%</td>
-        <td class="text-right font-mono" style="color: #0A5CF5; font-weight: 700;">
+        <td class="text-right font-mono font-bold">
           <div>Bs. ${ivaBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#64748b;">($${ivaUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${ivaUsd.toFixed(2)})</div>
         </td>
-        <td class="text-right font-mono font-bold" style="color: var(--ucg-navy);">
+        <td class="text-right font-mono font-bold">
           <div>Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size:0.72rem; color:#059669;">($${totalUsd.toFixed(2)})</div>
+          <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${totalUsd.toFixed(2)})</div>
         </td>
         <td class="text-center" style="white-space:nowrap;">
           ${actionsCol}
@@ -6282,21 +6282,21 @@ function renderDeclaracionesHistorico(declaraciones) {
     const excSigNum = Number(d.excedente_siguiente_bs || 0);
 
     return `
-      <tr style="cursor: pointer; ${isSelected ? 'background: #eff6ff; border-left: 3px solid #0A5CF5;' : ''}" onclick="seleccionarPeriodoDeclaracion('${d.periodo}')" title="Haz clic para ver el detalle de Forma 30 de ${d.periodo}">
-        <td class="font-bold" style="color: var(--ucg-navy); white-space: nowrap;">${nombresMes[d.periodo] || d.periodo}</td>
-        <td class="text-right font-mono">Bs. ${Number(d.ventas_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono font-bold" style="color: #0A5CF5;">Bs. ${Number(d.debito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono">Bs. ${Number(d.compras_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${Number(d.credito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono" style="color: #0284c7;">Bs. ${Number(d.excedente_anterior_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono font-bold" style="color: #166534;">Bs. ${excSigNum.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-        <td class="text-right font-mono font-bold" style="color: ${aPagarNum > 0 ? '#be123c' : '#64748b'};">
+      <tr style="cursor: pointer; ${isSelected ? 'background: #eff6ff; border-left: 3px solid #2563eb;' : ''}" onclick="seleccionarPeriodoDeclaracion('${d.periodo}')" title="Haz clic para ver el detalle de Forma 30 de ${d.periodo}">
+        <td class="font-bold" style="color: #0f172a; white-space: nowrap;">${nombresMes[d.periodo] || d.periodo}</td>
+        <td class="text-right font-mono" style="color: #334155;">Bs. ${Number(d.ventas_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #0f172a;">Bs. ${Number(d.debito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono" style="color: #334155;">Bs. ${Number(d.compras_base_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #0f172a;">Bs. ${Number(d.credito_fiscal_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono" style="color: #64748b;">Bs. ${Number(d.excedente_anterior_bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: #059669;">Bs. ${excSigNum.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right font-mono font-bold" style="color: ${aPagarNum > 0 ? '#dc2626' : '#64748b'};">
           ${aPagarNum > 0 ? `Bs. ${aPagarNum.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '0,00 Bs.'}
         </td>
         <td class="text-center">${statusPill}</td>
         <td class="text-center" style="white-space: nowrap;" onclick="event.stopPropagation();">
-          <button class="btn btn-sm btn-secondary" style="padding: 2px 7px; font-size: 10.5px;" onclick="irALibroDesdeForma30('compras', '${d.periodo}')" title="Ver Libro de Compras de ${d.periodo}">📥 Compras (${d.total_compras_facturas || 0})</button>
-          <button class="btn btn-sm btn-secondary" style="padding: 2px 7px; font-size: 10.5px;" onclick="irALibroDesdeForma30('ventas', '${d.periodo}')" title="Ver Libro de Ventas de ${d.periodo}">📤 Ventas (${d.total_ventas_dias || 0})</button>
+          <button class="btn btn-sm btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="irALibroDesdeForma30('compras', '${d.periodo}')" title="Ver Libro de Compras de ${d.periodo}">📥 Compras (${d.total_compras_facturas || 0})</button>
+          <button class="btn btn-sm btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="irALibroDesdeForma30('ventas', '${d.periodo}')" title="Ver Libro de Ventas de ${d.periodo}">📤 Ventas (${d.total_ventas_dias || 0})</button>
         </td>
       </tr>
     `;

@@ -318,13 +318,12 @@
           <span>Kardex de Artículos</span>
         </button>
 
-        <button class="nav-tab" data-tab="tab-punto-cero" id="btn-tab-punto-cero" style="border-left: 3px solid #10b981;">
+        <button class="nav-tab" data-tab="tab-punto-cero" id="btn-tab-punto-cero">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 11l3 3L22 4"></path>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           <span>Toma Física & Ajuste de Stock</span>
-          <span class="nav-badge-pill" style="background:#e0f2fe; color:#0369a1; font-weight:800;">AJUSTES</span>
         </button>
 
         <div class="nav-section-title">CONTROL FISCAL & SENIAT</div>
@@ -336,7 +335,6 @@
             <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
           <span>Libro de Compras</span>
-          <span class="nav-badge-pill" style="background:#e0f2fe; color:#0369a1;">SENIAT</span>
         </button>
 
         <button class="nav-tab" data-tab="tab-libro-ventas" id="btn-tab-libro-ventas">
@@ -346,7 +344,6 @@
             <line x1="12" y1="17" x2="12" y2="21"></line>
           </svg>
           <span>Libro de Ventas</span>
-          <span class="nav-badge-pill" style="background:#fef3c7; color:#92400e;">ZOA</span>
         </button>
 
         <button class="nav-tab" data-tab="tab-declaraciones" id="btn-tab-declaraciones">
@@ -364,8 +361,6 @@
             <line x1="9" y1="11" x2="15" y2="11"></line>
           </svg>
           <span>Retenciones ISLR</span>
-          <span class="nav-badge-pill" style="background:#0B2447; color:#19A7CE; border:1px solid #19A7CE;">PA
-            00093</span>
         </button>
 
         <button class="nav-tab" data-tab="tab-proveedores" id="btn-tab-proveedores">
@@ -700,12 +695,12 @@
               style="border: 1px solid #e2e8f0; border-radius: 8px; max-height: 420px; overflow-y: auto;">
               <table class="data-table" id="table-dashboard-monthly" style="margin: 0; font-size: 0.82rem;">
                 <thead>
-                  <tr style="background: #0B2447; color: #ffffff;">
-                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px;">MES / PERÍODO</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">TASA BCV</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">COMPRAS DE MERCANCÍA</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: right;">VENTAS DEL MES</th>
-                    <th style="background:#0B2447; color:#ffffff; padding: 11px 14px; text-align: center; width: 170px;">ESTADO OPERATIVO</th>
+                  <tr>
+                    <th>MES / PERÍODO</th>
+                    <th class="text-right">TASA BCV</th>
+                    <th class="text-right">COMPRAS DE MERCANCÍA</th>
+                    <th class="text-right">VENTAS DEL MES</th>
+                    <th class="text-center" style="width: 170px;">ESTADO OPERATIVO</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-dashboard-monthly">
