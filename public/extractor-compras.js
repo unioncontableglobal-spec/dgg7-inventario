@@ -1522,7 +1522,7 @@ async function emitirRetencionDesdeFichaDetalle() {
 
   // Cambiar a la vista de Retenciones ISLR
   if (typeof switchTab === 'function') {
-    switchTab('retenciones-islr');
+    switchTab('tab-retenciones-islr');
   }
 
   // Cargar datos oficiales en el formulario de emisión

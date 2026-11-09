@@ -1855,7 +1855,18 @@ export async function onRequest(context) {
     if (path === '/api/fiscal/libro-compras' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
       const id = url.searchParams.get('id');
-      let sql = `SELECT lc.*, p.razon_social as proveedor_registrado_nombre FROM libro_compras lc LEFT JOIN proveedores p ON lc.proveedor_id = p.id WHERE 1=1`;
+      let sql = `
+        SELECT 
+          lc.*, 
+          p.razon_social as proveedor_registrado_nombre,
+          ri.id as retencion_islr_id,
+          ri.nro_comprobante as comprobante_islr_emitido
+        FROM libro_compras lc 
+        LEFT JOIN proveedores p ON lc.proveedor_id = p.id 
+        LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
+        LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
+        WHERE 1=1
+      `;
       const args = [];
       if (id) {
         sql += ` AND lc.id = ?`;
@@ -2791,6 +2802,40 @@ export async function onRequest(context) {
 
     if (path === '/api/islr/proximo-numero' && method === 'GET') {
       const periodo = url.searchParams.get('periodo') || '2026-10';
+      const libroCompraId = url.searchParams.get('libro_compra_id');
+      const nroFactura = url.searchParams.get('nro_factura');
+      const rif = url.searchParams.get('rif');
+
+      // Si se consulta para una factura específica que ya tiene comprobante emitido, preservar e informar dicho comprobante
+      if (libroCompraId || (nroFactura && rif)) {
+        let findSql = `
+          SELECT ri.id, ri.nro_comprobante, ri.periodo 
+          FROM retenciones_islr ri
+          JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id
+          WHERE 1=1
+        `;
+        const findArgs = [];
+        if (libroCompraId) {
+          findSql += ` AND rid.libro_compra_id = ?`;
+          findArgs.push(libroCompraId);
+        } else {
+          findSql += ` AND rid.nro_factura = ? AND ri.sujeto_rif = ?`;
+          findArgs.push(nroFactura, rif);
+        }
+        findSql += ` ORDER BY ri.id ASC LIMIT 1`;
+
+        const existingRes = await db.execute({ sql: findSql, args: findArgs }).catch(() => ({ rows: [] }));
+        if (existingRes.rows.length > 0) {
+          const ex = existingRes.rows[0];
+          return jsonResponse({
+            periodo: ex.periodo || periodo,
+            nro_comprobante: ex.nro_comprobante,
+            retencion_id: ex.id,
+            es_existente: true
+          });
+        }
+      }
+
       const yyyymm = String(periodo).replace('-', '').slice(0, 6);
 
       const [resPer, resGlobal] = await Promise.all([
@@ -2813,7 +2858,7 @@ export async function onRequest(context) {
       }
 
       const nroComprobante = `${yyyymm}${String(nextSeq).padStart(8, '0')}`;
-      return jsonResponse({ periodo, nro_comprobante: nroComprobante });
+      return jsonResponse({ periodo, nro_comprobante: nroComprobante, es_existente: false });
     }
 
     if (path === '/api/islr/facturas-disponibles' && method === 'GET') {
@@ -3031,46 +3076,143 @@ export async function onRequest(context) {
         if (!finalTasaBcv || finalTasaBcv <= 100) finalTasaBcv = 880.12;
       }
 
-      const insHeader = await db.execute({
-        sql: `
-          INSERT INTO retenciones_islr (
-            nro_comprobante, periodo, fecha_emision, hora_emision,
-            proveedor_id, sujeto_rif, sujeto_razon_social, sujeto_tipo_persona,
-            sujeto_direccion, sujeto_email, sujeto_telefono,
-            concepto_general, codigo_concepto_principal,
-            es_multimoneda, moneda_divisa, tasa_bcv, valor_ut_aplicado,
-            total_documento_bs, total_base_imponible_bs, total_sustraendo_bs,
-            total_islr_retenido_bs, total_a_pagar_bs, estatus, observaciones
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EMITIDO', ?)
-        `,
-        args: [
-          cleanNroComp,
-          periodo || '2026-10',
-          fecha_emision || defaultFecha,
-          hora_emision || defaultHora,
-          proveedor_id || null,
-          cleanRif,
-          String(sujeto_razon_social).trim(),
-          tipoPersona,
-          String(sujeto_direccion || 'CARACAS, DISTRITO CAPITAL').trim(),
-          cleanEmail,
-          String(sujeto_telefono || '').trim(),
-          String(concepto_general || processedItems[0].descripcion_concepto).trim(),
-          codigoPrincipal,
-          es_multimoneda ? 1 : 0,
-          moneda_divisa || 'USD',
-          finalTasaBcv,
-          utBs,
-          Number(totDocBs.toFixed(2)),
-          Number(totBaseBs.toFixed(2)),
-          Number(totSustBs.toFixed(2)),
-          Number(totRetBs.toFixed(2)),
-          totalAPagar,
-          String(observaciones || '').trim()
-        ]
-      });
+      // Identificar si es una corrección/actualización de un comprobante existente
+      let retencionId = body.id ? Number(body.id) : null;
+      let existingComp = null;
 
-      const retencionId = Number(insHeader.lastInsertRowid);
+      if (!retencionId && cleanNroComp) {
+        const existRes = await db.execute({
+          sql: "SELECT * FROM retenciones_islr WHERE nro_comprobante = ? LIMIT 1",
+          args: [cleanNroComp]
+        }).catch(() => ({ rows: [] }));
+        if (existRes.rows.length > 0) {
+          existingComp = existRes.rows[0];
+          retencionId = Number(existingComp.id);
+        }
+      }
+
+      if (!retencionId) {
+        const lcIds = processedItems.map(it => it.libro_compra_id).filter(Boolean);
+        if (lcIds.length > 0) {
+          const placeholders = lcIds.map(() => '?').join(',');
+          const existDet = await db.execute({
+            sql: `SELECT ri.* FROM retenciones_islr ri JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id WHERE rid.libro_compra_id IN (${placeholders}) LIMIT 1`,
+            args: lcIds
+          }).catch(() => ({ rows: [] }));
+          if (existDet.rows.length > 0) {
+            existingComp = existDet.rows[0];
+            retencionId = Number(existingComp.id);
+          }
+        }
+      }
+
+      const finalNroComp = existingComp ? String(existingComp.nro_comprobante) : cleanNroComp;
+
+      if (retencionId) {
+        // ACTUALIZACIÓN LEGAL: Conservar estrictamente el número correlativo asignado y actualizar datos/cálculos
+        await db.execute({
+          sql: `
+            UPDATE retenciones_islr SET
+              nro_comprobante = ?,
+              periodo = ?,
+              fecha_emision = ?,
+              hora_emision = ?,
+              proveedor_id = ?,
+              sujeto_rif = ?,
+              sujeto_razon_social = ?,
+              sujeto_tipo_persona = ?,
+              sujeto_direccion = ?,
+              sujeto_email = ?,
+              sujeto_telefono = ?,
+              concepto_general = ?,
+              codigo_concepto_principal = ?,
+              es_multimoneda = ?,
+              moneda_divisa = ?,
+              tasa_bcv = ?,
+              valor_ut_aplicado = ?,
+              total_documento_bs = ?,
+              total_base_imponible_bs = ?,
+              total_sustraendo_bs = ?,
+              total_islr_retenido_bs = ?,
+              total_a_pagar_bs = ?,
+              observaciones = ?
+            WHERE id = ?
+          `,
+          args: [
+            finalNroComp,
+            periodo || '2026-10',
+            fecha_emision || defaultFecha,
+            hora_emision || defaultHora,
+            proveedor_id || null,
+            cleanRif,
+            String(sujeto_razon_social).trim(),
+            tipoPersona,
+            String(sujeto_direccion || 'CARACAS, DISTRITO CAPITAL').trim(),
+            cleanEmail,
+            String(sujeto_telefono || '').trim(),
+            String(concepto_general || processedItems[0].descripcion_concepto).trim(),
+            codigoPrincipal,
+            es_multimoneda ? 1 : 0,
+            moneda_divisa || 'USD',
+            finalTasaBcv,
+            utBs,
+            Number(totDocBs.toFixed(2)),
+            Number(totBaseBs.toFixed(2)),
+            Number(totSustBs.toFixed(2)),
+            Number(totRetBs.toFixed(2)),
+            totalAPagar,
+            String(observaciones || '').trim(),
+            retencionId
+          ]
+        });
+
+        // Limpiar detalles viejos para insertar los nuevos
+        await db.execute({
+          sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?",
+          args: [retencionId]
+        });
+      } else {
+        // INSERCIÓN NUEVA: Asignar nuevo comprobante para una factura que no ha sido retenida
+        const insHeader = await db.execute({
+          sql: `
+            INSERT INTO retenciones_islr (
+              nro_comprobante, periodo, fecha_emision, hora_emision,
+              proveedor_id, sujeto_rif, sujeto_razon_social, sujeto_tipo_persona,
+              sujeto_direccion, sujeto_email, sujeto_telefono,
+              concepto_general, codigo_concepto_principal,
+              es_multimoneda, moneda_divisa, tasa_bcv, valor_ut_aplicado,
+              total_documento_bs, total_base_imponible_bs, total_sustraendo_bs,
+              total_islr_retenido_bs, total_a_pagar_bs, estatus, observaciones
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EMITIDO', ?)
+          `,
+          args: [
+            finalNroComp,
+            periodo || '2026-10',
+            fecha_emision || defaultFecha,
+            hora_emision || defaultHora,
+            proveedor_id || null,
+            cleanRif,
+            String(sujeto_razon_social).trim(),
+            tipoPersona,
+            String(sujeto_direccion || 'CARACAS, DISTRITO CAPITAL').trim(),
+            cleanEmail,
+            String(sujeto_telefono || '').trim(),
+            String(concepto_general || processedItems[0].descripcion_concepto).trim(),
+            codigoPrincipal,
+            es_multimoneda ? 1 : 0,
+            moneda_divisa || 'USD',
+            finalTasaBcv,
+            utBs,
+            Number(totDocBs.toFixed(2)),
+            Number(totBaseBs.toFixed(2)),
+            Number(totSustBs.toFixed(2)),
+            Number(totRetBs.toFixed(2)),
+            totalAPagar,
+            String(observaciones || '').trim()
+          ]
+        });
+        retencionId = Number(insHeader.lastInsertRowid);
+      }
 
       for (const it of processedItems) {
         await db.execute({

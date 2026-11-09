@@ -6985,7 +6985,7 @@ async function emitirISLRDesdeFacturaCompra(libroCompraId) {
 
   // 4. Si tenemos la factura, precargarla de inmediato con todos sus datos y el cálculo fiscal
   if (factura) {
-    cargarFacturaDirectaEnModalISLR(factura);
+    await cargarFacturaDirectaEnModalISLR(factura);
 
     // Sincronizar índice en el desplegable de facturas disponibles si aplica
     const idx = (islrState.facturasDisponibles || []).findIndex(f => Number(f.id) === Number(libroCompraId));
@@ -6999,6 +6999,17 @@ async function emitirISLRDesdeFacturaCompra(libroCompraId) {
 async function openModalEmitirRetencionISLR() {
   const form = document.getElementById('form-emitir-islr');
   if (form) form.reset();
+
+  const modalEl = document.getElementById('modal-emitir-islr');
+  if (modalEl) {
+    modalEl.dataset.retencionId = '';
+    modalEl.dataset.esExistente = 'false';
+  }
+  const compInput = document.getElementById('m-islr-nro-comprobante');
+  if (compInput) compInput.readOnly = false;
+
+  const btnEmitir = document.querySelector('#modal-emitir-islr button[type="submit"]');
+  if (btnEmitir) btnEmitir.textContent = '✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)';
 
   const periodoActivo = document.getElementById('islr-periodo-select')?.value;
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
@@ -7060,6 +7071,7 @@ async function openModalEmitirRetencionISLR() {
 }
 
 async function actualizarProximoNumeroISLR() {
+  const modalEl = document.getElementById('modal-emitir-islr');
   const periodo = document.getElementById('m-islr-periodo')?.value || '2026-10';
   const elTasa = document.getElementById('m-islr-tasa-bcv');
   if (elTasa) {
@@ -7067,6 +7079,12 @@ async function actualizarProximoNumeroISLR() {
     elTasa.value = tasaOficial.toFixed(2);
     recalcularLineasISLR();
   }
+
+  // Si ya estamos corrigiendo un comprobante existente y anclado, NO cambiar el número
+  if (modalEl?.dataset?.esExistente === 'true') {
+    return;
+  }
+
   const yyyymm = String(periodo).replace('-', '').slice(0, 6);
   let asignado = false;
   try {
@@ -7114,15 +7132,52 @@ function seleccionarProveedorEnModalISLR(provId) {
 }
 
 // Cargar Factura Directa con Autocalculo de Retenciones (Decreto 1808 • PA SNAT/2026/00093)
-function cargarFacturaDirectaEnModalISLR(f) {
+async function cargarFacturaDirectaEnModalISLR(f) {
   if (!f) return;
 
-  // 1. Sincronizar Período Fiscal
+  const modalEl = document.getElementById('modal-emitir-islr');
   const periodo = f.periodo || '2026-10';
   const perEl = document.getElementById('m-islr-periodo');
-  if (perEl) {
-    perEl.value = periodo;
-    actualizarProximoNumeroISLR();
+  if (perEl) perEl.value = periodo;
+
+  // 1. ANCLAJE LEGAL: Verificar si esta factura YA TIENE un número de comprobante asignado
+  let nroCompAsignado = f.comprobante_islr_emitido || null;
+  let retIdAsignado = f.retencion_islr_id || null;
+  let esExistente = Boolean(nroCompAsignado);
+
+  try {
+    const qUrl = `/api/islr/proximo-numero?periodo=${encodeURIComponent(periodo)}&libro_compra_id=${encodeURIComponent(f.id || '')}&nro_factura=${encodeURIComponent(f.nro_factura || '')}&rif=${encodeURIComponent(f.rif || '')}`;
+    const checkRes = await fetch(qUrl);
+    if (checkRes.ok) {
+      const checkData = await checkRes.json();
+      if (checkData.es_existente) {
+        nroCompAsignado = checkData.nro_comprobante;
+        retIdAsignado = checkData.retencion_id;
+        esExistente = true;
+      } else if (!nroCompAsignado && checkData.nro_comprobante) {
+        nroCompAsignado = checkData.nro_comprobante;
+      }
+    }
+  } catch (err) {
+    console.warn('Error verificando correlativo legal ISLR:', err);
+  }
+
+  const compInput = document.getElementById('m-islr-nro-comprobante');
+  if (compInput && nroCompAsignado) {
+    compInput.value = nroCompAsignado;
+    compInput.readOnly = esExistente; // Inmutable para proteger el correlativo legal en correcciones
+  }
+
+  if (modalEl) {
+    modalEl.dataset.retencionId = retIdAsignado || '';
+    modalEl.dataset.esExistente = esExistente ? 'true' : 'false';
+  }
+
+  const btnEmitir = document.querySelector('#modal-emitir-islr button[type="submit"]');
+  if (btnEmitir) {
+    btnEmitir.textContent = esExistente
+      ? `💾 Guardar Corrección del Comprobante N° ${nroCompAsignado}`
+      : `✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)`;
   }
 
   // Sincronizar Tasa BCV Oficial: tomar tasa_bcv de la factura (ej. 880.12) o la del período
@@ -7192,25 +7247,25 @@ function cargarFacturaDirectaEnModalISLR(f) {
   recalcularLineasISLR();
 
   if (typeof showToast === 'function') {
-    showToast(`🧾 Datos de ${f.razon_social} (Factura N° ${f.nro_factura}) cargados con retención calculada.`, 'success');
+    const avisoComp = esExistente ? ` (Comprobante N° ${nroCompAsignado})` : '';
+    showToast(`🧾 Datos de ${f.razon_social} (Factura N° ${f.nro_factura})${avisoComp} cargados con retención calculada.`, 'success');
   }
 }
 
-function cargarFacturaCompraEnModalISLR(idxStr) {
+async function cargarFacturaCompraEnModalISLR(idxStr) {
   if (idxStr === '' || idxStr === null || idxStr === undefined) return;
   const f = islrState.facturasDisponibles[Number(idxStr)];
   if (!f) return;
-  cargarFacturaDirectaEnModalISLR(f);
+  await cargarFacturaDirectaEnModalISLR(f);
 }
 
 // Emisión Oficial de Retención Directa desde Ficha de Factura (Unión Global / Proveedores)
 async function emitirRetencionDirectaDesdeFactura(f) {
   if (!f) return;
   await openModalEmitirRetencionISLR();
-  cargarFacturaDirectaEnModalISLR(f);
+  await cargarFacturaDirectaEnModalISLR(f);
 }
 window.emitirRetencionDirectaDesdeFactura = emitirRetencionDirectaDesdeFactura;
-window.cargarFacturaDirectaEnModalISLR = cargarFacturaDirectaEnModalISLR;
 window.cargarFacturaDirectaEnModalISLR = cargarFacturaDirectaEnModalISLR;
 
 function toggleBloqueMultimonedaISLR() {
@@ -7395,7 +7450,11 @@ async function guardarComprobanteISLR(e) {
     });
   });
 
+  const modalEl = document.getElementById('modal-emitir-islr');
+  const retencionId = modalEl?.dataset?.retencionId;
+
   const payload = {
+    id: retencionId ? Number(retencionId) : undefined,
     nro_comprobante: nroComprobante,
     periodo: document.getElementById('m-islr-periodo').value,
     fecha_emision: document.getElementById('m-islr-fecha-emision').value.trim(),
@@ -7426,10 +7485,13 @@ async function guardarComprobanteISLR(e) {
     showToast(result.message || 'Comprobante ISLR emitido con éxito', 'success');
     closeModal('modal-emitir-islr');
 
-    // Cambiar filtro al período recién emitido y mostrar vista PDF
+    // Cambiar filtro al período recién emitido y refrescar vistas
     const selPer = document.getElementById('islr-periodo-select');
     if (selPer) selPer.value = payload.periodo;
-    await loadComprobantesISLR();
+    await Promise.all([
+      loadComprobantesISLR(),
+      loadLibroCompras()
+    ]);
 
     if (result.id) {
       await verComprobanteISLRPDF(result.id);
