@@ -6109,17 +6109,17 @@ async function loadDeclaracionDetalle() {
     const c = detailData.compras || {};
     const v = detailData.ventas || {};
 
-    const vBase = Number(d.ventas_base_bs !== undefined ? d.ventas_base_bs : (v.total_base || 0));
-    const vDeb = Number(d.debito_fiscal_bs !== undefined ? d.debito_fiscal_bs : (v.total_iva || 0));
-    const vDias = Number(d.total_ventas_dias !== undefined ? d.total_ventas_dias : (v.count_lotes || 0));
+    const vBase = Number(d.ventas_base_bs !== undefined && d.ventas_base_bs > 0 ? d.ventas_base_bs : (v.total_base || 0));
+    const vDeb = Number(d.debito_fiscal_bs !== undefined && d.debito_fiscal_bs > 0 ? d.debito_fiscal_bs : (v.total_iva || 0));
+    const vDias = Number(d.total_ventas_dias !== undefined && d.total_ventas_dias > 0 ? d.total_ventas_dias : (v.count_lotes || 0));
 
-    const cBase = Number(d.compras_base_bs !== undefined ? d.compras_base_bs : (c.total_base || 0));
-    const cCred = Number(d.credito_fiscal_bs !== undefined ? d.credito_fiscal_bs : (c.total_iva || 0));
-    const cFacs = Number(d.total_compras_facturas !== undefined ? d.total_compras_facturas : (c.count_facturas || 0));
-    const excAnt = Number(d.excedente_anterior_bs || 0);
-    const excSig = Number(d.excedente_siguiente_bs || 0);
-    const aPagar = Number(d.total_a_pagar_bs || 0);
-    const cRet = Number(d.iva_retenido_bs !== undefined ? d.iva_retenido_bs : (c.total_retenido || 0));
+    const cBase = Number(d.compras_base_bs !== undefined && d.compras_base_bs > 0 ? d.compras_base_bs : (c.total_base || 0));
+    const cCred = Number(d.credito_fiscal_bs !== undefined && d.credito_fiscal_bs > 0 ? d.credito_fiscal_bs : (c.total_iva || 0));
+    const cFacs = Number(d.total_compras_facturas !== undefined && d.total_compras_facturas > 0 ? d.total_compras_facturas : (c.count_facturas || 0));
+    const excAnt = Number(d.excedente_anterior_bs !== undefined ? d.excedente_anterior_bs : 0);
+    const excSig = Number(d.excedente_siguiente_bs !== undefined ? d.excedente_siguiente_bs : 0);
+    const aPagar = Number(d.total_a_pagar_bs !== undefined ? d.total_a_pagar_bs : 0);
+    const cRet = Number(d.iva_retenido_bs !== undefined ? d.iva_retenido_bs : 0);
 
     const totCredDeducible = cCred + excAnt;
 
@@ -6147,9 +6147,28 @@ async function loadDeclaracionDetalle() {
     const resLbl = document.getElementById('f30-lbl-resultado');
     const resVal = document.getElementById('f30-val-resultado');
 
-    cacheDeclaracionesIva = historyData;
+    // Sincronizar el registro del período en el arreglo de histórico para que todas las vistas coincidan
+    const histIdx = Array.isArray(historyData) ? historyData.findIndex(item => item.periodo === periodo) : -1;
+    if (histIdx >= 0) {
+      historyData[histIdx] = {
+        ...historyData[histIdx],
+        ventas_base_bs: vBase,
+        debito_fiscal_bs: vDeb,
+        compras_base_bs: cBase,
+        credito_fiscal_bs: cCred,
+        excedente_anterior_bs: excAnt,
+        excedente_siguiente_bs: excSig,
+        total_a_pagar_bs: aPagar,
+        total_ventas_dias: vDias,
+        total_compras_facturas: cFacs,
+        estatus: d.estatus || historyData[histIdx].estatus
+      };
+    }
 
-    const declActual = historyData.find(item => item.periodo === periodo) || d;
+    cacheDeclaracionesIva = historyData;
+    fiscalStateNew.declaraciones = historyData;
+
+    const declActual = (Array.isArray(historyData) && historyData.find(item => item.periodo === periodo)) || d;
     const isDeclarado = (declActual && declActual.estatus === 'DECLARADO') || (periodo <= '2026-09');
 
     if (isDeclarado) {
@@ -6305,8 +6324,9 @@ function imprimirDeclaracionForma30() {
     <div class="print-preview-container seniat-portrait-f30">
       <!-- Encabezado Oficial Forma 30 SENIAT (3 columnas: Logo | Títulos | Caja Forma 30) -->
       <div class="seniat-f30-top-banner">
-        <div class="seniat-f30-banner-logo">
-          <img src="LOGOUCG.png" alt="Logo" style="height: 44px; max-width: 115px; object-fit: contain;">
+        <div class="seniat-f30-banner-logo" style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:2px solid #000080; border-radius:4px; padding:4px 8px; background:#f8fafc; min-width:85px;">
+          <span style="font-size:14px; font-weight:900; color:#000080; letter-spacing:1px; line-height:1;">SENIAT</span>
+          <span style="font-size:6.5px; font-weight:800; color:#475569; letter-spacing:0.5px; margin-top:2px;">FORMA OFICIAL</span>
         </div>
         <div class="seniat-f30-banner-center">
           <div style="font-size: 8.5px; font-weight: 800; color: #334155; letter-spacing: 0.04em; text-transform: uppercase;">
@@ -6540,7 +6560,7 @@ function imprimirDeclaracionForma30() {
         </div>
         <div>
           <div class="sig-line">REVISADO POR CONTADOR PÚBLICO</div>
-          <div style="font-size: 8px; color:#475569; margin-top:2px;">UNIÓN CONTABLE GLOBAL • CPC N°</div>
+          <div style="font-size: 8px; color:#475569; margin-top:2px;">CONTADOR PÚBLICO COLEGIADO • CPC N°</div>
         </div>
         <div>
           <div class="sig-line">REPRESENTANTE LEGAL / SELLO HÚMEDO</div>

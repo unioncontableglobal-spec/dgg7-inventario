@@ -2478,7 +2478,92 @@ export async function onRequest(context) {
       await db.execute({ sql: "UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE libro_compras_id = ?", args: [compId] }).catch(() => {});
       await db.execute({ sql: "DELETE FROM libro_compras WHERE id = ?", args: [compId] });
       return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras' });
-      return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras' });
+    }
+
+    // CONSULTA DINÁMICA DE DETALLE DE DECLARACIÓN IVA (SENIAT FORMA 30) POR PERÍODO
+    if (path.startsWith('/api/fiscal/declaracion/') && method === 'GET') {
+      const parts = path.split('/');
+      const periodo = parts[4] || '2026-10';
+
+      const [ventasRes, comprasRes, declPrev, declActualRes] = await Promise.all([
+        db.execute({
+          sql: `SELECT 
+                  COALESCE(SUM(base_imponible_bs), 0) as total_base,
+                  COALESCE(SUM(iva_bs), 0) as total_iva,
+                  COALESCE(SUM(exento_bs), 0) as total_exento,
+                  COUNT(DISTINCT fecha) as count_lotes
+                FROM libro_ventas WHERE periodo = ?`,
+          args: [periodo]
+        }),
+        db.execute({
+          sql: `SELECT 
+                  COALESCE(SUM(base_imponible_bs), 0) as total_base,
+                  COALESCE(SUM(iva_bs), 0) as total_iva,
+                  COALESCE(SUM(iva_retenido_bs), 0) as total_retenido,
+                  COUNT(*) as count_facturas
+                FROM libro_compras WHERE periodo = ?`,
+          args: [periodo]
+        }),
+        db.execute({
+          sql: `SELECT excedente_siguiente_bs FROM declaraciones_iva WHERE periodo < ? ORDER BY periodo DESC LIMIT 1`,
+          args: [periodo]
+        }),
+        db.execute({
+          sql: `SELECT * FROM declaraciones_iva WHERE periodo = ? LIMIT 1`,
+          args: [periodo]
+        })
+      ]);
+
+      const declRow = declActualRes.rows[0] || null;
+      const isDeclarado = declRow?.estatus === 'DECLARADO';
+
+      const vBase = Number(ventasRes.rows[0]?.total_base || 0);
+      const vDeb = Number(ventasRes.rows[0]?.total_iva || 0);
+      const vExento = Number(ventasRes.rows[0]?.total_exento || 0);
+      const vDias = Number(ventasRes.rows[0]?.count_lotes || 0);
+
+      const cBase = Number(comprasRes.rows[0]?.total_base || 0);
+      const cCred = Number(comprasRes.rows[0]?.total_iva || 0);
+      const cRet = Number(comprasRes.rows[0]?.total_retenido || 0);
+      const cFacs = Number(comprasRes.rows[0]?.count_facturas || 0);
+
+      const excAnt = Number(declPrev.rows[0]?.excedente_siguiente_bs || 0);
+      const totCred = Number((cCred + excAnt).toFixed(2));
+      const saldo = Number((vDeb - totCred).toFixed(2));
+      const aPagar = saldo > 0 ? saldo : 0;
+      const excSig = saldo < 0 ? Math.abs(saldo) : 0;
+
+      const declaracion = {
+        periodo,
+        ventas_base_bs: isDeclarado && Number(declRow.ventas_base_bs) > 0 ? Number(declRow.ventas_base_bs) : vBase,
+        debito_fiscal_bs: isDeclarado && Number(declRow.debito_fiscal_bs) > 0 ? Number(declRow.debito_fiscal_bs) : vDeb,
+        compras_base_bs: isDeclarado && Number(declRow.compras_base_bs) > 0 ? Number(declRow.compras_base_bs) : cBase,
+        credito_fiscal_bs: isDeclarado && Number(declRow.credito_fiscal_bs) > 0 ? Number(declRow.credito_fiscal_bs) : cCred,
+        iva_retenido_bs: 0,
+        iva_retenido_compras_bs: cRet,
+        excedente_anterior_bs: excAnt,
+        excedente_siguiente_bs: isDeclarado && declRow.excedente_siguiente_bs !== undefined ? Number(declRow.excedente_siguiente_bs) : excSig,
+        total_a_pagar_bs: isDeclarado && declRow.total_a_pagar_bs !== undefined ? Number(declRow.total_a_pagar_bs) : aPagar,
+        total_compras_facturas: isDeclarado && Number(declRow.total_compras_facturas) > 0 ? Number(declRow.total_compras_facturas) : cFacs,
+        total_ventas_dias: isDeclarado && Number(declRow.total_ventas_dias) > 0 ? Number(declRow.total_ventas_dias) : vDias,
+        estatus: declRow?.estatus || (periodo <= '2026-09' ? 'DECLARADO' : 'EN_PROCESO')
+      };
+
+      return jsonResponse({
+        declaracion,
+        ventas: {
+          total_base: vBase,
+          total_iva: vDeb,
+          total_exento: vExento,
+          count_lotes: vDias
+        },
+        compras: {
+          total_base: cBase,
+          total_iva: cCred,
+          total_retenido: cRet,
+          count_facturas: cFacs
+        }
+      });
     }
 
     // CIERRE Y CAMBIO DE ESTATUS DE DECLARACIÓN IVA (SENIAT FORMA 30)
@@ -2527,10 +2612,10 @@ export async function onRequest(context) {
       const totalDias = Number(ventasRes.rows[0]?.dias_ventas || 0);
 
       const excAnt = Number(declPrev.rows[0]?.excedente_siguiente_bs || 0);
-      const totCred = cCred + excAnt + cRet;
-      const saldo = vDeb - totCred;
-      const aPagar = saldo > 0 ? Number(saldo.toFixed(2)) : 0;
-      const excSig = saldo < 0 ? Number(Math.abs(saldo).toFixed(2)) : 0;
+      const totCred = Number((cCred + excAnt).toFixed(2));
+      const saldo = Number((vDeb - totCred).toFixed(2));
+      const aPagar = saldo > 0 ? saldo : 0;
+      const excSig = saldo < 0 ? Math.abs(saldo) : 0;
 
       await db.execute({
         sql: `UPDATE declaraciones_iva 
@@ -2539,7 +2624,7 @@ export async function onRequest(context) {
                   debito_fiscal_bs = ?,
                   compras_base_bs = ?,
                   credito_fiscal_bs = ?,
-                  iva_retenido_bs = ?,
+                  iva_retenido_bs = 0,
                   excedente_anterior_bs = ?,
                   excedente_siguiente_bs = ?,
                   total_a_pagar_bs = ?,
@@ -2552,7 +2637,6 @@ export async function onRequest(context) {
           vDeb,
           cBase,
           cCred,
-          cRet,
           excAnt,
           excSig,
           aPagar,
@@ -2572,11 +2656,56 @@ export async function onRequest(context) {
       });
     }
 
-
-
     if (path === '/api/fiscal/declaraciones-iva' && method === 'GET') {
       const res = await db.execute("SELECT * FROM declaraciones_iva ORDER BY periodo ASC");
-      return jsonResponse(res.rows);
+      const rows = res.rows.map(r => ({ ...r }));
+
+      // Para cualquier período abierto (EN_PROCESO o 2026-10), autocalcular dinámicamente con los libros
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.estatus === 'EN_PROCESO' || row.periodo === '2026-10') {
+          const [vRes, cRes, prevRes] = await Promise.all([
+            db.execute({
+              sql: `SELECT COALESCE(SUM(base_imponible_bs), 0) as v_base, COALESCE(SUM(iva_bs), 0) as v_deb, COUNT(DISTINCT fecha) as v_dias FROM libro_ventas WHERE periodo = ?`,
+              args: [row.periodo]
+            }),
+            db.execute({
+              sql: `SELECT COALESCE(SUM(base_imponible_bs), 0) as c_base, COALESCE(SUM(iva_bs), 0) as c_cred, COUNT(*) as c_facs FROM libro_compras WHERE periodo = ?`,
+              args: [row.periodo]
+            }),
+            db.execute({
+              sql: `SELECT excedente_siguiente_bs FROM declaraciones_iva WHERE periodo < ? ORDER BY periodo DESC LIMIT 1`,
+              args: [row.periodo]
+            })
+          ]);
+
+          const vBase = Number(vRes.rows[0]?.v_base || 0);
+          const vDeb = Number(vRes.rows[0]?.v_deb || 0);
+          const vDias = Number(vRes.rows[0]?.v_dias || 0);
+
+          const cBase = Number(cRes.rows[0]?.c_base || 0);
+          const cCred = Number(cRes.rows[0]?.c_cred || 0);
+          const cFacs = Number(cRes.rows[0]?.c_facs || 0);
+
+          const excAnt = Number(prevRes.rows[0]?.excedente_siguiente_bs || 0);
+          const totCred = Number((cCred + excAnt).toFixed(2));
+          const saldo = Number((vDeb - totCred).toFixed(2));
+          const aPagar = saldo > 0 ? saldo : 0;
+          const excSig = saldo < 0 ? Math.abs(saldo) : 0;
+
+          row.ventas_base_bs = vBase;
+          row.debito_fiscal_bs = vDeb;
+          row.compras_base_bs = cBase;
+          row.credito_fiscal_bs = cCred;
+          row.excedente_anterior_bs = excAnt;
+          row.excedente_siguiente_bs = excSig;
+          row.total_a_pagar_bs = aPagar;
+          row.total_compras_facturas = cFacs;
+          row.total_ventas_dias = vDias;
+        }
+      }
+
+      return jsonResponse(rows);
     }
 
     if (path === '/api/fiscal/resumen-cruce' && method === 'GET') {
