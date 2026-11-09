@@ -1869,8 +1869,7 @@ export async function onRequest(context) {
           p.razon_social as proveedor_registrado_nombre,
           ri.id as retencion_islr_id,
           ri.nro_comprobante as comprobante_islr_emitido,
-          COALESCE(rid.monto_retenido_bs, ri.monto_retenido_bs, 0) as islr_retenido_bs,
-          COALESCE(rid.monto_retenido_divisa, 0) as islr_retenido_divisa
+          COALESCE(rid.impuesto_retenido_bs, ri.total_islr_retenido_bs, 0) as islr_retenido_bs
         FROM libro_compras lc 
         LEFT JOIN proveedores p ON lc.proveedor_id = p.id 
         LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
