@@ -2621,6 +2621,17 @@ export async function onRequest(context) {
     // RETENCIONES ISLR (DECRETO 1808)
     // ----------------------------------------------------
     if (path === '/api/islr/config' && method === 'GET') {
+      await db.execute(`
+        UPDATE config_fiscal_islr 
+        SET agente_email = 'dg67contable@gmail.com' 
+        WHERE id = 1 AND (agente_email IS NULL OR agente_email LIKE '%inversionesdg67.com.ve%')
+      `).catch(() => {});
+      await db.execute(`
+        UPDATE empresas 
+        SET email = 'dg67contable@gmail.com' 
+        WHERE id = 1 AND (email IS NULL OR email LIKE '%inversionesdg67.com.ve%')
+      `).catch(() => {});
+
       const [cfgRes, empRes] = await Promise.all([
         db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1"),
         db.execute("SELECT * FROM empresas WHERE id = 1")
@@ -2980,23 +2991,39 @@ export async function onRequest(context) {
     if (path === '/api/islr/config' && method === 'PUT') {
       const body = await request.json();
       const {
-        agente_rif, agente_razon_social, agente_direccion,
-        valor_ut_bs, factor_sustraendo, nro_resolucion_especial, fecha_resolucion_especial
+        agente_rif, agente_razon_social, agente_direccion, agente_telefono, agente_email,
+        valor_ut_bs, factor_sustraendo, nro_resolucion_especial, fecha_resolucion_especial,
+        aplica_imprenta_digital, imprenta_razon_social, imprenta_rif, imprenta_providencia, imprenta_fecha_asignacion
       } = body;
       await db.execute({
         sql: `
           UPDATE config_fiscal_islr SET
-            agente_rif = ?, agente_razon_social = ?, agente_direccion = ?,
-            valor_ut_bs = ?, factor_sustraendo = ?,
-            nro_resolucion_especial = ?, fecha_resolucion_especial = ?
+            agente_rif = COALESCE(?, agente_rif), 
+            agente_razon_social = COALESCE(?, agente_razon_social), 
+            agente_direccion = COALESCE(?, agente_direccion),
+            agente_telefono = COALESCE(?, agente_telefono),
+            agente_email = COALESCE(?, agente_email),
+            valor_ut_bs = COALESCE(?, valor_ut_bs), 
+            factor_sustraendo = COALESCE(?, factor_sustraendo),
+            nro_resolucion_especial = COALESCE(?, nro_resolucion_especial), 
+            fecha_resolucion_especial = COALESCE(?, fecha_resolucion_especial),
+            aplica_imprenta_digital = COALESCE(?, aplica_imprenta_digital),
+            imprenta_razon_social = COALESCE(?, imprenta_razon_social),
+            imprenta_rif = COALESCE(?, imprenta_rif),
+            imprenta_providencia = COALESCE(?, imprenta_providencia),
+            imprenta_fecha_asignacion = COALESCE(?, imprenta_fecha_asignacion)
           WHERE id = 1
         `,
         args: [
-          agente_rif, agente_razon_social, agente_direccion,
-          valor_ut_bs, factor_sustraendo,
-          nro_resolucion_especial, fecha_resolucion_especial
+          agente_rif, agente_razon_social, agente_direccion, agente_telefono, agente_email || 'dg67contable@gmail.com',
+          valor_ut_bs, factor_sustraendo, nro_resolucion_especial, fecha_resolucion_especial,
+          aplica_imprenta_digital !== undefined ? aplica_imprenta_digital : 1,
+          imprenta_razon_social, imprenta_rif, imprenta_providencia, imprenta_fecha_asignacion
         ]
       });
+      if (agente_email) {
+        await db.execute({ sql: "UPDATE empresas SET email = ? WHERE id = 1", args: [agente_email] }).catch(() => {});
+      }
       return jsonResponse({ success: true, message: 'Configuración fiscal actualizada.' });
     }
 

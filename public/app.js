@@ -6785,7 +6785,7 @@ const islrState = {
     agente_rif: 'J-50700865-7',
     agente_direccion: 'AV. SUR 11 ENTRE LAS ESQUINAS BOLÍVAR Y MIRANDA, CASA NRO. 112, LOCAL S/N, URB. SAN AGUSTÍN DEL NORTE, CARACAS',
     agente_telefono: '0212-5771122',
-    agente_email: 'administracion@inversionesdg67.com.ve',
+    agente_email: 'dg67contable@gmail.com',
     valor_ut_bs: 43.00,
     factor_sustraendo: 83.3334,
     aplica_imprenta_digital: 1,
@@ -7440,7 +7440,7 @@ function openModalConfigISLR() {
   document.getElementById('cfg-islr-rif').value = c.agente_rif || 'J-50700865-7';
   document.getElementById('cfg-islr-dir').value = c.agente_direccion || 'AV. SUR 11 ENTRE LAS ESQUINAS BOLÍVAR Y MIRANDA, CASA NRO. 112, LOCAL S/N, URB. SAN AGUSTÍN DEL NORTE, CARACAS';
   document.getElementById('cfg-islr-tel').value = c.agente_telefono || '0212-5771122';
-  document.getElementById('cfg-islr-email').value = c.agente_email || 'administracion@inversionesdg67.com.ve';
+  document.getElementById('cfg-islr-email').value = c.agente_email || 'dg67contable@gmail.com';
   document.getElementById('cfg-islr-ut').value = Number(c.valor_ut_bs || 43.00).toFixed(2);
   document.getElementById('cfg-islr-factor').value = Number(c.factor_sustraendo || 83.3334).toFixed(4);
   document.getElementById('cfg-islr-aplica-imprenta').checked = Boolean(c.aplica_imprenta_digital);
@@ -7674,7 +7674,7 @@ async function verComprobanteISLRPDF(id) {
                 </tr>
                 <tr>
                   <td style="padding: 4px 7px; color: #6B7280; font-weight: 700;">CORREO EMISOR:</td>
-                  <td style="padding: 4px 7px; font-family: monospace; color: #3F5B8F; font-weight: 700;" colspan="3">${cfg.agente_email || 'administracion@inversionesdg67.com.ve'}</td>
+                  <td style="padding: 4px 7px; font-family: monospace; color: #3F5B8F; font-weight: 700;" colspan="3">${cfg.agente_email || 'dg67contable@gmail.com'}</td>
                 </tr>
               </tbody>
             </table>
