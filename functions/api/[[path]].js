@@ -2690,8 +2690,39 @@ export async function onRequest(context) {
         return jsonResponse({ error: 'Comprobante de Retención ISLR no encontrado' }, 404);
       }
 
+      const comp = headerRes.rows[0];
+      // Si el comprobante tenía guardada una tasa obsoleta o irreal (ej. <= 100), corregir dinámicamente con la tasa oficial BCV de la factura o período
+      if (!comp.tasa_bcv || Number(comp.tasa_bcv) <= 100) {
+        let realTasa = null;
+        if (itemsRes.rows.length > 0 && itemsRes.rows[0].libro_compra_id) {
+          const lcRes = await db.execute({
+            sql: "SELECT tasa_bcv FROM libro_compras WHERE id = ?",
+            args: [itemsRes.rows[0].libro_compra_id]
+          }).catch(() => ({ rows: [] }));
+          if (lcRes.rows.length > 0 && Number(lcRes.rows[0].tasa_bcv) > 100) {
+            realTasa = Number(lcRes.rows[0].tasa_bcv);
+          }
+        }
+        if (!realTasa) {
+          const tasaPerRes = await db.execute({
+            sql: "SELECT tasa_bcv FROM tasas_bcv_periodo WHERE periodo = ?",
+            args: [comp.periodo || '2026-10']
+          }).catch(() => ({ rows: [] }));
+          if (tasaPerRes.rows.length > 0 && Number(tasaPerRes.rows[0].tasa_bcv) > 100) {
+            realTasa = Number(tasaPerRes.rows[0].tasa_bcv);
+          }
+        }
+        if (!realTasa) realTasa = 880.12;
+
+        comp.tasa_bcv = realTasa;
+        await db.execute({
+          sql: "UPDATE retenciones_islr SET tasa_bcv = ? WHERE id = ?",
+          args: [realTasa, id]
+        }).catch(() => {});
+      }
+
       return jsonResponse({
-        comprobante: headerRes.rows[0],
+        comprobante: comp,
         detalles: itemsRes.rows,
         config: configRes.rows[0] || {}
       });
@@ -2810,6 +2841,25 @@ export async function onRequest(context) {
       const defaultHora = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
       const defaultFecha = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
 
+      // Garantizar que la tasa oficial BCV sea la tasa real de la factura o del período (nunca tasas fijas de 68.50)
+      let finalTasaBcv = parseFloat(tasa_bcv);
+      if (!finalTasaBcv || finalTasaBcv <= 100) {
+        const lcId = processedItems.find(it => it.libro_compra_id)?.libro_compra_id;
+        if (lcId) {
+          const lcRow = await db.execute({ sql: "SELECT tasa_bcv FROM libro_compras WHERE id = ?", args: [lcId] }).catch(() => ({ rows: [] }));
+          if (lcRow.rows.length > 0 && Number(lcRow.rows[0].tasa_bcv) > 100) {
+            finalTasaBcv = Number(lcRow.rows[0].tasa_bcv);
+          }
+        }
+        if (!finalTasaBcv || finalTasaBcv <= 100) {
+          const tasaPer = await db.execute({ sql: "SELECT tasa_bcv FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo || '2026-10'] }).catch(() => ({ rows: [] }));
+          if (tasaPer.rows.length > 0 && Number(tasaPer.rows[0].tasa_bcv) > 100) {
+            finalTasaBcv = Number(tasaPer.rows[0].tasa_bcv);
+          }
+        }
+        if (!finalTasaBcv || finalTasaBcv <= 100) finalTasaBcv = 880.12;
+      }
+
       const insHeader = await db.execute({
         sql: `
           INSERT INTO retenciones_islr (
@@ -2838,7 +2888,7 @@ export async function onRequest(context) {
           codigoPrincipal,
           es_multimoneda ? 1 : 0,
           moneda_divisa || 'USD',
-          Number(tasa_bcv || 889.58),
+          finalTasaBcv,
           utBs,
           Number(totDocBs.toFixed(2)),
           Number(totBaseBs.toFixed(2)),

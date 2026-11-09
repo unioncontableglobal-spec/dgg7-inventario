@@ -6963,6 +6963,10 @@ async function openModalEmitirRetencionISLR() {
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-islr-periodo').value = targetPeriodo;
 
+  const tasaOficial = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(targetPeriodo) : 880.12;
+  const elTasa = document.getElementById('m-islr-tasa-bcv');
+  if (elTasa) elTasa.value = tasaOficial.toFixed(2);
+
   // Sello de fecha y hora exacta con segundos (DD/MM/AAAA y HH:MM:SS)
   const now = new Date();
   const pad2 = n => String(n).padStart(2, '0');
@@ -7016,6 +7020,12 @@ async function openModalEmitirRetencionISLR() {
 
 async function actualizarProximoNumeroISLR() {
   const periodo = document.getElementById('m-islr-periodo')?.value || '2026-10';
+  const elTasa = document.getElementById('m-islr-tasa-bcv');
+  if (elTasa) {
+    const tasaOficial = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(periodo) : 880.12;
+    elTasa.value = tasaOficial.toFixed(2);
+    recalcularLineasISLR();
+  }
   const yyyymm = String(periodo).replace('-', '').slice(0, 6);
   let asignado = false;
   try {
@@ -7072,6 +7082,13 @@ function cargarFacturaDirectaEnModalISLR(f) {
   if (perEl) {
     perEl.value = periodo;
     actualizarProximoNumeroISLR();
+  }
+
+  // Sincronizar Tasa BCV Oficial: tomar tasa_bcv de la factura (ej. 880.12) o la del período
+  const tasaDoc = Number(f.tasa_bcv || (typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(f.fecha || f.periodo) : 880.12));
+  const elTasa = document.getElementById('m-islr-tasa-bcv');
+  if (elTasa && tasaDoc > 0) {
+    elTasa.value = tasaDoc.toFixed(2);
   }
 
   // 2. Formatear fecha a DD/MM/AAAA
@@ -7351,7 +7368,7 @@ async function guardarComprobanteISLR(e) {
     concepto_general: document.getElementById('m-islr-concepto-general').value.trim(),
     es_multimoneda: document.getElementById('m-islr-multimoneda').checked ? 1 : 0,
     moneda_divisa: document.getElementById('m-islr-moneda').value,
-    tasa_bcv: parseFloat(document.getElementById('m-islr-tasa-bcv').value) || 68.50,
+    tasa_bcv: parseFloat(document.getElementById('m-islr-tasa-bcv').value) || (typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(document.getElementById('m-islr-periodo').value) : 880.12),
     valor_ut_aplicado: Number(islrState.config?.valor_ut_bs || 43.00),
     detalles
   };
@@ -7475,8 +7492,15 @@ async function verComprobanteISLRPDF(id) {
     const detalles = data.detalles || [];
     const cfg = data.config || islrState.config || {};
 
-    const [yr, mo] = String(r.periodo || '2026-09').split('-');
-    const tasa = Number(r.tasa_bcv || 67.40);
+    const [yr, mo] = String(r.periodo || '2026-10').split('-');
+    let tasa = Number(r.tasa_bcv || 0);
+    if (!tasa || tasa <= 100) {
+      if (detalles.length > 0 && Number(detalles[0].tasa_bcv) > 100) {
+        tasa = Number(detalles[0].tasa_bcv);
+      } else {
+        tasa = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(r.fecha_emision || r.periodo) : 880.12;
+      }
+    }
     const moneda = r.moneda_divisa || 'USD';
 
     const labelsTipoPersona = {
@@ -7559,7 +7583,7 @@ async function verComprobanteISLRPDF(id) {
       <div style="margin-top: 8px; border: 1px solid #3F5B8F; background: #F3F4F6; border-radius: 4px; padding: 5px 10px; font-size: 7.8px; color: #0B2447; display: flex; justify-content: space-between; align-items: center;">
         <div>
           <strong>TRAZABILIDAD DE IMPRENTA DIGITAL AUTORIZADA (PA SNAT/2026/00093):</strong>
-          ${cfg.imprenta_razon_social || 'UNIÓN CONTABLE GLOBAL SISTEMAS DIGITALES, C.A.'} • <strong>RIF:</strong> ${cfg.imprenta_rif || 'J-50714716-9'}
+          ${cfg.imprenta_razon_social || 'SISTEMAS DIGITALES TRIBUTARIOS, C.A.'} • <strong>RIF:</strong> ${cfg.imprenta_rif || 'J-50714716-9'}
         </div>
         <div style="font-family: monospace; font-weight: 800;">
           Providencia: ${cfg.imprenta_providencia || 'SNAT/2026/00093-AUT-00418'} • Asignación: ${cfg.imprenta_fecha_asignacion || `${r.fecha_emision} ${r.hora_emision}`}
@@ -7569,15 +7593,14 @@ async function verComprobanteISLRPDF(id) {
 
     const printHtml = `
       <div class="print-preview-container islr-official-sheet" style="max-width: 1040px; padding: 18px 22px; border-top: 5px solid #0B2447;">
-        <!-- 1. ENCABEZADO CORPORATIVO UNIÓN CONTABLE GLOBAL & NUMERACIÓN PA SNAT/2026/00093 -->
-        <div style="display: grid; grid-template-columns: 220px 1fr 235px; align-items: center; gap: 12px; border-bottom: 2.5px solid #0B2447; padding-bottom: 10px; margin-bottom: 10px;">
-          <!-- Firma Asesora -->
+        <!-- 1. ENCABEZADO FISCAL AGENTE DE RETENCIÓN & NUMERACIÓN PA SNAT/2026/00093 -->
+        <div style="display: grid; grid-template-columns: 240px 1fr 240px; align-items: center; gap: 12px; border-bottom: 2.5px solid #0B2447; padding-bottom: 10px; margin-bottom: 10px;">
+          <!-- Identidad Agente Emisor -->
           <div style="display: flex; align-items: center; gap: 9px;">
-            <img src="LOGOUCG.png" alt="Unión Contable Global" style="height: 44px; object-fit: contain;">
             <div>
-              <div style="font-size: 9.5px; font-weight: 900; color: #0B2447; line-height: 1.15;">UNIÓN CONTABLE GLOBAL</div>
-              <div style="font-size: 8px; font-weight: 700; color: #3F5B8F;">Asesores Contables</div>
-              <div style="font-size: 7.2px; font-style: italic; color: #19A7CE; font-weight: 700;">«Unimos números, contamos éxitos»</div>
+              <div style="font-size: 11px; font-weight: 900; color: #0B2447; line-height: 1.15; letter-spacing: 0.01em;">${cfg.agente_razon_social || 'INVERSIONES DG 67, C.A.'}</div>
+              <div style="font-size: 8.5px; font-weight: 800; color: #3F5B8F; margin-top: 2px;">RIF: ${cfg.agente_rif || 'J-50700865-7'}</div>
+              <div style="font-size: 7.5px; color: #64748B; font-weight: 700; text-transform: uppercase;">AGENTE DE RETENCIÓN ISLR</div>
             </div>
           </div>
 
@@ -7712,22 +7735,17 @@ async function verComprobanteISLRPDF(id) {
 
         ${imprentaHtml}
 
-        <!-- 6. FIRMAS Y SELLOS (AGENTE DE RETENCIÓN Y SUJETO RETENIDO) -->
-        <div class="print-footer-signatures seniat-3-signatures" style="margin-top: 26px;">
+        <!-- 6. FIRMAS Y SELLOS OFICIALES (AGENTE DE RETENCIÓN Y SUJETO RETENIDO) -->
+        <div class="print-footer-signatures" style="margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; text-align: center;">
           <div>
             <div class="sig-line" style="border-top-color: #0B2447; color: #0B2447;">FIRMA Y SELLO AGENTE DE RETENCIÓN</div>
-            <div style="font-size: 8px; color: #3F5B8F; font-weight: 700; margin-top: 2px;">${cfg.agente_razon_social || 'INVERSIONES DG 67, C.A.'} • RIF: ${cfg.agente_rif || 'J-50700865-7'}</div>
-            <div style="font-size: 7.5px; color: #6B7280;">Fecha de Entrega: ${r.fecha_emision}</div>
-          </div>
-          <div>
-            <div class="sig-line" style="border-top-color: #3F5B8F; color: #3F5B8F;">REVISIÓN Y ASESORÍA TRIBUTARIA</div>
-            <div style="font-size: 8px; color: #0B2447; font-weight: 800; margin-top: 2px;">UNIÓN CONTABLE GLOBAL, ASESORES CONTABLES</div>
-            <div style="font-size: 7.5px; color: #19A7CE; font-weight: 700;">«Unimos números, contamos éxitos»</div>
+            <div style="font-size: 8.5px; color: #0B2447; font-weight: 800; margin-top: 3px;">${cfg.agente_razon_social || 'INVERSIONES DG 67, C.A.'} • RIF: ${cfg.agente_rif || 'J-50700865-7'}</div>
+            <div style="font-size: 7.5px; color: #64748B;">Fecha de Entrega: ${r.fecha_emision}</div>
           </div>
           <div>
             <div class="sig-line" style="border-top-color: #0B2447; color: #0B2447;">FIRMA Y SELLO SUJETO RETENIDO (RECIBÍ CONFORME)</div>
-            <div style="font-size: 8px; color: #3F5B8F; font-weight: 700; margin-top: 2px;">${r.sujeto_razon_social} • RIF: ${r.sujeto_rif}</div>
-            <div style="font-size: 7.5px; color: #6B7280;">Notificado a: ${r.sujeto_email}</div>
+            <div style="font-size: 8.5px; color: #0B2447; font-weight: 800; margin-top: 3px;">${r.sujeto_razon_social} • RIF: ${r.sujeto_rif}</div>
+            <div style="font-size: 7.5px; color: #64748B;">Notificado a: ${r.sujeto_email}</div>
           </div>
         </div>
       </div>
