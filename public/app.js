@@ -6918,12 +6918,37 @@ function renderComprobantesISLR(rows) {
 }
 
 async function emitirISLRDesdeFacturaCompra(libroCompraId) {
+  // 1. Localizar la factura seleccionada del Libro de Compras en memoria
+  let factura = (state.libroCompras || []).find(c => Number(c.id) === Number(libroCompraId));
+  if (!factura) {
+    factura = (islrState.facturasDisponibles || []).find(f => Number(f.id) === Number(libroCompraId));
+  }
+
+  // 2. Si no estuviera en memoria (p. ej. tras refrescar), consultar BD
+  if (!factura && libroCompraId) {
+    try {
+      const res = await fetch(`/api/fiscal/libro-compras/${libroCompraId}`);
+      if (res.ok) {
+        factura = await res.json();
+      }
+    } catch (e) {
+      console.warn('Error localizando factura por ID:', e);
+    }
+  }
+
+  // 3. Abrir el modal de emisión
   await openModalEmitirRetencionISLR();
-  const idx = (islrState.facturasDisponibles || []).findIndex(f => Number(f.id) === Number(libroCompraId));
-  if (idx !== -1) {
-    const sel = document.getElementById('islr-select-factura-compra');
-    if (sel) sel.value = String(idx);
-    cargarFacturaCompraEnModalISLR(String(idx));
+
+  // 4. Si tenemos la factura, precargarla de inmediato con todos sus datos y el cálculo fiscal
+  if (factura) {
+    cargarFacturaDirectaEnModalISLR(factura);
+
+    // Sincronizar índice en el desplegable de facturas disponibles si aplica
+    const idx = (islrState.facturasDisponibles || []).findIndex(f => Number(f.id) === Number(libroCompraId));
+    if (idx !== -1) {
+      const sel = document.getElementById('islr-select-factura-compra');
+      if (sel) sel.value = String(idx);
+    }
   }
 }
 
@@ -6988,14 +7013,21 @@ async function openModalEmitirRetencionISLR() {
 
 async function actualizarProximoNumeroISLR() {
   const periodo = document.getElementById('m-islr-periodo')?.value || '2026-10';
+  const yyyymm = String(periodo).replace('-', '').slice(0, 6);
+  let asignado = false;
   try {
     const res = await fetch(`/api/islr/proximo-numero?periodo=${encodeURIComponent(periodo)}`);
-    const data = await res.json();
-    if (data.nro_comprobante) {
-      document.getElementById('m-islr-nro-comprobante').value = data.nro_comprobante;
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.nro_comprobante) {
+        document.getElementById('m-islr-nro-comprobante').value = data.nro_comprobante;
+        asignado = true;
+      }
     }
   } catch (err) {
-    const yyyymm = periodo.replace('-', '');
+    console.warn('Error obteniendo próximo número ISLR:', err);
+  }
+  if (!asignado) {
     document.getElementById('m-islr-nro-comprobante').value = `${yyyymm}00000001`;
   }
 }
@@ -7027,125 +7059,63 @@ function seleccionarProveedorEnModalISLR(provId) {
   recalcularLineasISLR();
 }
 
-function cargarFacturaCompraEnModalISLR(idxStr) {
-  if (idxStr === '' || idxStr === null || idxStr === undefined) return;
-  const f = islrState.facturasDisponibles[Number(idxStr)];
+// Cargar Factura Directa con Autocalculo de Retenciones (Decreto 1808 • PA SNAT/2026/00093)
+function cargarFacturaDirectaEnModalISLR(f) {
   if (!f) return;
 
-  if (f.periodo) {
-    document.getElementById('m-islr-periodo').value = f.periodo;
+  // 1. Sincronizar Período Fiscal
+  const periodo = f.periodo || '2026-10';
+  const perEl = document.getElementById('m-islr-periodo');
+  if (perEl) {
+    perEl.value = periodo;
     actualizarProximoNumeroISLR();
   }
 
-  document.getElementById('m-islr-rif').value = f.rif || '';
-  document.getElementById('m-islr-razon').value = f.razon_social || '';
-  const tipoPers = f.tipo_persona || ((String(f.rif || '').startsWith('V') || String(f.rif || '').startsWith('E')) ? 'PN-R' : 'PJ-D');
-  document.getElementById('m-islr-tipo-persona').value = tipoPers;
-  document.getElementById('m-islr-direccion').value = f.direccion_fiscal || 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS';
-  document.getElementById('m-islr-email').value = f.email || 'facturacion@unioncontableglobal.com';
-  document.getElementById('m-islr-concepto-general').value = f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES'
-    ? 'ASESORIA ADMINISTRATIVA'
-    : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
-
-  // Formatear fecha de la factura a DD/MM/AAAA
-  let fechaDoc = f.fecha || '30/09/2026';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(fechaDoc)) {
-    const [y, m, d] = fechaDoc.split('-');
-    fechaDoc = `${d}/${m}/${y}`;
-  }
-
-  // SINCRONIZACIÓN DE FECHA SEGÚN MARCO LEGAL SENIAT (PA SNAT/2026/00093 • Decreto 1808)
-  const fecEmisionEl = document.getElementById('m-islr-fecha-emision');
-  if (fecEmisionEl && fechaDoc) {
-    fecEmisionEl.value = fechaDoc;
-  }
-
-  const codConcepto = f.codigo_concepto_islr || (tipoPers === 'PN-R' ? '001' : '055');
-  const tbodyItems = document.getElementById('tbody-modal-islr-items');
-  if (tbodyItems) tbodyItems.innerHTML = '';
-
-  agregarFilaDetalleISLR({
-    libro_compra_id: f.id,
-    fecha_factura: fechaDoc,
-    nro_factura: f.nro_factura || '000001',
-    nro_control: f.nro_control || '00-00000001',
-    codigo_concepto: codConcepto,
-    descripcion_concepto: f.rif === 'J-50714716-9' ? 'ASESORIA 360 GLOBAL - CFT' : (f.observaciones_cruce || 'PRESTACIÓN DE SERVICIOS PROFESIONALES'),
-    monto_total_bs: Number(f.total_bs || 0),
-    base_imponible_bs: Number(f.base_imponible_bs || 0)
-  });
-}
-
-// Emisión Oficial de Retención Directa desde Ficha de Factura (Unión Global / Proveedores)
-async function emitirRetencionDirectaDesdeFactura(f) {
-  if (!f) return;
-  await openModalEmitirRetencionISLR();
-
-  const periodo = f.periodo || '2026-10';
-  const perEl = document.getElementById('m-islr-periodo');
-  if (perEl) perEl.value = periodo;
-  await actualizarProximoNumeroISLR();
-
-  // Formatear fecha de la factura a DD/MM/AAAA
+  // 2. Formatear fecha a DD/MM/AAAA
   let fechaDoc = f.fecha || '31/10/2026';
   if (/^\d{4}-\d{2}-\d{2}$/.test(fechaDoc)) {
     const [y, m, d] = fechaDoc.split('-');
     fechaDoc = `${d}/${m}/${y}`;
   }
 
-  // 1. Sincronizar fecha oficial de emisión del comprobante (debe coincidir con la fecha de la factura en el período)
-  const fecEl = document.getElementById('m-islr-fecha-emision');
-  if (fecEl) fecEl.value = fechaDoc;
+  // 3. Fecha oficial de emisión del comprobante (debe coincidir con la fecha de la factura en el período)
+  const fecEmisionEl = document.getElementById('m-islr-fecha-emision');
+  if (fecEmisionEl && fechaDoc) {
+    fecEmisionEl.value = fechaDoc;
+  }
 
-  // 2. Establecer datos del Sujeto Retenido (Proveedor)
-  const rifEl = document.getElementById('m-islr-rif');
-  if (rifEl) rifEl.value = f.rif || '';
-
-  const razonEl = document.getElementById('m-islr-razon');
-  if (razonEl) razonEl.value = f.razon_social || '';
+  // 4. Datos del Sujeto Retenido (Proveedor)
+  document.getElementById('m-islr-rif').value = f.rif || '';
+  document.getElementById('m-islr-razon').value = f.razon_social || '';
 
   const cleanRif = String(f.rif || '').toUpperCase();
-  const tipoPers = (cleanRif.startsWith('V') || cleanRif.startsWith('E')) ? 'PN-R' : 'PJ-D';
-  const tipoEl = document.getElementById('m-islr-tipo-persona');
-  if (tipoEl) tipoEl.value = tipoPers;
+  const tipoPers = f.tipo_persona || ((cleanRif.startsWith('V') || cleanRif.startsWith('E')) ? 'PN-R' : 'PJ-D');
+  document.getElementById('m-islr-tipo-persona').value = tipoPers;
 
-  const dirEl = document.getElementById('m-islr-direccion');
-  if (dirEl) {
-    if (cleanRif.includes('50714716')) {
-      dirEl.value = 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS';
-    } else {
-      dirEl.value = f.direccion_fiscal || 'CARACAS, DISTRITO CAPITAL';
-    }
-  }
-
-  const emailEl = document.getElementById('m-islr-email');
-  if (emailEl) {
-    if (cleanRif.includes('50714716')) {
-      emailEl.value = 'facturacion@unioncontableglobal.com';
-    } else {
-      emailEl.value = f.email || '';
-    }
-  }
-
-  const concGenEl = document.getElementById('m-islr-concepto-general');
-  if (concGenEl) {
-    concGenEl.value = (cleanRif.includes('50714716') || f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES')
+  if (cleanRif.includes('50714716')) {
+    document.getElementById('m-islr-direccion').value = 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS';
+    document.getElementById('m-islr-email').value = 'facturacion@unioncontableglobal.com';
+    document.getElementById('m-islr-concepto-general').value = 'ASESORIA ADMINISTRATIVA';
+  } else {
+    document.getElementById('m-islr-direccion').value = f.direccion_fiscal || 'CARACAS, DISTRITO CAPITAL';
+    document.getElementById('m-islr-email').value = f.email || 'administracion@proveedor.com';
+    document.getElementById('m-islr-concepto-general').value = f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES'
       ? 'ASESORIA ADMINISTRATIVA'
       : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
   }
 
-  // 3. Configurar renglón de retención con tarifa legal según Decreto 1808
-  // Concepto 055 (2% Servicios PJ-D) o 003 (5% Honorarios PJ-D)
-  const codConcepto = cleanRif.includes('50714716') ? '055' : (tipoPers === 'PN-R' ? '001' : '055');
-  const descConcepto = cleanRif.includes('50714716') 
-    ? 'ASESORIA 360 GLOBAL - CFT' 
-    : (f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'EJECUCIÓN DE OBRAS Y SUMINISTROS' : 'PRESTACIÓN DE SERVICIOS');
+  // 5. Configurar concepto según Decreto 1808 (Concepto 055 para PJ-D, 2% sobre base imponible)
+  const codConcepto = f.codigo_concepto_islr || (cleanRif.includes('50714716') ? '055' : (tipoPers === 'PN-R' ? '001' : '055'));
+  const descConcepto = cleanRif.includes('50714716')
+    ? 'ASESORIA 360 GLOBAL - CFT'
+    : (f.observaciones_cruce || (f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'EJECUCIÓN DE OBRAS Y SUMINISTROS' : 'PRESTACIÓN DE SERVICIOS'));
 
+  // 6. Renglón de detalle de factura objeto de retención con Base y Total correctos
   const tbodyItems = document.getElementById('tbody-modal-islr-items');
   if (tbodyItems) tbodyItems.innerHTML = '';
 
   agregarFilaDetalleISLR({
-    libro_compra_id: f.id || '',
+    libro_compra_id: f.id,
     fecha_factura: fechaDoc,
     nro_factura: f.nro_factura || '000014',
     nro_control: f.nro_control || '00-00000015',
@@ -7155,13 +7125,29 @@ async function emitirRetencionDirectaDesdeFactura(f) {
     base_imponible_bs: Number(f.base_imponible_bs || 0)
   });
 
+  // 7. Forzar recálculo inmediato de retenciones y totales
   recalcularLineasISLR();
 
   if (typeof showToast === 'function') {
-    showToast(`🧾 Comprobante de Retención preparado conforme a Ley para ${f.razon_social || 'Proveedor'}. Emisión: ${fechaDoc}.`, 'success');
+    showToast(`🧾 Datos de ${f.razon_social} (Factura N° ${f.nro_factura}) cargados con retención calculada.`, 'success');
   }
 }
+
+function cargarFacturaCompraEnModalISLR(idxStr) {
+  if (idxStr === '' || idxStr === null || idxStr === undefined) return;
+  const f = islrState.facturasDisponibles[Number(idxStr)];
+  if (!f) return;
+  cargarFacturaDirectaEnModalISLR(f);
+}
+
+// Emisión Oficial de Retención Directa desde Ficha de Factura (Unión Global / Proveedores)
+async function emitirRetencionDirectaDesdeFactura(f) {
+  if (!f) return;
+  await openModalEmitirRetencionISLR();
+  cargarFacturaDirectaEnModalISLR(f);
+}
 window.emitirRetencionDirectaDesdeFactura = emitirRetencionDirectaDesdeFactura;
+window.cargarFacturaDirectaEnModalISLR = cargarFacturaDirectaEnModalISLR;
 
 function toggleBloqueMultimonedaISLR() {
   const checked = document.getElementById('m-islr-multimoneda')?.checked;

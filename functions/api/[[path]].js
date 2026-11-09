@@ -2609,6 +2609,307 @@ export async function onRequest(context) {
       return jsonResponse(res.rows);
     }
 
+    if (path === '/api/islr/proximo-numero' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo') || '2026-10';
+      const yyyymm = String(periodo).replace('-', '').slice(0, 6);
+
+      const [resPer, resGlobal] = await Promise.all([
+        db.execute({
+          sql: "SELECT nro_comprobante FROM retenciones_islr WHERE nro_comprobante LIKE ? ORDER BY nro_comprobante DESC LIMIT 1",
+          args: [`${yyyymm}%`]
+        }),
+        db.execute("SELECT nro_comprobante FROM retenciones_islr ORDER BY id DESC LIMIT 1")
+      ]);
+
+      let nextSeq = 1;
+      if (resPer.rows.length > 0) {
+        const last = String(resPer.rows[0].nro_comprobante);
+        const numPart = parseInt(last.slice(6), 10) || 0;
+        nextSeq = numPart + 1;
+      } else if (resGlobal.rows.length > 0) {
+        const lastGlobal = String(resGlobal.rows[0].nro_comprobante);
+        const numPart = parseInt(lastGlobal.slice(6), 10) || 0;
+        nextSeq = numPart + 1;
+      }
+
+      const nroComprobante = `${yyyymm}${String(nextSeq).padStart(8, '0')}`;
+      return jsonResponse({ periodo, nro_comprobante: nroComprobante });
+    }
+
+    if (path === '/api/islr/facturas-disponibles' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      const rif = url.searchParams.get('rif');
+      let sql = `
+        SELECT 
+          lc.*,
+          p.id as prov_id,
+          COALESCE(p.tipo_persona, CASE WHEN lc.rif LIKE 'V%' OR lc.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
+          COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
+          COALESCE(p.email, '') as email,
+          COALESCE(p.telefono, '') as telefono,
+          COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
+          ri.nro_comprobante as comprobante_islr_emitido
+        FROM libro_compras lc
+        LEFT JOIN proveedores p ON lc.rif = p.rif
+        LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
+        LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
+        WHERE 1=1
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` AND lc.periodo = ?`;
+        args.push(periodo);
+      }
+      if (rif) {
+        sql += ` AND lc.rif = ?`;
+        args.push(rif);
+      }
+      sql += ` ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
+      const result = await db.execute({ sql, args });
+      return jsonResponse(result.rows);
+    }
+
+    if (path.startsWith('/api/islr/comprobantes/') && method === 'GET') {
+      const id = path.split('/')[4];
+      const [headerRes, itemsRes, configRes] = await Promise.all([
+        db.execute({ sql: "SELECT * FROM retenciones_islr WHERE id = ?", args: [id] }),
+        db.execute({ sql: "SELECT * FROM retenciones_islr_detalles WHERE retencion_id = ? ORDER BY nro_operacion ASC", args: [id] }),
+        db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1")
+      ]);
+
+      if (headerRes.rows.length === 0) {
+        return jsonResponse({ error: 'Comprobante de Retención ISLR no encontrado' }, 404);
+      }
+
+      return jsonResponse({
+        comprobante: headerRes.rows[0],
+        detalles: itemsRes.rows,
+        config: configRes.rows[0] || {}
+      });
+    }
+
+    if (path === '/api/islr/comprobantes' && method === 'POST') {
+      const body = await request.json();
+      const {
+        nro_comprobante,
+        periodo,
+        fecha_emision,
+        hora_emision,
+        proveedor_id,
+        sujeto_rif,
+        sujeto_razon_social,
+        sujeto_tipo_persona,
+        sujeto_direccion,
+        sujeto_email,
+        sujeto_telefono,
+        concepto_general,
+        es_multimoneda,
+        moneda_divisa,
+        tasa_bcv,
+        valor_ut_aplicado,
+        observaciones,
+        detalles
+      } = body;
+
+      const cleanNroComp = String(nro_comprobante || '').trim();
+      if (!/^\d{14}$/.test(cleanNroComp)) {
+        return jsonResponse({
+          error: 'El Número de Comprobante debe tener exactamente 14 dígitos numéricos (Formato AAAAMM + 8 dígitos secuenciales, ej. 20261000000001).'
+        }, 400);
+      }
+
+      const cleanEmail = String(sujeto_email || '').trim();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return jsonResponse({
+          error: 'El Correo Electrónico del Proveedor (Sujeto Retenido) es un CAMPO OBLIGATORIO según la Providencia Administrativa SNAT/2026/00093.'
+        }, 400);
+      }
+
+      const cleanRif = String(sujeto_rif || '').trim().toUpperCase();
+      if (!cleanRif || !sujeto_razon_social) {
+        return jsonResponse({ error: 'El RIF y la Razón Social del Sujeto Retenido son obligatorios.' }, 400);
+      }
+
+      if (!Array.isArray(detalles) || detalles.length === 0) {
+        return jsonResponse({ error: 'Debe incluir al menos una factura o documento objeto de retención.' }, 400);
+      }
+
+      const cfgRes = await db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1");
+      const cfg = cfgRes.rows[0] || { valor_ut_bs: 43.00, factor_sustraendo: 83.3334 };
+      const utBs = Number(valor_ut_aplicado || cfg.valor_ut_bs || 43.00);
+      const factorSust = Number(cfg.factor_sustraendo || 83.3334);
+      const tipoPersona = sujeto_tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
+
+      let totDocBs = 0;
+      let totBaseBs = 0;
+      let totSustBs = 0;
+      let totRetBs = 0;
+      let codigoPrincipal = '055';
+
+      const processedItems = detalles.map((item, idx) => {
+        const montoDoc = Number(item.monto_total_bs || 0);
+        const baseImp = Number(item.base_imponible_bs || 0);
+        const pctBase = Number(item.pct_base !== undefined ? item.pct_base : 100.0);
+        const pctTarifa = Number(item.pct_tarifa !== undefined ? item.pct_tarifa : 2.0);
+        const codConcepto = String(item.codigo_concepto || '055').padStart(3, '0');
+        if (idx === 0) codigoPrincipal = codConcepto;
+
+        let sustraendo = 0.0;
+        const umbralMinimo = utBs * factorSust;
+        if (tipoPersona === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3)) {
+          if (item.sustraendo_bs !== undefined && item.sustraendo_bs !== null && item.sustraendo_bs !== '') {
+            sustraendo = Number(item.sustraendo_bs);
+          } else if (baseImp > umbralMinimo) {
+            sustraendo = Number((utBs * factorSust * (pctTarifa / 100)).toFixed(2));
+          }
+        } else if (item.sustraendo_bs !== undefined && Number(item.sustraendo_bs) > 0) {
+          sustraendo = Number(item.sustraendo_bs);
+        }
+
+        const baseObjeto = baseImp * (pctBase / 100);
+        const retencionBruta = baseObjeto * (pctTarifa / 100);
+        const impuestoRetenido = Math.max(0, Number((retencionBruta - sustraendo).toFixed(2)));
+
+        totDocBs += montoDoc;
+        totBaseBs += baseImp;
+        totSustBs += sustraendo;
+        totRetBs += impuestoRetenido;
+
+        return {
+          libro_compra_id: item.libro_compra_id || null,
+          nro_operacion: idx + 1,
+          fecha_factura: item.fecha_factura || fecha_emision,
+          nro_factura: String(item.nro_factura || '').trim() || 'S/N',
+          nro_control: String(item.nro_control || '').trim() || 'S/C',
+          nro_nota_debito: String(item.nro_nota_debito || '').trim(),
+          nro_nota_credito: String(item.nro_nota_credito || '').trim(),
+          tipo_transaccion: item.tipo_transaccion || '01-REG',
+          codigo_concepto: codConcepto,
+          descripcion_concepto: item.descripcion_concepto || concepto_general || 'SERVICIOS PROFESIONALES / EJECUCIÓN DE OBRAS',
+          monto_total_bs: Number(montoDoc.toFixed(2)),
+          base_imponible_bs: Number(baseImp.toFixed(2)),
+          pct_base: pctBase,
+          pct_tarifa: pctTarifa,
+          sustraendo_bs: Number(sustraendo.toFixed(2)),
+          impuesto_retenido_bs: impuestoRetenido
+        };
+      });
+
+      const totalAPagar = Number((totDocBs - totRetBs).toFixed(2));
+      const now = new Date();
+      const pad2 = n => String(n).padStart(2, '0');
+      const defaultHora = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+      const defaultFecha = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+      const insHeader = await db.execute({
+        sql: `
+          INSERT INTO retenciones_islr (
+            nro_comprobante, periodo, fecha_emision, hora_emision,
+            proveedor_id, sujeto_rif, sujeto_razon_social, sujeto_tipo_persona,
+            sujeto_direccion, sujeto_email, sujeto_telefono,
+            concepto_general, codigo_concepto_principal,
+            es_multimoneda, moneda_divisa, tasa_bcv, valor_ut_aplicado,
+            total_documento_bs, total_base_imponible_bs, total_sustraendo_bs,
+            total_islr_retenido_bs, total_a_pagar_bs, estatus, observaciones
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EMITIDO', ?)
+        `,
+        args: [
+          cleanNroComp,
+          periodo || '2026-10',
+          fecha_emision || defaultFecha,
+          hora_emision || defaultHora,
+          proveedor_id || null,
+          cleanRif,
+          String(sujeto_razon_social).trim(),
+          tipoPersona,
+          String(sujeto_direccion || 'CARACAS, DISTRITO CAPITAL').trim(),
+          cleanEmail,
+          String(sujeto_telefono || '').trim(),
+          String(concepto_general || processedItems[0].descripcion_concepto).trim(),
+          codigoPrincipal,
+          es_multimoneda ? 1 : 0,
+          moneda_divisa || 'USD',
+          Number(tasa_bcv || 889.58),
+          utBs,
+          Number(totDocBs.toFixed(2)),
+          Number(totBaseBs.toFixed(2)),
+          Number(totSustBs.toFixed(2)),
+          Number(totRetBs.toFixed(2)),
+          totalAPagar,
+          String(observaciones || '').trim()
+        ]
+      });
+
+      const retencionId = Number(insHeader.lastInsertRowid);
+
+      for (const it of processedItems) {
+        await db.execute({
+          sql: `
+            INSERT INTO retenciones_islr_detalles (
+              retencion_id, libro_compra_id, nro_operacion,
+              fecha_factura, nro_factura, nro_control,
+              nro_nota_debito, nro_nota_credito, tipo_transaccion,
+              codigo_concepto, descripcion_concepto,
+              monto_total_bs, base_imponible_bs, pct_base, pct_tarifa,
+              sustraendo_bs, impuesto_retenido_bs
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: [
+            retencionId, it.libro_compra_id, it.nro_operacion,
+            it.fecha_factura, it.nro_factura, it.nro_control,
+            it.nro_nota_debito, it.nro_nota_credito, it.tipo_transaccion,
+            it.codigo_concepto, it.descripcion_concepto,
+            it.monto_total_bs, it.base_imponible_bs, it.pct_base, it.pct_tarifa,
+            it.sustraendo_bs, it.impuesto_retenido_bs
+          ]
+        });
+      }
+
+      if (cleanRif) {
+        await db.execute({
+          sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ? WHERE rif = ?`,
+          args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, cleanRif]
+        });
+      }
+
+      return jsonResponse({
+        success: true,
+        id: retencionId,
+        nro_comprobante: cleanNroComp,
+        message: `Comprobante de Retención ISLR N° ${cleanNroComp} emitido conforme a la PA SNAT/2026/00093.`
+      });
+    }
+
+    if (path.startsWith('/api/islr/comprobantes/') && method === 'DELETE') {
+      const id = path.split('/')[4];
+      await db.execute({ sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?", args: [id] });
+      await db.execute({ sql: "DELETE FROM retenciones_islr WHERE id = ?", args: [id] });
+      return jsonResponse({ success: true, message: 'Comprobante eliminado con éxito.' });
+    }
+
+    if (path === '/api/islr/config' && method === 'PUT') {
+      const body = await request.json();
+      const {
+        agente_rif, agente_razon_social, agente_direccion,
+        valor_ut_bs, factor_sustraendo, nro_resolucion_especial, fecha_resolucion_especial
+      } = body;
+      await db.execute({
+        sql: `
+          UPDATE config_fiscal_islr SET
+            agente_rif = ?, agente_razon_social = ?, agente_direccion = ?,
+            valor_ut_bs = ?, factor_sustraendo = ?,
+            nro_resolucion_especial = ?, fecha_resolucion_especial = ?
+          WHERE id = 1
+        `,
+        args: [
+          agente_rif, agente_razon_social, agente_direccion,
+          valor_ut_bs, factor_sustraendo,
+          nro_resolucion_especial, fecha_resolucion_especial
+        ]
+      });
+      return jsonResponse({ success: true, message: 'Configuración fiscal actualizada.' });
+    }
+
     if (path === '/api/reportes/mes-a-mes' && method === 'GET') {
       const rawMovs = await db.execute(`
         SELECT 
