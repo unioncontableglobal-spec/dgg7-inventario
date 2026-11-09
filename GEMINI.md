@@ -48,6 +48,16 @@
 * **Identidad Exclusiva de la Empresa:** Los encabezados de los libros fiscales deben mostrar únicamente la razón social, RIF y domicilio fiscal de la empresa cliente (**INVERSIONES DG 67, C.A.**), quedando prohibido incluir logotipos o marcas de la firma contable externa (UCG) en la cabecera del libro fiscal.
 * **Relación de Facturas Anuladas en Ventas:** En el Libro de Ventas, incluir siempre la columna o desglose correlativo de facturas anuladas por reporte Z (indicando los números de comprobante para control de la correlatividad según Providencia 00071, sin necesidad de colocar monto).
 
+## 7. Automatización Integral y Precarga Obligatoria de Retenciones Fiscales (ISLR / IVA)
+* **Precarga Total Inmediata:** Al invocar la emisión de una retención desde cualquier factura o registro del sistema (botón `🧾 Ret. ISLR` en el Libro de Compras, Extractor Inteligente o ficha de detalle), el modal o formulario de retención DEBE abrirse con el **100% de los datos precargados**:
+  1. **Período Fiscal y Correlativo Legal:** Período idéntico al de la factura y número correlativo de 14 dígitos oficial (`YYYYMMXXXXXXXX`).
+  2. **Fecha de Emisión Coincidente:** La fecha de emisión del comprobante debe coincidir exactamente con la fecha de la factura/operación dentro del período fiscal impositivo, de conformidad con la Providencia SENIAT PA SNAT/2026/00093 y el Decreto 1.808.
+  3. **Datos Completos del Sujeto Retenido:** RIF, Razón Social, tipo de persona (`PJ-D` / `PN-R`), dirección fiscal completa y correo electrónico obligatorio para notificación.
+  4. **Detalle del Documento y Montos:** N° de Factura, N° de Control, código y descripción del concepto SENIAT (ej. Concepto `055` al 2% para personas jurídicas domiciliadas), Monto Total de la Factura y Base Imponible exacta.
+* **Autocálculo Matemático Inmediato:** El sistema debe ejecutar de forma instantánea el cálculo de la retención (base × tarifa legal - sustraendo si aplica) y proyectar el monto retenido y el total neto a pagar en los campos y en el pie de totales.
+* **Principio de Operación en Un Solo Clic:** La pantalla no debe exigir recapturas ni cálculos manuales redundantes; el usuario solo debe verificar los datos y presionar el botón de aprobación y emisión final.
+
+
 
 
 
