@@ -2143,21 +2143,29 @@ export async function onRequest(context) {
         }
       }
 
+      const retBs = body.iva_retenido_bs !== undefined && body.iva_retenido_bs !== null && body.iva_retenido_bs !== ''
+        ? Number(body.iva_retenido_bs)
+        : Number((ivaBs * 0.75).toFixed(2));
+      const retDiv = Number((retBs / tasaOp).toFixed(2));
+
       const insResult = await db.execute({
         sql: `INSERT INTO libro_compras 
               (periodo, archivo_origen, nro_operacion, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
                tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
+               iva_retenido_bs, iva_retenido_divisa,
                proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
                tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
               VALUES 
               (?, ?, ?, ?, ?, ?, ?, ?, ?,
                ?, ?, ?, ?, ?,
+               ?, ?,
                ?, ?, ?, ?, ?, ?,
                ?, ?, 'USD', ?, ?, ?)
               RETURNING id`,
         args: [
           periodo, body.archivo_origen || 'SISTEMA_WEB', nextOp, fecha, body.fecha_recepcion || fecha, cleanRif, cleanRazon, String(nro_factura).trim(), nro_control || '00-000000',
           tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
+          retBs, retDiv,
           provId, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
           esMercancia ? 1 : 0, estatus, matchMovId, obs,
           tasaOp, fechaTasaOp, baseDiv, ivaDiv, totDiv
@@ -2255,21 +2263,29 @@ export async function onRequest(context) {
           let estatus = esMercancia ? 'PENDIENTE_DG67' : 'NO_APLICA_GASTO';
           let obs = f.observaciones_cruce || (esMercancia ? 'Factura asentada por Carga Masiva PDF. Pendiente por recepción física.' : 'Gasto operativo / servicio asentado por Carga Masiva PDF.');
 
+          const retBs = f.iva_retenido_bs !== undefined && f.iva_retenido_bs !== null && f.iva_retenido_bs !== ''
+            ? Number(f.iva_retenido_bs)
+            : Number((ivaBs * 0.75).toFixed(2));
+          const retDiv = Number((retBs / tasaOp).toFixed(2));
+
           const insResult = await db.execute({
             sql: `INSERT INTO libro_compras 
                   (periodo, archivo_origen, nro_operacion, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control,
                    tipo_transaccion, base_imponible_bs, alicuota, iva_bs, total_bs,
+                   iva_retenido_bs, iva_retenido_divisa,
                    proveedor_id, tipo_servicio, aplica_inventario, estatus_conciliacion, movimiento_id, observaciones_cruce,
                    tasa_bcv, fecha_tasa_bcv, moneda_divisa, base_imponible_divisa, monto_iva_divisa, total_divisa)
                   VALUES 
                   (?, ?, ?, ?, ?, ?, ?, ?, ?,
                    ?, ?, ?, ?, ?,
+                   ?, ?,
                    ?, ?, ?, ?, ?, ?,
                    ?, ?, 'USD', ?, ?, ?)
                   RETURNING id`,
             args: [
               periodo, f.archivo_origen || 'CARGA_MASIVA_PDF', nextOp, fecha, f.fecha_recepcion || fecha, cleanRif, cleanRazon, String(nro_factura).trim(), nro_control || '00-000000',
               f.tipo_transaccion || '01-reg', baseBs, ali, ivaBs, totBs,
+              retBs, retDiv,
               provId, f.tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'),
               esMercancia ? 1 : 0, estatus, null, obs,
               tasaOp, fechaTasaOp, baseDiv, ivaDiv, totDiv

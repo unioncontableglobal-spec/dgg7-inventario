@@ -1864,12 +1864,32 @@ input:focus {
 .print-preview-header,
 .seniat-official-header {
   display: grid;
-  grid-template-columns: 120px 1fr 185px;
+  grid-template-columns: 310px 1fr 220px;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   border-bottom: 2px solid #000080;
   padding-bottom: 12px;
   margin-bottom: 14px;
+}
+
+.seniat-header-left {
+  min-width: 290px;
+}
+
+.seniat-header-left .seniat-company-title {
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #000080;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.seniat-header-left .seniat-company-rif {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 
 .print-preview-table,

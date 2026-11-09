@@ -525,6 +525,7 @@ async function cargarLoteAuditadoOctubreDG67() {
         id: `audit-oct-${item.pagina}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         archivo_nombre: `Compras DG67 OCT26.pdf (Pág. ${item.pagina}/11)`,
         file: null,
+        url_pdf: '/docs/Compras_DG67_OCT26.pdf',
         pagina: item.pagina,
         total_paginas: 11,
         periodo: periodoActual,
@@ -1092,6 +1093,8 @@ async function asentarFacturaStagingIndividual(idx) {
     alicuota: 0.16,
     iva_bs: f.iva_bs,
     total_bs: f.total_bs,
+    iva_retenido_bs: Number((f.iva_bs * 0.75).toFixed(2)),
+    porcentaje_retencion: 75.0,
     tasa_bcv: f.tasa_bcv,
     archivo_origen: f.archivo_nombre
   };
@@ -1159,6 +1162,8 @@ async function asentarTodasFacturasValidadas() {
       alicuota: 0.16,
       iva_bs: f.iva_bs,
       total_bs: f.total_bs,
+      iva_retenido_bs: Number((f.iva_bs * 0.75).toFixed(2)),
+      porcentaje_retencion: 75.0,
       tasa_bcv: f.tasa_bcv,
       archivo_origen: f.archivo_nombre
     }))
@@ -1199,15 +1204,209 @@ async function asentarTodasFacturasValidadas() {
 }
 
 // ==============================================================================
-// VISOR Y AUDITORÍA DETALLADA DE FACTURA CON BOTÓN DE ASIENTO DIRECTO
+// VISOR Y AUDITORÍA DETALLADA DE FACTURA (CANVAS PDF.JS DE ALTA FIDELIDAD)
 // ==============================================================================
-function abrirVisorDetalleFacturaStaging(idx) {
+let pdfDocActual = null;
+let pdfPaginaActual = 1;
+let pdfTotalPaginas = 1;
+let pdfZoomScale = 'auto';
+let pdfSourceActual = null;
+
+// Resolver origen del documento PDF (Archivo en memoria o Ruta Estática Servida)
+function obtenerUrlOArchivoPDF(f) {
+  if (!f) return null;
+  if (f.file) return f.file;
+  if (f.url_pdf) return f.url_pdf;
+
+  const name = String(f.archivo_nombre || '').toLowerCase();
+  const rif = String(f.rif || '').toUpperCase();
+  const nroFact = String(f.nro_factura || '').trim();
+
+  // Caso 1: Unión Global 333, C.A. (Factura 000014)
+  if (name.includes('factura_000014') || rif.includes('50714716') || nroFact === '000014') {
+    return '/docs/FACTURA_000014_20261031015557-1.pdf';
+  }
+  // Caso 2: Grupo Matute (Factura 006734)
+  if (name.includes('oct26_2') || nroFact === '006734') {
+    return '/docs/Compras_DG67_OCT26_2.pdf';
+  }
+  // Caso 3: Lote Escaneado 11 Páginas Octubre 2026
+  if (name.includes('oct26') || f.total_paginas === 11 || (f.pagina && f.pagina >= 1 && f.pagina <= 11)) {
+    return '/docs/Compras_DG67_OCT26.pdf';
+  }
+
+  return null;
+}
+
+// Cargar y Renderizar Documento PDF en Canvas de Alta Resolución
+async function cargarYRenderizarPDFEnVisor(pdfSource, initialPage = 1) {
+  const canvas = document.getElementById('canvas-visor-pdf');
+  const iframe = document.getElementById('iframe-visor-pdf-factura');
+  const loading = document.getElementById('visor-pdf-loading-msg');
+  const indicator = document.getElementById('visor-pdf-page-indicator');
+
+  if (!pdfSource) {
+    if (indicator) indicator.textContent = 'Sin comprobante';
+    return;
+  }
+
+  // Si PDF.js no está disponible en window, fallback a iframe
+  if (typeof pdfjsLib === 'undefined') {
+    console.warn('PDF.js no disponible en window, usando iframe de respaldo.');
+    if (iframe) {
+      iframe.style.display = 'block';
+      if (canvas) canvas.style.display = 'none';
+      if (typeof pdfSource === 'string') {
+        iframe.src = pdfSource + `#page=${initialPage}`;
+      } else if (pdfSource instanceof Blob) {
+        iframe.src = URL.createObjectURL(pdfSource) + `#page=${initialPage}`;
+      }
+    }
+    return;
+  }
+
+  try {
+    if (loading) loading.style.display = 'block';
+    if (canvas) canvas.style.display = 'block';
+    if (iframe) iframe.style.display = 'none';
+
+    // Cargar nuevo documento solo si cambió el origen
+    if (pdfSource !== pdfSourceActual || !pdfDocActual) {
+      let loadingTask;
+      if (pdfSource instanceof Blob || pdfSource instanceof File) {
+        const arrayBuffer = await pdfSource.arrayBuffer();
+        loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      } else {
+        loadingTask = pdfjsLib.getDocument(pdfSource);
+      }
+
+      pdfDocActual = await loadingTask.promise;
+      pdfSourceActual = pdfSource;
+      pdfTotalPaginas = pdfDocActual.numPages || 1;
+    }
+
+    pdfPaginaActual = Math.max(1, Math.min(initialPage || 1, pdfTotalPaginas));
+    await renderizarPaginaActualPDF();
+  } catch (err) {
+    console.error('Error cargando documento PDF con canvas:', err);
+    // Fallback de contingencia a iframe
+    if (iframe) {
+      iframe.style.display = 'block';
+      if (canvas) canvas.style.display = 'none';
+      if (typeof pdfSource === 'string') {
+        iframe.src = pdfSource + `#page=${initialPage}`;
+      } else if (pdfSource instanceof Blob) {
+        iframe.src = URL.createObjectURL(pdfSource) + `#page=${initialPage}`;
+      }
+    }
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+// Renderizado de Página con Soporte Retina y Escalado Óptimo
+async function renderizarPaginaActualPDF() {
+  if (!pdfDocActual) return;
+  const canvas = document.getElementById('canvas-visor-pdf');
+  const indicator = document.getElementById('visor-pdf-page-indicator');
+  const loading = document.getElementById('visor-pdf-loading-msg');
+  const btnPrev = document.getElementById('btn-pdf-prev-page');
+  const btnNext = document.getElementById('btn-pdf-next-page');
+
+  if (!canvas) return;
+
+  try {
+    if (loading) loading.style.display = 'block';
+    const page = await pdfDocActual.getPage(pdfPaginaActual);
+
+    const container = document.getElementById('visor-pdf-canvas-container');
+    const containerWidth = container ? Math.max(300, container.clientWidth - 32) : 520;
+
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    let scale = pdfZoomScale;
+    if (scale === 'auto' || !scale) {
+      scale = Math.min(2.0, Math.max(0.75, containerWidth / unscaledViewport.width));
+    }
+
+    const viewport = page.getViewport({ scale: Number(scale) || 1.0 });
+    const context = canvas.getContext('2d');
+
+    const outputScale = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(viewport.width * outputScale);
+    canvas.height = Math.floor(viewport.height * outputScale);
+    canvas.style.width = Math.floor(viewport.width) + 'px';
+    canvas.style.height = Math.floor(viewport.height) + 'px';
+
+    const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+
+    const renderContext = {
+      canvasContext: context,
+      transform: transform,
+      viewport: viewport
+    };
+
+    await page.render(renderContext).promise;
+
+    if (indicator) {
+      indicator.textContent = `Pág. ${pdfPaginaActual} de ${pdfTotalPaginas}`;
+    }
+
+    if (btnPrev) btnPrev.disabled = (pdfPaginaActual <= 1);
+    if (btnNext) btnNext.disabled = (pdfPaginaActual >= pdfTotalPaginas);
+  } catch (err) {
+    console.error('Error renderizando página en canvas:', err);
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+// Controles de Navegación de Páginas en Lotes Multi-Factura
+async function cambiarPaginaPDFVisor(delta) {
+  if (!pdfDocActual) return;
+  const targetPage = pdfPaginaActual + delta;
+  if (targetPage >= 1 && targetPage <= pdfTotalPaginas) {
+    pdfPaginaActual = targetPage;
+    await renderizarPaginaActualPDF();
+
+    // Sincronizar automáticamente formulario de detalle con la factura correspondiente en esta página
+    const matchIdx = stagingFacturasCompras.findIndex(item => item.pagina === targetPage);
+    if (matchIdx !== -1 && matchIdx !== currentDetailIndex) {
+      cargarDatosFacturaEnFormularioDetalle(matchIdx);
+    }
+  }
+}
+
+// Controles de Zoom
+function zoomPDFVisor(delta) {
+  let cur = (typeof pdfZoomScale === 'number') ? pdfZoomScale : 1.0;
+  pdfZoomScale = Math.min(2.5, Math.max(0.5, cur + delta));
+  renderizarPaginaActualPDF();
+}
+
+function ajustarPDFVisorAncho() {
+  pdfZoomScale = 'auto';
+  renderizarPaginaActualPDF();
+}
+
+function abrirPDFEnNuevaPestana() {
+  const f = currentDetailIndex !== null ? stagingFacturasCompras[currentDetailIndex] : null;
+  const source = f ? obtenerUrlOArchivoPDF(f) : pdfSourceActual;
+  if (!source) return;
+
+  if (typeof source === 'string') {
+    window.open(source, '_blank');
+  } else if (source instanceof Blob || source instanceof File) {
+    const url = URL.createObjectURL(source);
+    window.open(url, '_blank');
+  }
+}
+
+// Cargar Datos en los Campos del Formulario de la Ficha
+function cargarDatosFacturaEnFormularioDetalle(idx) {
   currentDetailIndex = idx;
   const f = stagingFacturasCompras[idx];
   if (!f) return;
 
-  const modalVisor = document.getElementById('modal-visor-pdf-factura');
-  const iframe = document.getElementById('iframe-visor-pdf-factura');
   const titulo = document.getElementById('visor-pdf-titulo');
   const subtitulo = document.getElementById('visor-pdf-subtitulo');
   const badgeStatus = document.getElementById('visor-pdf-badge-status');
@@ -1218,8 +1417,6 @@ function abrirVisorDetalleFacturaStaging(idx) {
   const alertDuplicadaMsg = document.getElementById('detalle-alerta-duplicada-msg');
   const btnAsentar = document.getElementById('btn-asentar-desde-detalle');
 
-  if (!modalVisor) return;
-
   // Actualizar Títulos e Indicadores
   if (titulo) {
     titulo.textContent = `Ficha y Visor de Factura: ${f.nro_factura || 'S/N'} (${f.razon_social || 'Proveedor por confirmar'})`;
@@ -1229,7 +1426,7 @@ function abrirVisorDetalleFacturaStaging(idx) {
     subtitulo.textContent = `${f.archivo_nombre}${pagTxt} • Período Fiscal: ${f.periodo || '2026-10'}`;
   }
   if (pageIndicator) {
-    pageIndicator.textContent = `Página ${f.pagina || 1} de ${f.total_paginas || 1}`;
+    pageIndicator.textContent = `Pág. ${f.pagina || 1} de ${f.total_paginas || 1}`;
   }
   if (indiceFactura) {
     indiceFactura.textContent = `Comprobante #${idx + 1} de ${stagingFacturasCompras.length}`;
@@ -1303,31 +1500,51 @@ function abrirVisorDetalleFacturaStaging(idx) {
       btnAsentar.innerHTML = '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
     }
   }
+}
 
-  // Carga del PDF en iframe
-  if (iframe) {
-    if (f.file) {
-      const fileUrl = URL.createObjectURL(f.file);
-      const pageHash = f.pagina ? `#page=${f.pagina}` : '';
-      iframe.src = fileUrl + pageHash;
-    } else {
-      iframe.srcdoc = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #334155; text-align: center; padding: 25px; background: #0f172a;">
-          <div style="font-size: 3.5rem; margin-bottom: 12px;">📑</div>
-          <h3 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 1.15rem;">Comprobante Físico Auditado (Pág. ${f.pagina || 1}/${f.total_paginas || 11})</h3>
-          <p style="max-width: 480px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; background: #1e293b; padding: 14px 18px; border-radius: 8px; border: 1px solid #334155;">
-            Proveedor: <strong style="color: #f8fafc;">${f.razon_social}</strong> (RIF: <span style="font-family: monospace; color: #38bdf8;">${f.rif}</span>)<br>
-            Factura N°: <strong style="color: #f8fafc;">${f.nro_factura}</strong> | N° Control: <strong style="color: #f8fafc;">${f.nro_control}</strong><br>
-            Base Imponible: <strong style="color: #34d399;">Bs. ${Number(f.base_imponible_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong> | Total: <strong style="color: #38bdf8;">Bs. ${Number(f.total_bs).toLocaleString('es-VE', {minimumFractionDigits:2})}</strong>
-          </p>
-          <span style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 0.76rem; margin-top: 14px;">
-            ✓ Comprobante del lote físico Compras DG67 OCT26.pdf verificado
-          </span>
-        </div>`;
-    }
+// Emisión Directa de Retención ISLR / IVA conforme a Ley (Decreto 1808 • PA SNAT/2026/00093)
+async function emitirRetencionDesdeFichaDetalle() {
+  if (currentDetailIndex === null || !stagingFacturasCompras[currentDetailIndex]) {
+    showToast('Selecciona una factura válida para emitir retención.', 'warning');
+    return;
+  }
+  const f = stagingFacturasCompras[currentDetailIndex];
+
+  // Si la factura no ha sido asentada aún, la asentamos primero para que quede vinculada oficialmente
+  if (!f.asentado && !f.es_duplicada) {
+    showToast('Asentando factura en el Libro de Compras para vincular la retención...', 'info');
+    await asentarFacturaStagingIndividual(currentDetailIndex);
   }
 
+  // Cerrar modales de carga y visor
+  cerrarVisorPDF();
+  cerrarModalCargaMasivaPDF();
+
+  // Cambiar a la vista de Retenciones ISLR
+  if (typeof switchTab === 'function') {
+    switchTab('retenciones-islr');
+  }
+
+  // Cargar datos oficiales en el formulario de emisión
+  if (typeof window.emitirRetencionDirectaDesdeFactura === 'function') {
+    window.emitirRetencionDirectaDesdeFactura(f);
+  }
+}
+
+// Apertura Principal del Visor de Detalle
+function abrirVisorDetalleFacturaStaging(idx) {
+  const f = stagingFacturasCompras[idx];
+  if (!f) return;
+
+  const modalVisor = document.getElementById('modal-visor-pdf-factura');
+  if (!modalVisor) return;
+
+  cargarDatosFacturaEnFormularioDetalle(idx);
   modalVisor.style.display = 'flex';
+
+  const pdfSource = obtenerUrlOArchivoPDF(f);
+  const targetPage = f.pagina || 1;
+  cargarYRenderizarPDFEnVisor(pdfSource, targetPage);
 }
 
 // Sincronización bidireccional desde la Ficha de Detalle hacia el Staging
@@ -1444,10 +1661,16 @@ function abrirVisorPDF(idx) {
 function cerrarVisorPDF() {
   const modalVisor = document.getElementById('modal-visor-pdf-factura');
   const iframe = document.getElementById('iframe-visor-pdf-factura');
+  const canvas = document.getElementById('canvas-visor-pdf');
   if (modalVisor) modalVisor.style.display = 'none';
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
   if (iframe) {
     iframe.src = '';
     iframe.srcdoc = '';
+    iframe.style.display = 'none';
   }
   currentDetailIndex = null;
 }
@@ -1470,4 +1693,9 @@ window.abrirVisorDetalleFacturaStaging = abrirVisorDetalleFacturaStaging;
 window.sincronizarDetalleHaciaStaging = sincronizarDetalleHaciaStaging;
 window.asentarDesdeDetalleModal = asentarDesdeDetalleModal;
 window.chequearDuplicadoFiscal = chequearDuplicadoFiscal;
+window.cambiarPaginaPDFVisor = cambiarPaginaPDFVisor;
+window.zoomPDFVisor = zoomPDFVisor;
+window.ajustarPDFVisorAncho = ajustarPDFVisorAncho;
+window.abrirPDFEnNuevaPestana = abrirPDFEnNuevaPestana;
+window.emitirRetencionDesdeFichaDetalle = emitirRetencionDesdeFichaDetalle;
 

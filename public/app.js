@@ -4599,9 +4599,9 @@ function imprimirLibroCompras() {
       <!-- Encabezado Formal SENIAT (Titularidad Exclusiva INVERSIONES DG 67, C.A.) -->
       <div class="seniat-official-header">
         <div class="seniat-header-left">
-          <div style="font-size: 13px; font-weight: 900; color: #000080; letter-spacing: 0.02em;">INVERSIONES DG 67, C.A.</div>
-          <div style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px;">RIF: J-50700865-7</div>
-          <div style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 2px;">
+          <div class="seniat-company-title" style="font-size: 13.5px; font-weight: 900; color: #000080; letter-spacing: 0.02em; white-space: nowrap;">INVERSIONES DG 67, C.A.</div>
+          <div class="seniat-company-rif" style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px; white-space: nowrap;">RIF: J-50700865-7</div>
+          <div class="seniat-company-address" style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 3px;">
             Domicilio Fiscal: Av. Sur 11 entre Esq. Bolívar y Miranda, Casa N° 112, Local S/N, San Agustín del Norte, Caracas D.C.
           </div>
         </div>
@@ -5937,9 +5937,9 @@ function imprimirLibroVentas() {
       <!-- Encabezado Formal SENIAT (Titularidad Exclusiva INVERSIONES DG 67, C.A.) -->
       <div class="seniat-official-header">
         <div class="seniat-header-left">
-          <div style="font-size: 13px; font-weight: 900; color: #000080; letter-spacing: 0.02em;">INVERSIONES DG 67, C.A.</div>
-          <div style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px;">RIF: J-50700865-7</div>
-          <div style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 2px;">
+          <div class="seniat-company-title" style="font-size: 13.5px; font-weight: 900; color: #000080; letter-spacing: 0.02em; white-space: nowrap;">INVERSIONES DG 67, C.A.</div>
+          <div class="seniat-company-rif" style="font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 2px; white-space: nowrap;">RIF: J-50700865-7</div>
+          <div class="seniat-company-address" style="font-size: 8.5px; color: #475569; max-width: 320px; line-height: 1.25; margin-top: 3px;">
             Domicilio Fiscal: Av. Sur 11 entre Esq. Bolívar y Miranda, Casa N° 112, Local S/N, San Agustín del Norte, Caracas D.C.
           </div>
         </div>
@@ -7054,6 +7054,12 @@ function cargarFacturaCompraEnModalISLR(idxStr) {
     fechaDoc = `${d}/${m}/${y}`;
   }
 
+  // SINCRONIZACIÓN DE FECHA SEGÚN MARCO LEGAL SENIAT (PA SNAT/2026/00093 • Decreto 1808)
+  const fecEmisionEl = document.getElementById('m-islr-fecha-emision');
+  if (fecEmisionEl && fechaDoc) {
+    fecEmisionEl.value = fechaDoc;
+  }
+
   const codConcepto = f.codigo_concepto_islr || (tipoPers === 'PN-R' ? '001' : '055');
   const tbodyItems = document.getElementById('tbody-modal-islr-items');
   if (tbodyItems) tbodyItems.innerHTML = '';
@@ -7069,6 +7075,93 @@ function cargarFacturaCompraEnModalISLR(idxStr) {
     base_imponible_bs: Number(f.base_imponible_bs || 0)
   });
 }
+
+// Emisión Oficial de Retención Directa desde Ficha de Factura (Unión Global / Proveedores)
+async function emitirRetencionDirectaDesdeFactura(f) {
+  if (!f) return;
+  await openModalEmitirRetencionISLR();
+
+  const periodo = f.periodo || '2026-10';
+  const perEl = document.getElementById('m-islr-periodo');
+  if (perEl) perEl.value = periodo;
+  await actualizarProximoNumeroISLR();
+
+  // Formatear fecha de la factura a DD/MM/AAAA
+  let fechaDoc = f.fecha || '31/10/2026';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fechaDoc)) {
+    const [y, m, d] = fechaDoc.split('-');
+    fechaDoc = `${d}/${m}/${y}`;
+  }
+
+  // 1. Sincronizar fecha oficial de emisión del comprobante (debe coincidir con la fecha de la factura en el período)
+  const fecEl = document.getElementById('m-islr-fecha-emision');
+  if (fecEl) fecEl.value = fechaDoc;
+
+  // 2. Establecer datos del Sujeto Retenido (Proveedor)
+  const rifEl = document.getElementById('m-islr-rif');
+  if (rifEl) rifEl.value = f.rif || '';
+
+  const razonEl = document.getElementById('m-islr-razon');
+  if (razonEl) razonEl.value = f.razon_social || '';
+
+  const cleanRif = String(f.rif || '').toUpperCase();
+  const tipoPers = (cleanRif.startsWith('V') || cleanRif.startsWith('E')) ? 'PN-R' : 'PJ-D';
+  const tipoEl = document.getElementById('m-islr-tipo-persona');
+  if (tipoEl) tipoEl.value = tipoPers;
+
+  const dirEl = document.getElementById('m-islr-direccion');
+  if (dirEl) {
+    if (cleanRif.includes('50714716')) {
+      dirEl.value = 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS';
+    } else {
+      dirEl.value = f.direccion_fiscal || 'CARACAS, DISTRITO CAPITAL';
+    }
+  }
+
+  const emailEl = document.getElementById('m-islr-email');
+  if (emailEl) {
+    if (cleanRif.includes('50714716')) {
+      emailEl.value = 'facturacion@unioncontableglobal.com';
+    } else {
+      emailEl.value = f.email || '';
+    }
+  }
+
+  const concGenEl = document.getElementById('m-islr-concepto-general');
+  if (concGenEl) {
+    concGenEl.value = (cleanRif.includes('50714716') || f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES')
+      ? 'ASESORIA ADMINISTRATIVA'
+      : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
+  }
+
+  // 3. Configurar renglón de retención con tarifa legal según Decreto 1808
+  // Concepto 055 (2% Servicios PJ-D) o 003 (5% Honorarios PJ-D)
+  const codConcepto = cleanRif.includes('50714716') ? '055' : (tipoPers === 'PN-R' ? '001' : '055');
+  const descConcepto = cleanRif.includes('50714716') 
+    ? 'ASESORIA 360 GLOBAL - CFT' 
+    : (f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'EJECUCIÓN DE OBRAS Y SUMINISTROS' : 'PRESTACIÓN DE SERVICIOS');
+
+  const tbodyItems = document.getElementById('tbody-modal-islr-items');
+  if (tbodyItems) tbodyItems.innerHTML = '';
+
+  agregarFilaDetalleISLR({
+    libro_compra_id: f.id || '',
+    fecha_factura: fechaDoc,
+    nro_factura: f.nro_factura || '000014',
+    nro_control: f.nro_control || '00-00000015',
+    codigo_concepto: codConcepto,
+    descripcion_concepto: descConcepto,
+    monto_total_bs: Number(f.total_bs || 0),
+    base_imponible_bs: Number(f.base_imponible_bs || 0)
+  });
+
+  recalcularLineasISLR();
+
+  if (typeof showToast === 'function') {
+    showToast(`🧾 Comprobante de Retención preparado conforme a Ley para ${f.razon_social || 'Proveedor'}. Emisión: ${fechaDoc}.`, 'success');
+  }
+}
+window.emitirRetencionDirectaDesdeFactura = emitirRetencionDirectaDesdeFactura;
 
 function toggleBloqueMultimonedaISLR() {
   const checked = document.getElementById('m-islr-multimoneda')?.checked;
