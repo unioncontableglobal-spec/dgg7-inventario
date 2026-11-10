@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261109_v8"></script>
+  <script src="/extractor-compras.js?v=20261109_v10"></script>
 </head>
 
 <body>
@@ -5771,6 +5771,16 @@
               <span id="detalle-alerta-duplicada-msg">Esta factura ya se encuentra registrada en el historial fiscal.</span>
             </div>
 
+            <!-- Alerta Destacada si la Factura es de Período Distinto -->
+            <div id="detalle-alerta-periodo" style="display: none; background: #fffbeb; border: 1.5px solid #d97706; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; color: #92400e; font-size: 0.80rem;">
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem; margin-bottom: 4px; font-weight: 800;">
+                <span>📅</span><span id="detalle-alerta-periodo-title">FACTURA DE PERÍODO DISTINTO / ANTERIOR</span>
+              </div>
+              <div id="detalle-alerta-periodo-msg" style="line-height: 1.35;">
+                Esta factura tiene fecha de un mes distinto al período fiscal activo. Como contador, puedes optar por dar <strong>Solo Entrada al Inventario</strong> (para ingresar la mercancía a almacén sin afectar la declaración de IVA / Forma 30) o asentar en <strong>Libro de Compras + Inventario</strong>.
+              </div>
+            </div>
+
             <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 0.76rem; font-weight: 800; color: #000080; text-transform: uppercase;">📋 Datos de Identificación Fiscal</span>
               <span style="font-size: 0.72rem; color: #64748b;" id="detalle-factura-indice">Comprobante #1</span>
@@ -5858,6 +5868,9 @@
             <button type="button" class="btn btn-secondary" onclick="cerrarVisorPDF()" style="font-size: 0.82rem; padding: 6px 14px;">
               Volver a la Bandeja
             </button>
+            <button type="button" id="btn-asentar-solo-inv-desde-detalle" class="btn" onclick="asentarSoloInventarioDesdeDetalleModal()" style="display: none; background: #059669; color: #ffffff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 5px rgba(5,150,105,0.25);">
+              <span>📦 Dar Solo Entrada al Inventario</span>
+            </button>
             <button type="button" id="btn-emitir-retencion-desde-detalle" class="btn" onclick="emitirRetencionDesdeFichaDetalle()" style="background: #0B2447; color: #19A7CE; border: 1.5px solid #19A7CE; font-weight: 800; font-size: 0.82rem; padding: 7px 12px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;" title="Emitir Comprobante Oficial de Retención ISLR / IVA">
               <span>🧾 Emitir Retención</span>
             </button>
@@ -5876,7 +5889,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261109_v9"></script>
+  <script src="app.js?v=20261109_v10"></script>
 </body>
 
 </html>

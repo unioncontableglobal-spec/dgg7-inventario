@@ -2475,6 +2475,217 @@ async function recalculateDeclaracionIva(periodo) {
   }
 }
 
+// 10.5.1 Registrar Compra Directa Solo a Inventario (Factura fuera de período / sin Libro de Compras)
+app.post('/api/fiscal/compras/solo-inventario', async (req, res) => {
+  try {
+    const {
+      fecha, rif, razon_social, nro_factura, nro_control,
+      base_imponible_bs, alicuota, iva_bs, total_bs,
+      tasa_bcv, observaciones, items
+    } = req.body;
+
+    if (!fecha || !rif || !nro_factura) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios (Fecha, RIF, N° Factura)' });
+    }
+
+    const cleanRif = String(rif).trim().toUpperCase();
+    const cleanRazon = String(razon_social || 'PROVEEDOR GENERAL').trim();
+    const cleanFact = String(nro_factura).trim();
+    const cleanCtrl = String(nro_control || '00-000000').trim();
+
+    // 1. Obtener o auto-registrar proveedor
+    let provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = UPPER(REPLACE(REPLACE(REPLACE(?, '-', ''), '.', ''), ' ', '')) LIMIT 1", args: [cleanRif] });
+    let provId = provRes.rows[0]?.id || null;
+    if (!provId) {
+      try {
+        const insProv = await db.execute({
+          sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion)
+                VALUES (?, ?, 'MERCANCIA_REPUESTOS', 1, 0.0) RETURNING id`,
+          args: [cleanRif, cleanRazon]
+        });
+        provId = Number(insProv.rows[0]?.id || insProv.lastInsertRowid);
+      } catch (e) {
+        console.warn('Error registrando proveedor para solo-inventario:', e.message);
+      }
+    }
+
+    // 2. Verificar si ya existe movimiento de almacén para esta factura
+    let numFacturaNum = null;
+    const matchNum = cleanFact.match(/(\d+)/);
+    if (matchNum) numFacturaNum = parseInt(matchNum[1], 10);
+
+    const dupCheck = await db.execute({
+      sql: `SELECT id FROM movimientos 
+            WHERE tipo = 'ENTRADA_COMPRA' 
+              AND (
+                (proveedor_id = ? AND (numero_documento = ? OR (numero_factura_numerico IS NOT NULL AND numero_factura_numerico = ?)))
+                OR (numero_documento = ? AND proveedor_id = ?)
+              )
+            LIMIT 1`,
+      args: [provId, cleanFact, numFacturaNum || -1, cleanFact, provId]
+    });
+
+    if (dupCheck.rows.length > 0) {
+      return res.json({
+        success: true,
+        duplicado: true,
+        movimientoId: dupCheck.rows[0].id,
+        message: `La factura [${cleanFact}] ya cuenta con entrada en almacén (Movimiento #${dupCheck.rows[0].id}).`
+      });
+    }
+
+    // 3. Tasa BCV oficial de la fecha o período
+    const periodoMov = String(fecha).slice(0, 7);
+    const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodoMov] });
+    const tasaDefaultMes = Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
+    const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : tasaDefaultMes;
+
+    const ali = Number(alicuota) || 16.0;
+    const baseBs = Number(base_imponible_bs) || 0.0;
+    const ivaBs = Number(iva_bs) || Number((baseBs * (ali / 100)).toFixed(2));
+    const totBs = Number(total_bs) || Number((baseBs + ivaBs).toFixed(2));
+    const baseDiv = Number((baseBs / tasaOp).toFixed(2));
+    const totDiv = Number((totBs / tasaOp).toFixed(2));
+
+    // 4. Verificar si existe registro previo en libro_compras de algún mes anterior (ej. F0029250 en 2026-08)
+    let lcId = null;
+    try {
+      const matchLC = await db.execute({
+        sql: `SELECT id FROM libro_compras 
+              WHERE UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = UPPER(REPLACE(REPLACE(REPLACE(?, '-', ''), '.', ''), ' ', ''))
+                AND (UPPER(TRIM(nro_factura)) = UPPER(?) ${numFacturaNum ? 'OR (CAST(nro_factura AS INTEGER) > 0 AND CAST(nro_factura AS INTEGER) = ?)' : ''})
+              LIMIT 1`,
+        args: numFacturaNum ? [cleanRif, cleanFact, numFacturaNum] : [cleanRif, cleanFact]
+      });
+      if (matchLC.rows.length > 0) {
+        lcId = Number(matchLC.rows[0].id);
+      }
+    } catch (e) {
+      console.warn('Error verificando LC existente:', e.message);
+    }
+
+    // 5. Insertar cabecera en movimientos
+    const headerRes = await db.execute({
+      sql: `INSERT INTO movimientos 
+            (tipo, subtipo, fecha, numero_documento, numero_factura_numerico, nro_control,
+             usuario_responsable, documento_afectado, tasa_bcv, fecha_tasa_bcv,
+             moneda_operacion, metodo_valoracion, proveedor_id, observaciones,
+             estatus_conciliacion, libro_compras_id)
+            VALUES ('ENTRADA_COMPRA', 'COMPRA_EXTEMPORANEA_INVENTARIO', ?, ?, ?, ?,
+                    'CONTADOR_DG67', '', ?, ?,
+                    'USD', 'CPP', ?, ?,
+                    ?, ?)
+            RETURNING id`,
+      args: [
+        fecha, cleanFact, numFacturaNum, cleanCtrl,
+        tasaOp, fecha,
+        provId,
+        observaciones || `Entrada física a inventario (Factura fuera de período fiscal ${fecha} - Sin afectación al Libro de Compras)`,
+        lcId ? 'CONCILIADO' : 'SOLO_INVENTARIO_EXTEMPORANEO',
+        lcId
+      ]
+    });
+
+    const movId = Number(headerRes.rows[0]?.id || headerRes.lastInsertRowid);
+
+    // Si existía un registro en libro_compras huérfano sin conciliar, lo vinculamos
+    if (lcId) {
+      try {
+        await db.execute({
+          sql: `UPDATE libro_compras 
+                SET movimiento_id = ?, estatus_conciliacion = 'CONCILIADO', 
+                    observaciones_cruce = 'Conciliado con entrada física de almacén #' || ?
+                WHERE id = ?`,
+          args: [movId, movId, lcId]
+        });
+      } catch (e) {
+        console.warn('Error vinculando LC con nuevo movimiento:', e.message);
+      }
+    }
+
+    // 6. Insertar renglones de inventario
+    if (Array.isArray(items) && items.length > 0) {
+      const statements = items.map(it => {
+        const pid = parseInt(it.producto_id, 10);
+        const qty = parseFloat(it.cantidad) || 1;
+        const cBs = parseFloat(it.costo_unitario_bs || (baseBs / qty));
+        const cDiv = parseFloat(it.costo_unitario_divisa || (cBs / tasaOp));
+        return {
+          sql: `INSERT INTO movimiento_detalles (
+                  movimiento_id, producto_id, cantidad,
+                  costo_unitario_usd, costo_unitario_ves,
+                  costo_unitario_divisa, tasa_bcv_operacion, costo_unitario_bs,
+                  precio_unitario_bs, precio_unitario_divisa,
+                  base_imponible_bs, base_imponible_divisa,
+                  monto_iva_bs, monto_iva_divisa,
+                  total_linea_bs, total_linea_divisa
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            movId, pid, qty,
+            cDiv, cBs,
+            cDiv, tasaOp, cBs,
+            cBs, cDiv,
+            cBs * qty, cDiv * qty,
+            (cBs * qty) * 0.16, (cDiv * qty) * 0.16,
+            (cBs * qty) * 1.16, (cDiv * qty) * 1.16
+          ]
+        };
+      });
+      await db.batch(statements);
+    } else {
+      // Buscar o crear producto representativo para la mercancía del proveedor
+      let prodCode = `MERC-${cleanRif.replace(/[^A-Z0-9]/g, '').slice(0, 8)}-${cleanFact.replace(/[^A-Z0-9]/g, '').slice(-6)}`;
+      let prodDesc = `MERCANCÍA / REPUESTOS - ${cleanRazon.slice(0, 30)} (FACT. ${cleanFact})`;
+      
+      let prodRes = await db.execute({
+        sql: "SELECT id FROM productos WHERE codigo = ? OR descripcion LIKE ? LIMIT 1",
+        args: [prodCode, `%${cleanFact}%`]
+      });
+      let prodId = prodRes.rows[0]?.id || null;
+      if (!prodId) {
+        const newProd = await db.execute({
+          sql: `INSERT INTO productos (codigo, descripcion, unidad_medida, categoria_id, almacen_id, stock_minimo, costo_referencial_usd, activo)
+                VALUES (?, ?, 'UND', 16, 1, 1.0, ?, 1) RETURNING id`,
+          args: [prodCode, prodDesc, baseDiv]
+        });
+        prodId = Number(newProd.rows[0]?.id || newProd.lastInsertRowid);
+      }
+
+      await db.execute({
+        sql: `INSERT INTO movimiento_detalles (
+                movimiento_id, producto_id, cantidad,
+                costo_unitario_usd, costo_unitario_ves,
+                costo_unitario_divisa, tasa_bcv_operacion, costo_unitario_bs,
+                precio_unitario_bs, precio_unitario_divisa,
+                base_imponible_bs, base_imponible_divisa,
+                monto_iva_bs, monto_iva_divisa,
+                total_linea_bs, total_linea_divisa
+              ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          movId, prodId,
+          baseDiv, baseBs,
+          baseDiv, tasaOp, baseBs,
+          baseBs, baseDiv,
+          baseBs, baseDiv,
+          ivaBs, Number((ivaBs / tasaOp).toFixed(2)),
+          totBs, totDiv
+        ]
+      });
+    }
+
+    return res.json({
+      success: true,
+      movimientoId: movId,
+      libro_compras_vinculado: lcId,
+      message: `Factura [${cleanFact}] registrada exitosamente en Almacén / Inventario (Sin afectación al Libro de Compras ni alteración fiscal)`,
+      estatus_conciliacion: lcId ? 'CONCILIADO' : 'SOLO_INVENTARIO_EXTEMPORANEO'
+    });
+  } catch (err) {
+    console.error('Error en solo-inventario:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // 10.6 Registrar Nueva Factura en Libro de Compras (Soporta Doble Expresión Monetaria Bs. / Divisa)
 app.post('/api/fiscal/libro-compras', async (req, res) => {
   try {

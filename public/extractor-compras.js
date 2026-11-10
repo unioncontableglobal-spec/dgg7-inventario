@@ -28,9 +28,37 @@ async function initExtractorCompras() {
   }
 }
 
+// Validación heurística de período: detecta si la factura corresponde a un mes anterior/distinto al mes en curso
+function validarPeriodoFacturaStaging(facturaData, periodoActual) {
+  if (!facturaData) return;
+  const perAct = periodoActual || document.getElementById('staging-periodo-select')?.value || document.getElementById('compras-periodo-select')?.value || '2026-10';
+  const rawFecha = facturaData.fecha ? String(facturaData.fecha).trim() : '';
+  const mesFactura = rawFecha.slice(0, 7);
+
+  if (mesFactura && mesFactura !== perAct) {
+    facturaData.es_fuera_de_periodo = true;
+    facturaData.mes_factura = mesFactura;
+    const msgPeriodo = `📅 Fecha de mes distinto (${facturaData.fecha} - Mes ${mesFactura} vs ${perAct}). El contador decide: Solo Entrada a Inventario o Libro + Inv.`;
+    if (!Array.isArray(facturaData.alertas)) facturaData.alertas = [];
+    if (!facturaData.alertas.some(a => a.includes('Fecha de mes distinto') || a.includes('fuera del período activo'))) {
+      facturaData.alertas.unshift(msgPeriodo);
+    }
+  } else {
+    facturaData.es_fuera_de_periodo = false;
+    facturaData.mes_factura = mesFactura;
+    if (Array.isArray(facturaData.alertas)) {
+      facturaData.alertas = facturaData.alertas.filter(a => !a.includes('Fecha de mes distinto') && !a.includes('fuera del período activo'));
+    }
+  }
+}
+
 // Verificación asíncrona de duplicados contra el historial del Libro de Compras (SENIAT Art. 75-76 RLIVA)
 async function chequearDuplicadoFiscal(facturaData) {
-  if (!facturaData || !facturaData.rif || !facturaData.nro_factura) return;
+  if (!facturaData) return;
+  const periodoActual = document.getElementById('staging-periodo-select')?.value || '2026-10';
+  validarPeriodoFacturaStaging(facturaData, periodoActual);
+
+  if (!facturaData.rif || !facturaData.nro_factura) return;
   try {
     const cleanRif = String(facturaData.rif).trim();
     const cleanFact = String(facturaData.nro_factura).trim();
@@ -44,7 +72,10 @@ async function chequearDuplicadoFiscal(facturaData) {
         facturaData.es_duplicada = true;
         facturaData.duplicado_info = data.factura || {};
         facturaData.estado_validacion = 'DUPLICADA';
-        const msgAlerta = `🚫 YA EN EL LIBRO: Período ${data.factura?.periodo || 'anterior'} (Fecha: ${data.factura?.fecha || ''})`;
+        const yaEnAlmacen = Boolean(data.factura?.movimiento_id);
+        const msgAlerta = yaEnAlmacen
+          ? `🚫 YA EN EL LIBRO: Período ${data.factura?.periodo || 'anterior'} (Fecha: ${data.factura?.fecha || ''}) • Con Entrada en Almacén #${data.factura.movimiento_id}`
+          : `🚫 YA EN EL LIBRO: Período ${data.factura?.periodo || 'anterior'} (Fecha: ${data.factura?.fecha || ''}) • Pendiente por Entrada en Almacén`;
         if (!Array.isArray(facturaData.alertas)) facturaData.alertas = [];
         if (!facturaData.alertas.some(a => a.includes('YA EN EL LIBRO'))) {
           facturaData.alertas.unshift(msgAlerta);
@@ -838,9 +869,10 @@ function renderBandejaStagingFacturas() {
   if (!tbody) return;
 
   const totalComps = stagingFacturasCompras.length;
-  const listos = stagingFacturasCompras.filter(f => f.estado_validacion === 'LISTO' && !f.asentado && !f.es_duplicada).length;
+  const listos = stagingFacturasCompras.filter(f => f.estado_validacion === 'LISTO' && !f.asentado && !f.es_duplicada && !f.es_fuera_de_periodo).length;
   const duplicadas = stagingFacturasCompras.filter(f => f.es_duplicada && !f.asentado).length;
-  const alertas = stagingFacturasCompras.filter(f => f.estado_validacion !== 'LISTO' && !f.asentado && !f.es_duplicada).length;
+  const fueraPeriodo = stagingFacturasCompras.filter(f => f.es_fuera_de_periodo && !f.asentado && !f.es_duplicada).length;
+  const alertas = stagingFacturasCompras.filter(f => f.estado_validacion !== 'LISTO' && !f.asentado && !f.es_duplicada && !f.es_fuera_de_periodo).length;
   const asentados = stagingFacturasCompras.filter(f => f.asentado).length;
 
   let sumBaseBs = 0;
@@ -861,7 +893,11 @@ function renderBandejaStagingFacturas() {
   if (document.getElementById('kpi-staging-total')) document.getElementById('kpi-staging-total').textContent = totalComps;
   if (document.getElementById('kpi-staging-listos')) document.getElementById('kpi-staging-listos').textContent = listos;
   if (document.getElementById('kpi-staging-alertas')) {
-    document.getElementById('kpi-staging-alertas').textContent = duplicadas > 0 ? `${alertas + duplicadas} (${duplicadas} dup)` : alertas;
+    const parts = [];
+    if (alertas > 0) parts.push(`${alertas} alertas`);
+    if (duplicadas > 0) parts.push(`${duplicadas} dup`);
+    if (fueraPeriodo > 0) parts.push(`${fueraPeriodo} mes distinto`);
+    document.getElementById('kpi-staging-alertas').textContent = parts.length > 0 ? parts.join(' • ') : '0';
   }
   if (document.getElementById('kpi-staging-tot-bs')) document.getElementById('kpi-staging-tot-bs').textContent = `Bs. ${Number(sumTotBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (document.getElementById('kpi-staging-tot-usd')) document.getElementById('kpi-staging-tot-usd').textContent = `$${Number(sumTotUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
@@ -888,20 +924,32 @@ function renderBandejaStagingFacturas() {
   tbody.innerHTML = stagingFacturasCompras.map((f, idx) => {
     const isAsentado = Boolean(f.asentado);
     const isDup = Boolean(f.es_duplicada);
+    const isFuera = Boolean(f.es_fuera_de_periodo && !isAsentado && !isDup);
 
     let badgeStatus;
     if (isAsentado) {
-      badgeStatus = `<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ASENTADA</span>`;
+      if (f.asentado_modo === 'SOLO_INVENTARIO') {
+        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800;" title="Mercancía con entrada en inventario sin afectación a libro fiscal">📦 EN INVENTARIO (SIN LIBRO)</span>`;
+      } else {
+        badgeStatus = `<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ASENTADA</span>`;
+      }
     } else if (isDup) {
-      badgeStatus = `<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">🚫 YA EN EL LIBRO</span>`;
+      const yaEnAlmacen = Boolean(f.duplicado_info?.movimiento_id || f.movimiento_id);
+      if (yaEnAlmacen) {
+        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800;" title="Esta factura ya está en el Libro de Compras (Período ${f.duplicado_info?.periodo || ''}) y cuenta con Entrada en Almacén #${f.duplicado_info?.movimiento_id || f.movimiento_id}">✓ YA EN LIBRO E INVENTARIO</span>`;
+      } else {
+        badgeStatus = `<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">🚫 YA EN EL LIBRO</span>`;
+      }
+    } else if (f.es_fuera_de_periodo) {
+      badgeStatus = `<span class="badge" style="background:#d97706; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">📅 MES DISTINTO (${f.mes_factura || (f.fecha || '').slice(0, 7)})</span>`;
     } else if (f.estado_validacion === 'LISTO') {
       badgeStatus = `<span class="badge" style="background:#0284c7; color:#fff; font-weight:800;">✅ LISTA</span>`;
     } else {
       badgeStatus = `<span class="badge" style="background:#f59e0b; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">⚠️ REVISAR</span>`;
     }
 
-    const rowBg = isAsentado ? '#f0fdf4' : (isDup ? '#fff1f2' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc'));
-    const borderStyle = isDup ? 'border-left: 4px solid #ef4444;' : (isAsentado ? 'border-left: 4px solid #10b981;' : '');
+    const rowBg = isAsentado ? '#f0fdf4' : (isDup ? '#fff1f2' : (isFuera ? '#fffbeb' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc')));
+    const borderStyle = isDup ? 'border-left: 4px solid #ef4444;' : (isAsentado ? 'border-left: 4px solid #10b981;' : (isFuera ? 'border-left: 4px solid #d97706;' : ''));
 
     return `
       <tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem; ${borderStyle}">
@@ -994,10 +1042,31 @@ function renderBandejaStagingFacturas() {
               🔍 Detalle
             </button>
             ${isAsentado ? `
-              <span style="color: #10b981; font-weight: 800; font-size: 0.80rem; margin-left: 2px;">✓ Asentada</span>
+              <span style="color: #10b981; font-weight: 800; font-size: 0.80rem; margin-left: 2px;">
+                ✓ ${f.asentado_modo === 'SOLO_INVENTARIO' ? 'En Inventario' : 'Asentada'}
+              </span>
             ` : (isDup ? `
-              <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.70rem; padding:4px 6px; font-weight:700;" title="Esta factura ya existe en el Libro de Compras. No se permite duplicar.">🚫 Duplicada</span>
+              ${Boolean(f.duplicado_info?.movimiento_id || f.movimiento_id) ? `
+                <span class="badge" style="background:#dcfce7; color:#166534; font-size:0.72rem; padding:4px 7px; font-weight:800;">✓ En Inventario #${f.duplicado_info?.movimiento_id || f.movimiento_id}</span>
+              ` : `
+                <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.70rem; padding:4px 6px; font-weight:700;" title="Esta factura ya existe en el Libro de Compras.">🚫 Ya en Libro</span>
+                ${f.aplica_inventario === 1 ? `
+                  <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background:#059669; color:#fff; font-size:0.70rem; padding:3px 7px; font-weight:800; border:none; border-radius:4px; margin-left:2px; cursor:pointer;" title="Registrar entrada física a Almacén / Inventario sin duplicar en Libro de Compras">
+                    📦 Solo Inv.
+                  </button>
+                ` : ''}
+              `}
               <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">✕</button>
+            ` : (isFuera ? `
+              <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background:#059669; color:#fff; font-weight:800; font-size:0.72rem; padding:4px 8px; border:none; border-radius:4px; display:inline-flex; align-items:center; gap:3px; box-shadow: 0 1px 3px rgba(5,150,105,0.3); cursor:pointer;" title="Dar entrada física solo a Inventario (Sin asentar en Libro de Compras para no alterar el período fiscal)">
+                📦 Solo Inv.
+              </button>
+              <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" style="font-size:0.72rem; padding:4px 7px; font-weight:700;" title="Asentar en Libro de Compras + Inventario">
+                ✓ Libro + Inv.
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">
+                ✕
+              </button>
             ` : `
               <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" title="Dar visto bueno y asentar esta factura en el Libro de Compras">
                 ✓ Asentar
@@ -1005,7 +1074,7 @@ function renderBandejaStagingFacturas() {
               <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">
                 ✕
               </button>
-            `)}
+            `))}
           </div>
         </td>
       </tr>
@@ -1029,7 +1098,10 @@ function cambiarClasificacionStaging(idx, nuevoTipo) {
 async function actualizarCampoStaging(idx, campo, valor) {
   if (!stagingFacturasCompras[idx]) return;
   stagingFacturasCompras[idx][campo] = valor;
-  if (campo === 'rif' || campo === 'nro_factura' || campo === 'nro_control') {
+  if (campo === 'fecha') {
+    validarPeriodoFacturaStaging(stagingFacturasCompras[idx]);
+    renderBandejaStagingFacturas();
+  } else if (campo === 'rif' || campo === 'nro_factura' || campo === 'nro_control') {
     await chequearDuplicadoFiscal(stagingFacturasCompras[idx]);
     renderBandejaStagingFacturas();
   }
@@ -1063,6 +1135,58 @@ function limpiarBandejaStaging() {
   stagingFacturasCompras = [];
   renderBandejaStagingFacturas();
   showToast('Bandeja de facturas vaciada.', 'info');
+}
+
+// Asentar Compra Directamente Solo a Inventario (Factura fuera de período o sin afectación a Libro de Compras)
+async function asentarSoloInventarioStaging(idx) {
+  const f = stagingFacturasCompras[idx];
+  if (!f || f.asentado) return;
+
+  if (!f.rif || !f.nro_factura) {
+    showToast('La factura debe tener RIF y N° de Factura antes de registrar en inventario.', 'warning');
+    return;
+  }
+
+  const payload = {
+    fecha: f.fecha,
+    rif: f.rif,
+    razon_social: f.razon_social || 'PROVEEDOR GENERAL',
+    nro_factura: f.nro_factura,
+    nro_control: f.nro_control || '00-000000',
+    base_imponible_bs: f.base_imponible_bs,
+    alicuota: f.alicuota || 16.0,
+    iva_bs: f.iva_bs,
+    total_bs: f.total_bs,
+    tasa_bcv: f.tasa_bcv || tasaBcvExtractor || 889.58,
+    observaciones: `Entrada física a inventario (Factura fuera de período fiscal ${f.fecha} - N° ${f.nro_factura} ${f.razon_social}) sin afectación al Libro de Compras`
+  };
+
+  try {
+    const res = await fetch('/api/fiscal/compras/solo-inventario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al registrar en inventario');
+    }
+
+    f.asentado = true;
+    f.asentado_modo = 'SOLO_INVENTARIO';
+    f.estado_validacion = 'ASENTADA_INVENTARIO';
+    f.movimiento_id = data.movimientoId;
+    showToast(`📦 Factura [${f.nro_factura}] registrada exitosamente en Almacén / Inventario (Sin afectación al Libro de Compras).`, 'success');
+
+    if (typeof loadLibroCompras === 'function') loadLibroCompras();
+    if (typeof loadInventario === 'function') loadInventario();
+    if (typeof loadMovimientos === 'function') loadMovimientos();
+    renderBandejaStagingFacturas();
+  } catch (error) {
+    console.error('Error asentando solo inventario:', error);
+    showToast(`❌ Error al registrar en inventario [${f.nro_factura}]: ${error.message}`, 'error');
+  }
 }
 
 // Asentar Factura Individual con Visto Bueno
@@ -1124,22 +1248,29 @@ async function asentarFacturaStagingIndividual(idx) {
   }
 }
 
-// Asentar Todo el Lote Válido (Omitiendo duplicadas)
+// Asentar Todo el Lote Válido del Período (Omitiendo duplicadas y reservando meses anteriores para decisión)
 async function asentarTodasFacturasValidadas() {
-  const pendientes = stagingFacturasCompras.filter(f => !f.asentado && !f.es_duplicada && f.rif && f.nro_factura);
+  const pendientes = stagingFacturasCompras.filter(f => !f.asentado && !f.es_duplicada && !f.es_fuera_de_periodo && f.rif && f.nro_factura);
+  const fueraPeriodoOmitidas = stagingFacturasCompras.filter(f => !f.asentado && !f.es_duplicada && f.es_fuera_de_periodo);
   const duplicadasOmitidas = stagingFacturasCompras.filter(f => !f.asentado && f.es_duplicada);
 
   if (pendientes.length === 0) {
-    if (duplicadasOmitidas.length > 0) {
+    if (fueraPeriodoOmitidas.length > 0) {
+      showToast(`Hay ${fueraPeriodoOmitidas.length} facturas de meses previos. Por normativa fiscal SENIAT, elija para cada una: "📦 Solo Inv." o "✓ Libro + Inv.".`, 'warning');
+    } else if (duplicadasOmitidas.length > 0) {
       showToast('Las facturas en la bandeja ya existen en el Libro de Compras (Duplicadas). Omitidas por normativa fiscal.', 'warning');
     } else {
-      showToast('No hay facturas pendientes y listas para asentar en la bandeja.', 'warning');
+      showToast('No hay facturas pendientes y listas para asentar en el mes en curso.', 'warning');
     }
     return;
   }
 
-  const confirmMsg = duplicadasOmitidas.length > 0
-    ? `¿Estás seguro de asentar formalmente ${pendientes.length} facturas válidas? (${duplicadasOmitidas.length} facturas duplicadas se omitirán para evitar duplicidad fiscal).`
+  let noteExtra = [];
+  if (duplicadasOmitidas.length > 0) noteExtra.push(`${duplicadasOmitidas.length} duplicadas omitidas`);
+  if (fueraPeriodoOmitidas.length > 0) noteExtra.push(`${fueraPeriodoOmitidas.length} de meses previos reservadas para decisión individual`);
+
+  const confirmMsg = noteExtra.length > 0
+    ? `¿Estás seguro de asentar formalmente ${pendientes.length} facturas del mes al Libro de Compras fiscal? (${noteExtra.join(' • ')}).`
     : `¿Estás seguro de asentar formalmente ${pendientes.length} facturas al Libro de Compras fiscal?`;
 
   const confirmacion = confirm(confirmMsg);
@@ -1415,7 +1546,10 @@ function cargarDatosFacturaEnFormularioDetalle(idx) {
 
   const alertDuplicada = document.getElementById('detalle-alerta-duplicada');
   const alertDuplicadaMsg = document.getElementById('detalle-alerta-duplicada-msg');
+  const alertPeriodo = document.getElementById('detalle-alerta-periodo');
+  const alertPeriodoMsg = document.getElementById('detalle-alerta-periodo-msg');
   const btnAsentar = document.getElementById('btn-asentar-desde-detalle');
+  const btnAsentarSoloInv = document.getElementById('btn-asentar-solo-inv-desde-detalle');
 
   // Actualizar Títulos e Indicadores
   if (titulo) {
@@ -1457,18 +1591,43 @@ function cargarDatosFacturaEnFormularioDetalle(idx) {
   const totUsdDisplay = document.getElementById('det-modal-total-usd');
   if (totUsdDisplay) totUsdDisplay.textContent = `$${Number(f.total_divisa || 0).toFixed(2)} USD`;
 
+  // Control de Período Distinto vs Activo
+  const perAct = document.getElementById('staging-periodo-select')?.value || '2026-10';
+  if (f.es_fuera_de_periodo && !f.asentado) {
+    if (alertPeriodo) {
+      alertPeriodo.style.display = 'block';
+      if (alertPeriodoMsg) {
+        alertPeriodoMsg.innerHTML = `Esta factura tiene fecha <strong>${f.fecha}</strong> (Mes <strong>${f.mes_factura || f.fecha.slice(0, 7)}</strong>), anterior al período activo <strong>${perAct}</strong>.<br>Como contador, puedes optar por dar <strong>Solo Entrada al Inventario</strong> (ingresa la mercancía a almacén/Kardex sin afectar la declaración de IVA / Forma 30 de este mes) o asentar en <strong>Libro de Compras + Inventario</strong>.`;
+      }
+    }
+    if (btnAsentarSoloInv) {
+      btnAsentarSoloInv.style.display = 'inline-flex';
+      btnAsentarSoloInv.disabled = false;
+      btnAsentarSoloInv.innerHTML = '<span>📦 Dar Solo Entrada al Inventario</span>';
+    }
+  } else {
+    if (alertPeriodo) alertPeriodo.style.display = 'none';
+    if (btnAsentarSoloInv) btnAsentarSoloInv.style.display = 'none';
+  }
+
   // Control de Duplicidad y Estatus
   if (f.asentado) {
     if (badgeStatus) {
-      badgeStatus.textContent = '✓ ASENTADA';
-      badgeStatus.style.background = '#10b981';
+      if (f.asentado_modo === 'SOLO_INVENTARIO') {
+        badgeStatus.textContent = '📦 EN INVENTARIO';
+        badgeStatus.style.background = '#059669';
+      } else {
+        badgeStatus.textContent = '✓ ASENTADA';
+        badgeStatus.style.background = '#10b981';
+      }
     }
     if (alertDuplicada) alertDuplicada.style.display = 'none';
     if (btnAsentar) {
       btnAsentar.disabled = true;
-      btnAsentar.style.background = '#10b981';
-      btnAsentar.innerHTML = '<span>✓ Factura ya Asentada</span>';
+      btnAsentar.style.background = f.asentado_modo === 'SOLO_INVENTARIO' ? '#059669' : '#10b981';
+      btnAsentar.innerHTML = f.asentado_modo === 'SOLO_INVENTARIO' ? '<span>✓ Mercancía en Inventario (Sin Libro)</span>' : '<span>✓ Factura ya Asentada</span>';
     }
+    if (btnAsentarSoloInv) btnAsentarSoloInv.style.display = 'none';
   } else if (f.es_duplicada) {
     if (badgeStatus) {
       badgeStatus.textContent = '🚫 DUPLICADA';
@@ -1488,16 +1647,27 @@ function cargarDatosFacturaEnFormularioDetalle(idx) {
       btnAsentar.style.background = '#94a3b8';
       btnAsentar.innerHTML = '<span>🚫 No se puede asentar (Duplicada)</span>';
     }
+    // Si aplica a inventario y no está en almacén, permitir entrada física
+    if (f.aplica_inventario === 1 && btnAsentarSoloInv) {
+      btnAsentarSoloInv.style.display = 'inline-flex';
+      btnAsentarSoloInv.disabled = false;
+      btnAsentarSoloInv.innerHTML = '<span>📦 Dar Entrada Solo a Inventario</span>';
+    }
   } else {
     if (badgeStatus) {
-      badgeStatus.textContent = f.estado_validacion === 'LISTO' ? 'LISTA' : 'POR REVISAR';
-      badgeStatus.style.background = f.estado_validacion === 'LISTO' ? '#0284c7' : '#f59e0b';
+      if (f.es_fuera_de_periodo) {
+        badgeStatus.textContent = `📅 MES PREVIO (${f.mes_factura || f.fecha.slice(0, 7)})`;
+        badgeStatus.style.background = '#d97706';
+      } else {
+        badgeStatus.textContent = f.estado_validacion === 'LISTO' ? 'LISTA' : 'POR REVISAR';
+        badgeStatus.style.background = f.estado_validacion === 'LISTO' ? '#0284c7' : '#f59e0b';
+      }
     }
     if (alertDuplicada) alertDuplicada.style.display = 'none';
     if (btnAsentar) {
       btnAsentar.disabled = false;
       btnAsentar.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
-      btnAsentar.innerHTML = '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
+      btnAsentar.innerHTML = f.es_fuera_de_periodo ? '<span>✓ Asentar en Libro + Inv.</span>' : '<span>✓ Dar Visto Bueno y Asentar Factura</span>';
     }
   }
 }
@@ -1610,7 +1780,55 @@ async function sincronizarDetalleHaciaStaging(campo, valor) {
     }
   }
 
+  if (campo === 'fecha') {
+    validarPeriodoFacturaStaging(f);
+    const alertPeriodo = document.getElementById('detalle-alerta-periodo');
+    const btnAsentarSoloInv = document.getElementById('btn-asentar-solo-inv-desde-detalle');
+    if (f.es_fuera_de_periodo && !f.asentado) {
+      if (alertPeriodo) alertPeriodo.style.display = 'block';
+      if (btnAsentarSoloInv) btnAsentarSoloInv.style.display = 'inline-flex';
+    } else {
+      if (alertPeriodo) alertPeriodo.style.display = 'none';
+      if (btnAsentarSoloInv) btnAsentarSoloInv.style.display = 'none';
+    }
+  }
+
   renderBandejaStagingFacturas();
+}
+
+// Dar Solo Entrada al Inventario Directamente desde el Modal de Detalle
+async function asentarSoloInventarioDesdeDetalleModal() {
+  if (currentDetailIndex === null || !stagingFacturasCompras[currentDetailIndex]) return;
+  const f = stagingFacturasCompras[currentDetailIndex];
+
+  const btn = document.getElementById('btn-asentar-solo-inv-desde-detalle');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Registrando en Almacén / Inventario...</span>';
+  }
+
+  await asentarSoloInventarioStaging(currentDetailIndex);
+
+  if (f.asentado) {
+    if (btn) {
+      btn.disabled = true;
+      btn.style.background = '#059669';
+      btn.innerHTML = '<span>✓ Mercancía en Inventario</span>';
+    }
+    const badge = document.getElementById('visor-pdf-badge-status');
+    if (badge) {
+      badge.textContent = '📦 EN INVENTARIO';
+      badge.style.background = '#059669';
+    }
+    setTimeout(() => {
+      cerrarVisorPDF();
+    }, 800);
+  } else {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>📦 Dar Solo Entrada al Inventario</span>';
+    }
+  }
 }
 
 // Asentar Factura Directamente desde el Modal de Detalle

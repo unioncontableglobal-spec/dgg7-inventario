@@ -379,7 +379,7 @@ export async function verificarDuplicadoLibroCompras(rif, nroFactura, nroControl
   // 1. Verificación por RIF del Proveedor y Número de Factura (exacto o correlativo numérico)
   let sql = `
     SELECT id, periodo, fecha, fecha_recepcion, rif, razon_social, nro_factura, nro_control, 
-           total_bs, total_divisa, base_imponible_bs, iva_bs, estatus_conciliacion
+           total_bs, total_divisa, base_imponible_bs, iva_bs, estatus_conciliacion, movimiento_id, aplica_inventario
     FROM libro_compras
     WHERE id != ?
       AND UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = ?
@@ -411,7 +411,7 @@ export async function verificarDuplicadoLibroCompras(rif, nroFactura, nroControl
     const isGenericCtrl = /^(00-|00|0|s\/c|s\/ctrl|sin control)$/i.test(ctrlNorm);
     if (!isGenericCtrl && ctrlNorm.length >= 4) {
       const ctrlRes = await db.execute({
-        sql: `SELECT id, periodo, fecha, rif, razon_social, nro_factura, nro_control, total_bs, total_divisa
+        sql: `SELECT id, periodo, fecha, rif, razon_social, nro_factura, nro_control, total_bs, total_divisa, movimiento_id, aplica_inventario
               FROM libro_compras
               WHERE id != ?
                 AND UPPER(REPLACE(REPLACE(REPLACE(rif, '-', ''), '.', ''), ' ', '')) = ?
