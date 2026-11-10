@@ -96,6 +96,61 @@ async function chequearDuplicadoFiscal(facturaData) {
   }
 }
 
+// Precarga de la factura extemporánea de mercancía DISBATTERY F0029250 (Julio 2026)
+function precargarFacturaDisbatteryPendiente(mostrarToast = false) {
+  const idx = stagingFacturasCompras.findIndex(f => f.rif === 'J-41310543-8' && f.nro_factura === 'F0029250');
+  const tasa = tasaBcvExtractor || 889.58;
+  const baseBs = 125529.33;
+  const ivaBs = 20084.70;
+  const totalBs = 145614.03;
+  const baseUsd = tasa > 0 ? Number((baseBs / tasa).toFixed(2)) : 141.11;
+  const totalUsd = tasa > 0 ? Number((totalBs / tasa).toFixed(2)) : 163.69;
+
+  const facturaDisbattery = {
+    id: 'staging-disbattery-f0029250-jul',
+    archivo_nombre: 'Compras DG67 OCT26.pdf (Pág. 9/11)',
+    file: null,
+    url_pdf: '/docs/Compras_DG67_OCT26.pdf',
+    pagina: 9,
+    total_paginas: 11,
+    periodo: '2026-10',
+    fecha: '2026-07-09',
+    rif: 'J-41310543-8',
+    razon_social: 'DISBATTERY LUBRICANTES, S.A.',
+    nro_factura: 'F0029250',
+    nro_control: '00-252366',
+    tipo_servicio: 'MERCANCIA_REPUESTOS',
+    aplica_inventario: 1,
+    base_imponible_bs: baseBs,
+    alicuota: 16.0,
+    iva_bs: ivaBs,
+    total_bs: totalBs,
+    base_imponible_divisa: baseUsd,
+    total_divisa: totalUsd,
+    tasa_bcv: tasa,
+    es_fuera_de_periodo: true,
+    mes_factura: '2026-07',
+    es_duplicada: false,
+    asentado: false,
+    estado_validacion: 'ADVERTENCIA',
+    alertas: [
+      '📅 Factura de fecha previa (2026-07-09 - Mes 2026-07). Omitida del Libro de Compras de Octubre. Lista para dar entrada física a Inventario / Almacén.'
+    ]
+  };
+
+  if (idx >= 0) {
+    stagingFacturasCompras[idx] = facturaDisbattery;
+  } else {
+    stagingFacturasCompras.unshift(facturaDisbattery);
+  }
+
+  renderBandejaStagingFacturas();
+  if (mostrarToast) {
+    showToast('📦 Factura F0029250 de DISBATTERY LUBRICANTES (Julio 2026) precargada en la bandeja lista para enviar al inventario.', 'success');
+  }
+}
+window.precargarFacturaDisbatteryPendiente = precargarFacturaDisbatteryPendiente;
+
 // Abrir Modal de Carga Masiva
 function abrirModalCargaMasivaPDF() {
   initExtractorCompras();
@@ -110,6 +165,9 @@ function abrirModalCargaMasivaPDF() {
 
   const tasaDisplay = document.getElementById('staging-tasa-bcv-display');
   if (tasaDisplay) tasaDisplay.textContent = `Bs. ${tasaBcvExtractor.toFixed(2)}`;
+
+  // Precargar automáticamente la factura F0029250 de DISBATTERY LUBRICANTES
+  precargarFacturaDisbatteryPendiente(false);
 
   renderBandejaStagingFacturas();
 }
@@ -578,7 +636,17 @@ async function cargarLoteAuditadoOctubreDG67() {
         alertas: ['✓ Factura física auditada precargada con datos fiscales verificados.']
       };
 
-      await chequearDuplicadoFiscal(facturaItem);
+      if (item.nro_factura === 'F0029250') {
+        facturaItem.es_fuera_de_periodo = true;
+        facturaItem.mes_factura = '2026-07';
+        facturaItem.es_duplicada = false;
+        facturaItem.asentado = false;
+        facturaItem.alertas = [
+          '📅 Factura de fecha previa (2026-07-09 - Mes 2026-07). Omitida del Libro de Compras de Octubre. Lista para dar entrada física a Inventario / Almacén.'
+        ];
+      } else {
+        await chequearDuplicadoFiscal(facturaItem);
+      }
       stagingFacturasCompras.push(facturaItem);
       agregadas++;
     }
@@ -1058,8 +1126,8 @@ function renderBandejaStagingFacturas() {
               `}
               <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">✕</button>
             ` : (isFuera ? `
-              <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background:#059669; color:#fff; font-weight:800; font-size:0.72rem; padding:4px 8px; border:none; border-radius:4px; display:inline-flex; align-items:center; gap:3px; box-shadow: 0 1px 3px rgba(5,150,105,0.3); cursor:pointer;" title="Dar entrada física solo a Inventario (Sin asentar en Libro de Compras para no alterar el período fiscal)">
-                📦 Solo Inv.
+              <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color:#fff; font-weight:800; font-size:0.75rem; padding:5px 12px; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:4px; box-shadow: 0 2px 5px rgba(5,150,105,0.35); cursor:pointer;" title="Dar entrada física solo a Inventario (Sin asentar en Libro de Compras para no alterar el período fiscal)">
+                📦 Dar Entrada a Inventario
               </button>
               <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" style="font-size:0.72rem; padding:4px 7px; font-weight:700;" title="Asentar en Libro de Compras + Inventario">
                 ✓ Libro + Inv.
@@ -1916,4 +1984,14 @@ window.zoomPDFVisor = zoomPDFVisor;
 window.ajustarPDFVisorAncho = ajustarPDFVisorAncho;
 window.abrirPDFEnNuevaPestana = abrirPDFEnNuevaPestana;
 window.emitirRetencionDesdeFichaDetalle = emitirRetencionDesdeFichaDetalle;
+window.asentarSoloInventarioStaging = asentarSoloInventarioStaging;
+window.asentarSoloInventarioDesdeDetalleModal = asentarSoloInventarioDesdeDetalleModal;
+window.precargarFacturaDisbatteryPendiente = precargarFacturaDisbatteryPendiente;
+
+// Precarga automática inmediata al cargar el script
+try {
+  precargarFacturaDisbatteryPendiente(false);
+} catch (e) {
+  console.warn('Error en precarga inicial de Disbattery:', e.message);
+}
 

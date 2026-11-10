@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261109_v10"></script>
+  <script src="/extractor-compras.js?v=20261109_v11"></script>
 </head>
 
 <body>
@@ -5592,6 +5592,9 @@
 
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <input type="file" id="input-files-carga-masiva-pdf" multiple accept=".pdf" style="display: none;" onchange="procesarArchivosPDFMasivos(this.files)">
+            <button type="button" class="btn" onclick="precargarFacturaDisbatteryPendiente(true)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(2,132,199,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Precargar directamente la factura F0029250 de DISBATTERY LUBRICANTES (Julio 2026) para darle entrada a inventario">
+              <span>📦 Precargar F0029250 (Disbattery)</span>
+            </button>
             <button type="button" class="btn" onclick="cargarLoteAuditadoOctubreDG67()" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(4,120,87,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Cargar directamente las 11 facturas físicas auditadas de Octubre 2026 en la bandeja">
               <span>⚡ Cargar Lote Auditado Octubre (11 Facturas)</span>
             </button>
@@ -5889,7 +5892,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261109_v10"></script>
+  <script src="app.js?v=20261109_v11"></script>
 </body>
 
 </html>
