@@ -4529,7 +4529,7 @@ async function exportarLibroComprasExcel() {
       "BASE REF ($ USD)": Number(c.base_imponible_divisa || 0),
       "ALÍCUOTA": `${((c.alicuota || 0.16) * 100).toFixed(0)}%`,
       "IVA CRÉDITO (BS)": Number(c.iva_bs || 0),
-      "IVA RETENIDO (BS)": Number(c.iva_retenido_bs || 0),
+      "RET. ISLR (BS)": Number(c.islr_retenido_bs || 0),
       "TASA BCV": Number(c.tasa_bcv || 889.58),
       "CLASIFICACIÓN": c.tipo_servicio || 'MERCANCIA_REPUESTOS'
     }));
@@ -4601,7 +4601,6 @@ function imprimirLibroCompras() {
         <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
         <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">${fmtBs(iva)}</td>
-        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
       </tr>
     `;
   });
@@ -4638,21 +4637,20 @@ function imprimirLibroCompras() {
 
         <div class="seniat-header-right">
           <div style="font-weight: 800; color: #000080;">CONTRIBUYENTE ORDINARIO</div>
-          <div style="color: #475569; font-weight: 700;">No Retenedor de IVA (Prov. SNAT/2015/0049)</div>
           <div>Fecha Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
           <div>Total Operaciones: ${compras.length}</div>
           <div>Folio: Pág. 1 de 1</div>
         </div>
       </div>
 
-      <!-- Tabla Formal Libro de Compras SENIAT (17 Columnas Oficiales) -->
+      <!-- Tabla Formal Libro de Compras SENIAT (16 Columnas) -->
       <table class="print-preview-table seniat-grid-table">
         <thead>
           <tr class="seniat-group-header">
             <th colspan="7" style="text-align:center; background:#e2e8f0; color:#0f172a;">IDENTIFICACIÓN DE LA OPERACIÓN Y DEL PROVEEDOR</th>
             <th colspan="4" style="text-align:center; background:#e2e8f0; color:#0f172a;">DOCUMENTOS Y NOTAS</th>
             <th colspan="2" style="text-align:center; background:#dbeafe; color:#000080;">COMPRAS TOTALES E INTERNAS NO GRAVADAS</th>
-            <th colspan="4" style="text-align:center; background:#dcfce7; color:#14532d;">COMPRAS INTERNAS GRAVADAS (DERECHO A CRÉDITO FISCAL)</th>
+            <th colspan="3" style="text-align:center; background:#dcfce7; color:#14532d;">COMPRAS INTERNAS GRAVADAS (DERECHO A CRÉDITO FISCAL)</th>
           </tr>
           <tr>
             <th style="width: 26px; text-align:center; white-space:nowrap;">N° OP</th>
@@ -4671,11 +4669,10 @@ function imprimirLibroCompras() {
             <th style="width: 95px; text-align:right; white-space:nowrap;">BASE IMPONIBLE INTERNA (BS)</th>
             <th style="width: 38px; text-align:center; white-space:nowrap;">% ALÍC.</th>
             <th style="width: 90px; text-align:right; white-space:nowrap;">CRÉDITO FISCAL IVA (BS)</th>
-            <th style="width: 80px; text-align:right; white-space:nowrap;">IVA RETENIDO (NO APLICA)</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || '<tr><td colspan="17" style="text-align:center; padding: 14px;">Sin operaciones de compra registradas para este período impositivo.</td></tr>'}
+          ${rowsHtml || '<tr><td colspan="16" style="text-align:center; padding: 14px;">Sin operaciones de compra registradas para este período impositivo.</td></tr>'}
         </tbody>
         <tfoot>
           <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #000080;">
@@ -4685,15 +4682,9 @@ function imprimirLibroCompras() {
             <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
             <td style="text-align:center; white-space:nowrap;">16%</td>
             <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
-            <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
           </tr>
         </tfoot>
       </table>
-
-      <!-- Nota Legal de Contribuyente Ordinario del IVA -->
-      <div style="margin-top: 6px; margin-bottom: 8px; font-size: 8px; color: #334155; line-height: 1.3; padding: 5px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px;">
-        <strong>NOTA FISCAL SENIAT:</strong> INVERSIONES DG 67, C.A. ostenta la calificación de <strong>Contribuyente Ordinario del Impuesto al Valor Agregado (IVA)</strong>. De conformidad con la Providencia Administrativa SENIAT SNAT/2015/0049, la empresa <strong>NO actúa como Agente de Retención del IVA</strong> en compras a proveedores. Las retenciones practicadas por la empresa corresponden de forma exclusiva al Impuesto Sobre la Renta (ISLR) según el Decreto Ejecutivo N° 1.808 (Honorarios Profesionales y Servicios Técnicos/Administrativos).
-      </div>
 
       <!-- Cuadro Oficial de Resumen del Libro de Compras (Cruce Forma 30 SENIAT) -->
       <div class="seniat-summary-boxes">
