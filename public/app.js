@@ -1478,7 +1478,7 @@ async function cargarPanelCruceEntradas() {
     if (!res.ok) return;
     cruceComprasCache = await res.json();
 
-    // Actualizar KPIs
+    // Actualizar KPIs superiores
     const kpis = cruceComprasCache.kpis || {};
     const badgePend = document.getElementById('kpi-ent-pendientes-badge');
     const txtPend = document.getElementById('kpi-ent-pendientes-txt');
@@ -1495,6 +1495,14 @@ async function cargarPanelCruceEntradas() {
     if (badgeSin) badgeSin.textContent = kpis.entradas_sin_fiscal_cant || 0;
     if (txtSin) txtSin.textContent = `${kpis.entradas_sin_fiscal_cant || 0} entradas`;
 
+    // Actualizar badges de conteo en las pestañas
+    const countPend = document.getElementById('count-tab-pendientes');
+    if (countPend) countPend.textContent = kpis.pendientes_almacen_cant || 0;
+    const countConc = document.getElementById('count-tab-conciliadas');
+    if (countConc) countConc.textContent = kpis.conciliadas_cant || 0;
+    const countSin = document.getElementById('count-tab-sin-fiscal');
+    if (countSin) countSin.textContent = kpis.entradas_sin_fiscal_cant || 0;
+
     renderTablasCruceEntradas();
   } catch (err) {
     console.error('Error cargando panel de cruce de compras/entradas:', err);
@@ -1504,27 +1512,48 @@ async function cargarPanelCruceEntradas() {
 function cambiarTabCruceEntradas(tabName) {
   tabCruceEntradasActivo = tabName;
   const tabs = [
-    { name: 'PENDIENTES', btn: 'tab-cruce-ent-btn-pendientes', view: 'tab-cruce-ent-view-pendientes' },
-    { name: 'CONCILIADAS', btn: 'tab-cruce-ent-btn-conciliadas', view: 'tab-cruce-ent-view-conciliadas' },
-    { name: 'SIN_FISCAL', btn: 'tab-cruce-ent-btn-sin-fiscal', view: 'tab-cruce-ent-view-sin-fiscal' }
+    { 
+      name: 'PENDIENTES', 
+      btnIds: ['tab-btn-cruce-pendientes', 'tab-cruce-ent-btn-pendientes'], 
+      viewIds: ['vista-cruce-pendientes', 'tab-cruce-ent-view-pendientes'],
+      activeBg: '#ea580c'
+    },
+    { 
+      name: 'CONCILIADAS', 
+      btnIds: ['tab-btn-cruce-conciliadas', 'tab-cruce-ent-btn-conciliadas'], 
+      viewIds: ['vista-cruce-conciliadas', 'tab-cruce-ent-view-conciliadas'],
+      activeBg: '#16a34a'
+    },
+    { 
+      name: 'SIN_FISCAL', 
+      btnIds: ['tab-btn-cruce-sin-fiscal', 'tab-cruce-ent-btn-sin-fiscal'], 
+      viewIds: ['vista-cruce-sin-fiscal', 'tab-cruce-ent-view-sin-fiscal'],
+      activeBg: '#0284c7'
+    }
   ];
 
   tabs.forEach(t => {
-    const btnEl = document.getElementById(t.btn);
-    const viewEl = document.getElementById(t.view);
-    const isActive = t.name === tabName;
-    if (btnEl) {
-      if (isActive) {
-        btnEl.classList.add('active');
-        btnEl.style.fontWeight = '800';
-      } else {
-        btnEl.classList.remove('active');
-        btnEl.style.fontWeight = '600';
+    const isActive = (t.name === tabName);
+    t.btnIds.forEach(id => {
+      const btnEl = document.getElementById(id);
+      if (btnEl) {
+        if (isActive) {
+          btnEl.style.background = t.activeBg;
+          btnEl.style.color = '#ffffff';
+          btnEl.style.fontWeight = '800';
+        } else {
+          btnEl.style.background = '#f1f5f9';
+          btnEl.style.color = '#475569';
+          btnEl.style.fontWeight = '700';
+        }
       }
-    }
-    if (viewEl) {
-      viewEl.style.display = isActive ? 'block' : 'none';
-    }
+    });
+    t.viewIds.forEach(id => {
+      const viewEl = document.getElementById(id);
+      if (viewEl) {
+        viewEl.style.display = isActive ? 'block' : 'none';
+      }
+    });
   });
 }
 
@@ -1541,39 +1570,45 @@ function renderTablasCruceEntradas() {
   if (!cruceComprasCache) return;
 
   // 1. PENDIENTES POR DETALLAR EN ALMACÉN
-  const tbodyPend = document.getElementById('tbody-cruce-ent-pendientes');
+  const tbodyPend = document.getElementById('tbody-cruce-pendientes-almacen') || document.getElementById('tbody-cruce-ent-pendientes');
   if (tbodyPend) {
     const list = cruceComprasCache.facturas_pendientes_almacen || [];
     if (list.length === 0) {
-      tbodyPend.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px; color: #16a34a; font-weight: 700;">✅ ¡Excelente! No hay facturas fiscales pendientes por detallar en almacén.</td></tr>`;
+      tbodyPend.innerHTML = `<tr><td colspan="7" class="text-center" style="padding: 20px; color: #16a34a; font-weight: 700;">✅ ¡Excelente! No hay facturas fiscales de mercancía pendientes por detallar en almacén.</td></tr>`;
     } else {
       tbodyPend.innerHTML = list.map(f => {
+        const baseBs = Number(f.base_imponible_bs || 0);
         const totalBs = Number(f.total_bs || 0);
-        const totalUsd = Number(f.total_divisa || (totalBs / (f.tasa_bcv || 1)));
         const tasa = Number(f.tasa_bcv || 0);
+        const baseUsd = tasa > 0 ? (baseBs / tasa) : 0;
+        const totalUsd = Number(f.total_divisa || (tasa > 0 ? (totalBs / tasa) : 0));
 
         return `
           <tr style="border-bottom: 1px solid #fed7aa; transition: background 0.15s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='transparent'">
-            <td class="font-mono font-bold" style="padding: 8px 10px; color: #0f172a;">${f.fecha}</td>
-            <td style="padding: 8px 10px;">
-              <span class="font-mono font-bold" style="color: #c2410c; font-size: 0.85rem;">${f.nro_factura}</span>
-              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">Ctrl: ${f.nro_control || 'S/N'}</div>
+            <td class="font-mono font-bold" style="padding: 10px 8px; color: #0f172a; white-space: nowrap;">${f.fecha}</td>
+            <td style="padding: 10px 8px; white-space: nowrap;">
+              <span class="font-mono font-bold" style="color: #c2410c; font-size: 0.88rem;">${f.nro_factura}</span>
+              <div style="font-size: 0.70rem; color: #64748b; font-family: monospace;">Ctrl: ${f.nro_control || 'S/N'}</div>
             </td>
-            <td style="padding: 8px 10px;">
-              <strong style="color: #1e293b; font-size: 0.82rem;">${f.razon_social}</strong>
-              <div style="font-size: 0.72rem; color: #64748b; font-family: monospace;">${f.rif}</div>
+            <td style="padding: 10px 8px;">
+              <strong style="color: #1e293b; font-size: 0.82rem; display: block;">${f.razon_social}</strong>
+              <div style="font-size: 0.72rem; color: #64748b; font-family: monospace; font-weight: 600;">${f.rif}</div>
             </td>
-            <td style="padding: 8px 10px; text-align: right;">
-              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(totalBs)}</div>
-              <div style="font-size: 0.72rem; color: #059669; font-family: monospace; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
-              <div style="font-size: 0.68rem; color: #64748b; font-family: monospace;">Tasa BCV: ${tasa.toFixed(2)}</div>
+            <td style="padding: 10px 8px; text-align: right; font-family: monospace; white-space: nowrap;">
+              <div style="font-weight: 700; color: #1e293b;">Bs. ${fmtBs(baseBs)}</div>
+              <div style="font-size: 0.72rem; color: #059669; font-weight: 700;">$${baseUsd.toFixed(2)} USD</div>
             </td>
-            <td class="text-center" style="padding: 8px 10px;">
-              <span class="badge" style="background: #ffedd5; color: #c2410c; font-size: 11px; font-weight: 700;">⏳ Falta Entrada en Almacén</span>
+            <td style="padding: 10px 8px; text-align: right; font-family: monospace; white-space: nowrap;">
+              <div style="font-weight: 800; color: #0B2447; font-size: 0.88rem;">Bs. ${fmtBs(totalBs)}</div>
+              <div style="font-size: 0.72rem; color: #15803d; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
+              <div style="font-size: 0.68rem; color: #64748b;">Tasa: ${tasa.toFixed(2)}</div>
             </td>
-            <td class="text-center" style="padding: 8px 10px;">
-              <button type="button" class="btn btn-sm btn-primary" onclick="seleccionarFacturaCompraParaDetallar(${f.libro_compra_id})" style="font-size: 11px; font-weight: 800; padding: 5px 12px; background: #0A5CF5; color: #fff; border-radius: 6px; box-shadow: 0 2px 4px rgba(10,92,245,0.2);">
-                📥 Detallar Entrada en Almacén ➔
+            <td class="text-center" style="padding: 10px 8px; white-space: nowrap;">
+              <span class="badge" style="background: #ffedd5; color: #c2410c; font-size: 0.74rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; display: inline-block;">⏳ Falta Entrada Almacén</span>
+            </td>
+            <td class="text-center" style="padding: 10px 8px; white-space: nowrap;">
+              <button type="button" class="btn btn-sm" onclick="seleccionarFacturaCompraParaDetallar(${f.libro_compra_id})" style="font-size: 0.76rem; font-weight: 800; padding: 6px 14px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(2,132,199,0.3); display: inline-flex; align-items: center; gap: 4px;" title="Cargar datos de esta factura para detallar sus repuestos en almacén">
+                📥 Detallar Entrada ➔
               </button>
             </td>
           </tr>
@@ -1583,31 +1618,31 @@ function renderTablasCruceEntradas() {
   }
 
   // 2. CONCILIADAS
-  const tbodyConc = document.getElementById('tbody-cruce-ent-conciliadas');
+  const tbodyConc = document.getElementById('tbody-cruce-conciliadas') || document.getElementById('tbody-cruce-ent-conciliadas');
   if (tbodyConc) {
     const list = cruceComprasCache.compras_conciliadas || [];
     if (list.length === 0) {
-      tbodyConc.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 16px; color: #64748b;">No hay compras conciliadas en este período.</td></tr>`;
+      tbodyConc.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 20px; color: #64748b;">No hay compras conciliadas en este período.</td></tr>`;
     } else {
       tbodyConc.innerHTML = list.map(c => {
         const totalBs = Number(c.total_bs || 0);
-        const totalUsd = Number(c.total_divisa || (totalBs / (c.tasa_bcv || 1)));
+        const totalUsd = Number(c.total_divisa || (c.tasa_bcv ? (totalBs / c.tasa_bcv) : 0));
 
         return `
           <tr style="border-bottom: 1px solid #bbf7d0;">
-            <td class="font-mono" style="padding: 8px 10px;">${c.fecha}</td>
-            <td class="font-mono font-bold" style="padding: 8px 10px; color: #15803d;">${c.nro_factura}</td>
-            <td style="padding: 8px 10px;">
-              <strong style="color: #1e293b;">${c.razon_social}</strong>
-              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">${c.rif}</div>
+            <td class="font-mono" style="padding: 10px 8px; white-space: nowrap;">${c.fecha}</td>
+            <td class="font-mono font-bold" style="padding: 10px 8px; color: #15803d; white-space: nowrap;">${c.nro_factura}</td>
+            <td style="padding: 10px 8px;">
+              <strong style="color: #1e293b; display: block;">${c.razon_social}</strong>
+              <div style="font-size: 0.70rem; color: #64748b; font-family: monospace;">${c.rif}</div>
             </td>
-            <td class="font-mono" style="padding: 8px 10px;">Mov #${c.movimiento_id || '-'} (${c.fecha_almacen || c.fecha})</td>
-            <td style="padding: 8px 10px; text-align: right;">
-              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(totalBs)}</div>
-              <div style="font-size: 0.72rem; color: #15803d; font-family: monospace; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
+            <td class="font-mono" style="padding: 10px 8px; white-space: nowrap;">Mov #${c.movimiento_id || '-'} (${c.fecha_almacen || c.fecha})</td>
+            <td style="padding: 10px 8px; text-align: right; font-family: monospace; white-space: nowrap;">
+              <div style="font-weight: 700; color: #0B2447;">Bs. ${fmtBs(totalBs)}</div>
+              <div style="font-size: 0.72rem; color: #15803d; font-weight: 700;">$${totalUsd.toFixed(2)} USD</div>
             </td>
-            <td class="text-center" style="padding: 8px 10px;">
-              <span class="badge" style="background: #dcfce7; color: #166534; font-size: 11px; font-weight: 800;">✅ CONCILIADO 100%</span>
+            <td class="text-center" style="padding: 10px 8px; white-space: nowrap;">
+              <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.74rem; font-weight: 800; padding: 4px 8px; border-radius: 4px;">✅ CONCILIADO 100%</span>
             </td>
           </tr>
         `;
@@ -1616,11 +1651,11 @@ function renderTablasCruceEntradas() {
   }
 
   // 3. ENTRADAS DE ALMACÉN SIN FACTURA FISCAL
-  const tbodySin = document.getElementById('tbody-cruce-ent-sin-fiscal');
+  const tbodySin = document.getElementById('tbody-cruce-sin-fiscal') || document.getElementById('tbody-cruce-ent-sin-fiscal');
   if (tbodySin) {
     const list = cruceComprasCache.entradas_sin_factura_fiscal || [];
     if (list.length === 0) {
-      tbodySin.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 16px; color: #16a34a; font-weight: 700;">✅ Todas las entradas de almacén están respaldadas con su factura fiscal en Libro de Compras.</td></tr>`;
+      tbodySin.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 20px; color: #16a34a; font-weight: 700;">✅ Todas las entradas de almacén están respaldadas con su factura fiscal en Libro de Compras.</td></tr>`;
     } else {
       tbodySin.innerHTML = list.map(e => {
         const costoBs = Number(e.total_costo_bs || 0);
@@ -1628,18 +1663,21 @@ function renderTablasCruceEntradas() {
 
         return `
           <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td class="font-mono font-bold" style="padding: 8px 10px;">${e.fecha}</td>
-            <td class="font-mono font-bold" style="padding: 8px 10px; color: #0B2447;">${e.numero_documento || 'S/N'}</td>
-            <td style="padding: 8px 10px;">
-              <strong style="color: #1e293b;">${e.proveedor_nombre || 'Proveedor General'}</strong>
-              <div style="font-size: 0.7rem; color: #64748b; font-family: monospace;">${e.proveedor_rif || '-'}</div>
+            <td class="font-mono font-bold" style="padding: 10px 8px; white-space: nowrap;">${e.fecha}</td>
+            <td class="font-mono font-bold" style="padding: 10px 8px; color: #0B2447; white-space: nowrap;">${e.numero_documento || 'S/N'}</td>
+            <td style="padding: 10px 8px;">
+              <strong style="color: #1e293b; display: block;">${e.proveedor_nombre || 'Proveedor General'}</strong>
+              <div style="font-size: 0.70rem; color: #64748b; font-family: monospace;">${e.proveedor_rif || '-'}</div>
             </td>
-            <td class="text-center" style="padding: 8px 10px;">
+            <td class="text-center" style="padding: 10px 8px; white-space: nowrap;">
               <span class="badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700;">${e.total_unidades} unds (${e.total_items} items)</span>
             </td>
-            <td style="padding: 8px 10px; text-align: right;">
-              <div style="font-family: monospace; font-weight: 700; color: #0B2447;">Bs. ${fmtBs(costoBs)}</div>
-              <div style="font-size: 0.72rem; color: #059669; font-family: monospace;">$${costoUsd.toFixed(2)} USD</div>
+            <td style="padding: 10px 8px; text-align: right; font-family: monospace; white-space: nowrap;">
+              <div style="font-weight: 700; color: #0B2447;">Bs. ${fmtBs(costoBs)}</div>
+              <div style="font-size: 0.72rem; color: #059669;">$${costoUsd.toFixed(2)} USD</div>
+            </td>
+            <td class="text-center" style="padding: 10px 8px; white-space: nowrap;">
+              <span class="badge" style="background: #f1f5f9; color: #475569; font-size: 0.72rem; font-weight: 700;">Sin Factura Fiscal</span>
             </td>
           </tr>
         `;
@@ -1690,12 +1728,14 @@ function seleccionarFacturaCompraParaDetallar(compraId) {
   // 4. Mostrar banner de vinculación activa
   const banner = document.getElementById('banner-entrada-vinculada-lc');
   const txt = document.getElementById('txt-entrada-vinculada-lc');
+  const title = document.getElementById('banner-entrada-vinculada-title');
+  const sub = document.getElementById('banner-entrada-vinculada-sub');
   if (banner) banner.style.display = 'block';
-  if (txt) {
-    const totBs = Number(compra.total_bs || 0);
-    const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 1)));
-    txt.innerHTML = `Vinculando Entrada con <strong>Factura Fiscal #${compra.nro_factura}</strong> de <strong>${compra.razon_social}</strong> (${compra.rif}) por <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong>. Agrega los repuestos recibidos abajo:`;
-  }
+  const totBs = Number(compra.total_bs || 0);
+  const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 1)));
+  if (title) title.innerHTML = `🔗 Vinculando Entrada con Factura Fiscal #${compra.nro_factura} de ${compra.razon_social}`;
+  if (sub) sub.innerHTML = `Monto Factura: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • RIF: ${compra.rif}. Detalla los repuestos recibidos físicamente a continuación:`;
+  if (txt) txt.innerHTML = `Vinculando Entrada con <strong>Factura Fiscal #${compra.nro_factura}</strong> de <strong>${compra.razon_social}</strong> (${compra.rif}) por <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong>. Agrega los repuestos recibidos abajo:`;
 
   // 5. Scroll suave al formulario
   document.getElementById('form-entrada')?.scrollIntoView({ behavior: 'smooth' });
