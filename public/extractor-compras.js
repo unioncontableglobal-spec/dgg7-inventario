@@ -38,16 +38,16 @@ function validarPeriodoFacturaStaging(facturaData, periodoActual) {
   if (mesFactura && mesFactura !== perAct) {
     facturaData.es_fuera_de_periodo = true;
     facturaData.mes_factura = mesFactura;
-    const msgPeriodo = `📅 Fecha de mes distinto (${facturaData.fecha} - Mes ${mesFactura} vs ${perAct}). El contador decide: Solo Entrada a Inventario o Libro + Inv.`;
+    const msgPeriodo = `📅 Factura previa (${facturaData.fecha}). Entrada física a Inventario sin afectar Libro.`;
     if (!Array.isArray(facturaData.alertas)) facturaData.alertas = [];
-    if (!facturaData.alertas.some(a => a.includes('Fecha de mes distinto') || a.includes('fuera del período activo'))) {
+    if (!facturaData.alertas.some(a => a.includes('Factura previa') || a.includes('Fecha de mes distinto') || a.includes('fuera del período activo'))) {
       facturaData.alertas.unshift(msgPeriodo);
     }
   } else {
     facturaData.es_fuera_de_periodo = false;
     facturaData.mes_factura = mesFactura;
     if (Array.isArray(facturaData.alertas)) {
-      facturaData.alertas = facturaData.alertas.filter(a => !a.includes('Fecha de mes distinto') && !a.includes('fuera del período activo'));
+      facturaData.alertas = facturaData.alertas.filter(a => !a.includes('Factura previa') && !a.includes('Fecha de mes distinto') && !a.includes('fuera del período activo'));
     }
   }
 }
@@ -134,7 +134,7 @@ function precargarFacturaDisbatteryPendiente(mostrarToast = false) {
     asentado: false,
     estado_validacion: 'ADVERTENCIA',
     alertas: [
-      '📅 Factura de fecha previa (2026-07-09 - Mes 2026-07). Omitida del Libro de Compras de Octubre. Lista para dar entrada física a Inventario / Almacén.'
+      '📅 Factura previa (Julio 2026). Lista para dar entrada física a Inventario sin afectar Libro.'
     ]
   };
 
@@ -997,23 +997,23 @@ function renderBandejaStagingFacturas() {
     let badgeStatus;
     if (isAsentado) {
       if (f.asentado_modo === 'SOLO_INVENTARIO') {
-        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800;" title="Mercancía con entrada en inventario sin afectación a libro fiscal">📦 EN INVENTARIO (SIN LIBRO)</span>`;
+        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;" title="Mercancía con entrada en inventario sin afectación a libro fiscal">📦 EN INVENTARIO (SIN LIBRO)</span>`;
       } else {
-        badgeStatus = `<span class="badge" style="background:#10b981; color:#fff; font-weight:800;">✓ ASENTADA</span>`;
+        badgeStatus = `<span class="badge" style="background:#10b981; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;">✓ ASENTADA</span>`;
       }
     } else if (isDup) {
       const yaEnAlmacen = Boolean(f.duplicado_info?.movimiento_id || f.movimiento_id);
       if (yaEnAlmacen) {
-        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800;" title="Esta factura ya está en el Libro de Compras (Período ${f.duplicado_info?.periodo || ''}) y cuenta con Entrada en Almacén #${f.duplicado_info?.movimiento_id || f.movimiento_id}">✓ YA EN LIBRO E INVENTARIO</span>`;
+        badgeStatus = `<span class="badge" style="background:#059669; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;" title="Esta factura ya está en el Libro de Compras (Período ${f.duplicado_info?.periodo || ''}) y cuenta con Entrada en Almacén #${f.duplicado_info?.movimiento_id || f.movimiento_id}">✓ YA EN LIBRO E INVENTARIO</span>`;
       } else {
-        badgeStatus = `<span class="badge" style="background:#ef4444; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">🚫 YA EN EL LIBRO</span>`;
+        badgeStatus = `<span class="badge" style="background:#ef4444; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;" title="${(f.alertas || []).join(' • ')}">🚫 YA EN EL LIBRO</span>`;
       }
     } else if (f.es_fuera_de_periodo) {
-      badgeStatus = `<span class="badge" style="background:#d97706; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">📅 MES DISTINTO (${f.mes_factura || (f.fecha || '').slice(0, 7)})</span>`;
+      badgeStatus = `<span class="badge" style="background:#d97706; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;" title="${(f.alertas || []).join(' • ')}">📅 MES DISTINTO (${f.mes_factura || (f.fecha || '').slice(0, 7)})</span>`;
     } else if (f.estado_validacion === 'LISTO') {
-      badgeStatus = `<span class="badge" style="background:#0284c7; color:#fff; font-weight:800;">✅ LISTA</span>`;
+      badgeStatus = `<span class="badge" style="background:#0284c7; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;">✅ LISTA</span>`;
     } else {
-      badgeStatus = `<span class="badge" style="background:#f59e0b; color:#fff; font-weight:800;" title="${(f.alertas || []).join(' • ')}">⚠️ REVISAR</span>`;
+      badgeStatus = `<span class="badge" style="background:#f59e0b; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 9px; border-radius:4px; white-space:nowrap; display:inline-block;" title="${(f.alertas || []).join(' • ')}">⚠️ REVISAR</span>`;
     }
 
     const rowBg = isAsentado ? '#f0fdf4' : (isDup ? '#fff1f2' : (isFuera ? '#fffbeb' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc')));
@@ -1021,125 +1021,129 @@ function renderBandejaStagingFacturas() {
 
     return `
       <tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem; ${borderStyle}">
-        <td style="padding: 8px 10px; font-weight: 700; color: #64748b; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px 6px; font-weight: 700; color: #64748b; text-align: center; width: 40px; min-width: 40px;">${idx + 1}</td>
         
         <!-- Archivo y Visor -->
-        <td style="padding: 8px 10px;">
-          <div style="font-weight: 700; color: #0B2447; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" onclick="abrirVisorDetalleFacturaStaging(${idx})" title="${f.archivo_nombre} - Clic para ver ficha completa">
+        <td style="padding: 10px 8px; width: 195px; min-width: 195px;">
+          <div style="font-weight: 700; color: #0B2447; max-width: 185px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" onclick="abrirVisorDetalleFacturaStaging(${idx})" title="${f.archivo_nombre} - Clic para ver ficha completa">
             📄 ${f.archivo_nombre}
           </div>
-          <button type="button" class="btn-link" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="font-size: 0.72rem; color: #0284c7; padding: 0; background: none; border: none; cursor: pointer; text-decoration: underline; margin-top: 2px;">
+          <button type="button" class="btn-link" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="font-size: 0.74rem; color: #0284c7; padding: 0; background: none; border: none; cursor: pointer; text-decoration: underline; margin-top: 3px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;">
             👁️ Ficha & PDF
           </button>
         </td>
 
         <!-- Fecha -->
-        <td style="padding: 8px 10px;">
-          <input type="date" value="${f.fecha}" class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 125px;"
+        <td style="padding: 10px 8px; width: 145px; min-width: 145px;">
+          <input type="date" value="${f.fecha}" class="form-control" style="font-size: 0.80rem; padding: 4px 6px; width: 130px; font-weight: 600;"
             ${isAsentado ? 'disabled' : ''} onchange="actualizarCampoStaging(${idx}, 'fecha', this.value)">
         </td>
 
         <!-- Proveedor (RIF y Nombre) -->
-        <td style="padding: 8px 10px;">
-          <input type="text" value="${f.rif}" placeholder="J-12345678-9" class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px; font-family: monospace; font-weight: 700;"
+        <td style="padding: 10px 8px; width: 250px; min-width: 250px;">
+          <input type="text" value="${f.rif}" placeholder="J-12345678-9" class="form-control" style="font-size: 0.78rem; padding: 4px 6px; width: 120px; font-family: monospace; font-weight: 700;"
             ${isAsentado ? 'disabled' : ''} onchange="actualizarCampoStaging(${idx}, 'rif', this.value)">
-          <input type="text" value="${f.razon_social}" placeholder="Razón Social" class="form-control" style="font-size: 0.75rem; padding: 3px 6px; width: 180px; margin-top: 3px;"
+          <input type="text" value="${f.razon_social}" placeholder="Razón Social" class="form-control" style="font-size: 0.76rem; padding: 4px 6px; width: 235px; margin-top: 3px; font-weight: 600;"
             ${isAsentado ? 'disabled' : ''} onchange="actualizarCampoStaging(${idx}, 'razon_social', this.value)">
         </td>
 
         <!-- Factura y Control -->
-        <td style="padding: 8px 10px;">
+        <td style="padding: 10px 8px; width: 140px; min-width: 140px;">
           <div style="display:flex; flex-direction:column; gap:3px;">
-            <input type="text" value="${f.nro_factura}" placeholder="N° Factura" class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 105px; font-weight: 700;"
+            <input type="text" value="${f.nro_factura}" placeholder="N° Factura" class="form-control" style="font-size: 0.78rem; padding: 4px 6px; width: 120px; font-weight: 700;"
               ${isAsentado ? 'disabled' : ''} onchange="actualizarCampoStaging(${idx}, 'nro_factura', this.value)">
-            <input type="text" value="${f.nro_control}" placeholder="N° Control" class="form-control" style="font-size: 0.72rem; padding: 3px 6px; width: 105px; color: #475569;"
+            <input type="text" value="${f.nro_control}" placeholder="N° Control" class="form-control" style="font-size: 0.74rem; padding: 4px 6px; width: 120px; color: #475569;"
               ${isAsentado ? 'disabled' : ''} onchange="actualizarCampoStaging(${idx}, 'nro_control', this.value)">
           </div>
         </td>
 
         <!-- Clasificación Contable -->
-        <td style="padding: 8px 10px;">
-          <select class="form-control" style="font-size: 0.75rem; padding: 4px 6px; font-weight: 700; border-radius: 6px; ${getClasificacionColorStyle(f.tipo_servicio)}"
+        <td style="padding: 10px 8px; width: 210px; min-width: 210px;">
+          <select class="form-control" style="font-size: 0.76rem; padding: 4px 6px; font-weight: 700; border-radius: 6px; width: 195px; ${getClasificacionColorStyle(f.tipo_servicio)}"
             ${isAsentado ? 'disabled' : ''} onchange="cambiarClasificacionStaging(${idx}, this.value)">
             <option value="MERCANCIA_REPUESTOS" ${f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'selected' : ''}>📦 Mercancía (Inventario)</option>
             <option value="ACTIVO_FIJO_EQUIPOS" ${f.tipo_servicio === 'ACTIVO_FIJO_EQUIPOS' ? 'selected' : ''}>🏢 Activo Fijo / Equipos</option>
             <option value="SERVICIOS_CONTABLES_Y_LEGALES" ${f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES' ? 'selected' : ''}>📑 Gasto / Servicios</option>
           </select>
-          <div style="font-size: 0.68rem; color: #64748b; margin-top: 3px;">
+          <div style="font-size: 0.70rem; color: #64748b; margin-top: 3px; font-weight: 600;">
             ${f.aplica_inventario === 1 ? '✓ Genera Entrada de Almacén' : '• Sin afectación de stock'}
           </div>
         </td>
 
         <!-- Base e IVA -->
-        <td style="padding: 8px 10px; text-align: right; font-family: monospace;">
+        <td style="padding: 10px 8px; width: 150px; min-width: 150px; text-align: right; font-family: monospace;">
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
-            <div style="font-weight: 700; color: #1e293b;">
-              Bs. <input type="number" step="0.01" value="${f.base_imponible_bs}" style="font-size: 0.78rem; width: 95px; text-align: right; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 4px;"
+            <div style="font-weight: 700; color: #1e293b; font-size: 0.82rem;">
+              Bs. <input type="number" step="0.01" value="${f.base_imponible_bs}" style="font-size: 0.78rem; width: 95px; text-align: right; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 4px; font-weight: 700;"
                 ${isAsentado ? 'disabled' : ''} onchange="recalcularMontosStaging(${idx}, 'base', this.value)">
             </div>
-            <div style="font-size: 0.70rem; color: #64748b;">
+            <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">
               IVA: Bs. ${Number(f.iva_bs).toFixed(2)}
             </div>
           </div>
         </td>
 
         <!-- Total Factura (Doble Expresión) -->
-        <td style="padding: 8px 10px; text-align: right; font-family: monospace;">
-          <div style="font-weight: 800; color: #0284c7; font-size: 0.88rem;">
+        <td style="padding: 10px 8px; width: 155px; min-width: 155px; text-align: right; font-family: monospace;">
+          <div style="font-weight: 800; color: #0284c7; font-size: 0.90rem;">
             Bs. ${Number(f.total_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style="font-size: 0.72rem; color: #15803d; font-weight: 700;">
+          <div style="font-size: 0.74rem; color: #15803d; font-weight: 700;">
             Ref: $${Number(f.total_divisa).toFixed(2)} USD
           </div>
         </td>
 
         <!-- Estado y Alertas -->
-        <td style="padding: 8px 10px; text-align: center;">
-          ${badgeStatus}
-          ${f.alertas && f.alertas.length > 0 && !isAsentado ? `
-            <div style="font-size: 0.68rem; color: #b45309; margin-top: 3px; max-width: 140px; text-align: left;" title="${f.alertas.join(' \n ')}">
-              ${f.alertas[0]}
-            </div>
-          ` : ''}
+        <td style="padding: 10px 8px; width: 235px; min-width: 235px; text-align: center;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            ${badgeStatus}
+            ${f.alertas && f.alertas.length > 0 && !isAsentado ? `
+              <div style="font-size: 0.70rem; color: #92400e; line-height: 1.35; max-width: 220px; text-align: center; background: #fef3c7; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 6px;" title="${f.alertas.join(' \n ')}">
+                ${f.es_fuera_de_periodo 
+                  ? `Factura previa (${f.fecha}). Entrada física a Inventario sin Libro.` 
+                  : f.alertas[0]}
+              </div>
+            ` : ''}
+          </div>
         </td>
 
         <!-- Acciones: Ficha de Detalle y Asiento Directo -->
-        <td style="padding: 8px 10px; text-align: center;">
-          <div style="display: flex; gap: 4px; justify-content: center; align-items: center; flex-wrap: nowrap;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="background: #0284c7; color: #fff; border-color: #0284c7; font-weight: 700; font-size: 0.75rem; padding: 4px 7px; display: inline-flex; align-items: center; gap: 3px;" title="Ver ficha contable completa y documento PDF con botón de asiento">
+        <td style="padding: 10px 8px; width: 385px; min-width: 385px; text-align: center;">
+          <div style="display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: nowrap;">
+            <button type="button" class="btn btn-sm" onclick="abrirVisorDetalleFacturaStaging(${idx})" style="background: #0284c7; color: #fff; border: 1px solid #0284c7; font-weight: 700; font-size: 0.76rem; padding: 6px 11px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap; cursor: pointer;" title="Ver ficha contable completa y documento PDF con botón de asiento">
               🔍 Detalle
             </button>
             ${isAsentado ? `
-              <span style="color: #10b981; font-weight: 800; font-size: 0.80rem; margin-left: 2px;">
+              <span style="color: #10b981; font-weight: 800; font-size: 0.82rem; margin-left: 4px; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap;">
                 ✓ ${f.asentado_modo === 'SOLO_INVENTARIO' ? 'En Inventario' : 'Asentada'}
               </span>
             ` : (isDup ? `
               ${Boolean(f.duplicado_info?.movimiento_id || f.movimiento_id) ? `
-                <span class="badge" style="background:#dcfce7; color:#166534; font-size:0.72rem; padding:4px 7px; font-weight:800;">✓ En Inventario #${f.duplicado_info?.movimiento_id || f.movimiento_id}</span>
+                <span class="badge" style="background:#dcfce7; color:#166534; font-size:0.74rem; padding:5px 9px; font-weight:800; flex-shrink:0; white-space:nowrap;">✓ En Inventario #${f.duplicado_info?.movimiento_id || f.movimiento_id}</span>
               ` : `
-                <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.70rem; padding:4px 6px; font-weight:700;" title="Esta factura ya existe en el Libro de Compras.">🚫 Ya en Libro</span>
+                <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.72rem; padding:5px 8px; font-weight:800; flex-shrink:0; white-space:nowrap;" title="Esta factura ya existe en el Libro de Compras.">🚫 Ya en Libro</span>
                 ${f.aplica_inventario === 1 ? `
-                  <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background:#059669; color:#fff; font-size:0.70rem; padding:3px 7px; font-weight:800; border:none; border-radius:4px; margin-left:2px; cursor:pointer;" title="Registrar entrada física a Almacén / Inventario sin duplicar en Libro de Compras">
+                  <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background:#059669; color:#fff; font-size:0.74rem; padding:5px 10px; font-weight:800; border:none; border-radius:6px; flex-shrink:0; white-space:nowrap; cursor:pointer;" title="Registrar entrada física a Almacén / Inventario sin duplicar en Libro de Compras">
                     📦 Solo Inv.
                   </button>
                 ` : ''}
               `}
-              <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">✕</button>
+              <button type="button" class="btn btn-sm" onclick="quitarFacturaStaging(${idx})" style="background:#f1f5f9; color:#64748b; font-weight:700; font-size:0.76rem; padding:6px 9px; border-radius:6px; border:1px solid #cbd5e1; flex-shrink:0; cursor:pointer;" title="Quitar de la bandeja">✕</button>
             ` : (isFuera ? `
-              <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color:#fff; font-weight:800; font-size:0.75rem; padding:5px 12px; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:4px; box-shadow: 0 2px 5px rgba(5,150,105,0.35); cursor:pointer;" title="Dar entrada física solo a Inventario (Sin asentar en Libro de Compras para no alterar el período fiscal)">
+              <button type="button" class="btn btn-sm" onclick="asentarSoloInventarioStaging(${idx})" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color:#fff; font-weight:800; font-size:0.76rem; padding:6px 12px; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:5px; box-shadow: 0 2px 5px rgba(5,150,105,0.35); flex-shrink:0; white-space:nowrap; cursor:pointer;" title="Dar entrada física solo a Inventario (Sin asentar en Libro de Compras para no alterar el período fiscal)">
                 📦 Dar Entrada a Inventario
               </button>
-              <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" style="font-size:0.72rem; padding:4px 7px; font-weight:700;" title="Asentar en Libro de Compras + Inventario">
+              <button type="button" class="btn btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" style="background:#3b82f6; color:#fff; font-size:0.76rem; padding:6px 11px; font-weight:700; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:4px; flex-shrink:0; white-space:nowrap; cursor:pointer;" title="Asentar en Libro de Compras + Inventario">
                 ✓ Libro + Inv.
               </button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">
+              <button type="button" class="btn btn-sm" onclick="quitarFacturaStaging(${idx})" style="background:#f1f5f9; color:#64748b; font-weight:700; font-size:0.76rem; padding:6px 9px; border-radius:6px; border:1px solid #cbd5e1; flex-shrink:0; cursor:pointer;" title="Quitar de la bandeja">
                 ✕
               </button>
             ` : `
-              <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" title="Dar visto bueno y asentar esta factura en el Libro de Compras">
+              <button type="button" class="btn btn-emerald btn-sm" onclick="asentarFacturaStagingIndividual(${idx})" style="font-weight:800; font-size:0.76rem; padding:6px 14px; border-radius:6px; flex-shrink:0; white-space:nowrap; cursor:pointer;" title="Dar visto bueno y asentar esta factura en el Libro de Compras">
                 ✓ Asentar
               </button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="quitarFacturaStaging(${idx})" title="Quitar de la bandeja">
+              <button type="button" class="btn btn-sm" onclick="quitarFacturaStaging(${idx})" style="background:#f1f5f9; color:#64748b; font-weight:700; font-size:0.76rem; padding:6px 9px; border-radius:6px; border:1px solid #cbd5e1; flex-shrink:0; cursor:pointer;" title="Quitar de la bandeja">
                 ✕
               </button>
             `))}

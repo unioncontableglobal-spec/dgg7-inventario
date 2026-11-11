@@ -4432,6 +4432,81 @@ body {
 }
 
 /* ==========================================================================
+   MODAL DE CARGA MASIVA Y STAGING DE FACTURAS (VISTA MAXIMIZADA Y SCROLLPANEL)
+   ========================================================================== */
+#modal-carga-masiva-facturas-pdf,
+#modal-visor-pdf-factura {
+  padding: 10px !important;
+}
+
+#modal-carga-masiva-facturas-pdf .modal-box,
+#modal-visor-pdf-factura .modal-box {
+  width: 98vw !important;
+  max-width: 98vw !important;
+  height: 96vh !important;
+  max-height: 96vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 12px !important;
+  border: 1.5px solid #0284c7 !important;
+  box-shadow: 0 25px 50px -12px rgba(11, 36, 71, 0.4) !important;
+  overflow: hidden !important;
+}
+
+#modal-carga-masiva-facturas-pdf .modal-body {
+  padding: 12px 18px !important;
+  overflow-y: auto !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  background: #f8fafc !important;
+}
+
+#modal-carga-masiva-facturas-pdf .table-responsive {
+  scrollbar-width: thin;
+  scrollbar-color: #0284c7 #e2e8f0;
+}
+
+#modal-carga-masiva-facturas-pdf .table-responsive::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+#modal-carga-masiva-facturas-pdf .table-responsive::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 6px;
+}
+
+#modal-carga-masiva-facturas-pdf .table-responsive::-webkit-scrollbar-thumb {
+  background: #0284c7;
+  border-radius: 6px;
+}
+
+#modal-carga-masiva-facturas-pdf .table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #0369a1;
+}
+
+#table-staging-facturas-pdf {
+  min-width: 1890px !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+#table-staging-facturas-pdf thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  background: #0B2447 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 0.74rem !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+}
+
+/* ==========================================================================
    ENTERPRISE UI REFRESH (SISTEMA ESTÁNDAR TIPO GOOGLE / SAP FIORI HORIZON)
    ========================================================================== */
 

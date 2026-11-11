@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261109_v11"></script>
+  <script src="/extractor-compras.js?v=20261109_v12"></script>
 </head>
 
 <body>
@@ -5541,13 +5541,13 @@
   <!-- ====================================================================== -->
   <!-- MODAL: CARGA MASIVA Y EXTRACTOR INTELIGENTE DE FACTURAS EN PDF         -->
   <!-- ====================================================================== -->
-  <div class="modal-overlay" id="modal-carga-masiva-facturas-pdf" style="display: none; z-index: 1085;">
-    <div class="modal-box" style="max-width: 1300px; width: 96vw; max-height: 94vh; display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(11, 36, 71, 0.4); border: 1.5px solid #0284c7;">
+  <div class="modal-overlay" id="modal-carga-masiva-facturas-pdf" style="display: none; z-index: 1085; padding: 10px;">
+    <div class="modal-box" style="max-width: 98vw !important; width: 98vw !important; height: 96vh !important; max-height: 96vh !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; padding: 0 !important; border-radius: 12px !important; box-shadow: 0 25px 50px -12px rgba(11, 36, 71, 0.4) !important; border: 1.5px solid #0284c7 !important;">
       
       <!-- Encabezado Modal -->
-      <div class="modal-header" style="background: linear-gradient(135deg, #0B2447 0%, #0369a1 100%); color: #fff; padding: 14px 22px; border-bottom: 2px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0B2447 0%, #0369a1 100%); color: #fff; padding: 12px 20px; border-bottom: 2px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <span style="font-size: 1.6rem;">📂</span>
+          <span style="font-size: 1.5rem;">📂</span>
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
               <h3 style="color: #ffffff; font-weight: 800; font-size: 1.15rem; margin: 0; letter-spacing: -0.01em;">
@@ -5557,7 +5557,7 @@
                 SENIAT Art. 75-76 RLIVA • PA SNAT/2026/00093
               </span>
             </div>
-            <div style="font-size: 0.76rem; color: #e0f2fe; margin-top: 3px;">
+            <div style="font-size: 0.76rem; color: #e0f2fe; margin-top: 2px;">
               Extracción automática de datos fiscales, previsualización para visto bueno contable y clasificación en Mercancía, Activos o Gastos.
             </div>
           </div>
@@ -5565,15 +5565,15 @@
         <button class="modal-close" style="color: #ffffff; opacity: 0.9; font-size: 1.6rem; background: none; border: none; cursor: pointer;" onclick="cerrarModalCargaMasivaPDF()">&times;</button>
       </div>
 
-      <!-- Cuerpo Modal con Scroll -->
-      <div class="modal-body" style="padding: 18px 22px; overflow-y: auto; max-height: calc(94vh - 80px); background: #f8fafc;">
+      <!-- Cuerpo Modal con Scroll Vertical Interno y Flex Expandido -->
+      <div class="modal-body" style="padding: 12px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; background: #f8fafc;">
         
         <!-- Barra Superior de Configuración de Lote -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: #ffffff; padding: 12px 16px; border-radius: 10px; border: 1px solid #cbd5e1; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #ffffff; padding: 8px 14px; border-radius: 8px; border: 1px solid #cbd5e1; flex-shrink: 0;">
           <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
             <div>
-              <label style="font-size: 0.72rem; font-weight: 800; color: #475569; display: block; margin-bottom: 2px;">PERÍODO FISCAL DESTINO:</label>
-              <select id="staging-periodo-select" class="form-control" style="font-size: 0.82rem; font-weight: 700; width: 140px; padding: 4px 8px;">
+              <label style="font-size: 0.70rem; font-weight: 800; color: #475569; display: block; margin-bottom: 2px;">PERÍODO FISCAL DESTINO:</label>
+              <select id="staging-periodo-select" class="form-control" style="font-size: 0.82rem; font-weight: 700; width: 140px; padding: 3px 8px;">
                 <option value="2026-10">2026-10 (Octubre 2026)</option>
                 <option value="2026-09">2026-09 (Septiembre 2026)</option>
                 <option value="2026-08">2026-08 (Agosto 2026)</option>
@@ -5583,8 +5583,8 @@
               </select>
             </div>
             <div>
-              <label style="font-size: 0.72rem; font-weight: 800; color: #475569; display: block; margin-bottom: 2px;">TASA OFICIAL BCV APLICADA:</label>
-              <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 4px 10px; font-size: 0.82rem; font-weight: 800; color: #0284c7;">
+              <label style="font-size: 0.70rem; font-weight: 800; color: #475569; display: block; margin-bottom: 2px;">TASA OFICIAL BCV APLICADA:</label>
+              <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 3px 10px; font-size: 0.82rem; font-weight: 800; color: #0284c7;">
                 🏛️ <span id="staging-tasa-bcv-display">Bs. 889.58</span> / USD
               </div>
             </div>
@@ -5592,93 +5592,99 @@
 
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <input type="file" id="input-files-carga-masiva-pdf" multiple accept=".pdf" style="display: none;" onchange="procesarArchivosPDFMasivos(this.files)">
-            <button type="button" class="btn" onclick="precargarFacturaDisbatteryPendiente(true)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(2,132,199,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Precargar directamente la factura F0029250 de DISBATTERY LUBRICANTES (Julio 2026) para darle entrada a inventario">
+            <button type="button" class="btn" onclick="precargarFacturaDisbatteryPendiente(true)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: 800; font-size: 0.80rem; padding: 6px 12px; border-radius: 6px; box-shadow: 0 2px 6px rgba(2,132,199,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Precargar directamente la factura F0029250 de DISBATTERY LUBRICANTES (Julio 2026) para darle entrada a inventario">
               <span>📦 Precargar F0029250 (Disbattery)</span>
             </button>
-            <button type="button" class="btn" onclick="cargarLoteAuditadoOctubreDG67()" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 7px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(4,120,87,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Cargar directamente las 11 facturas físicas auditadas de Octubre 2026 en la bandeja">
+            <button type="button" class="btn" onclick="cargarLoteAuditadoOctubreDG67()" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; font-weight: 800; font-size: 0.80rem; padding: 6px 12px; border-radius: 6px; box-shadow: 0 2px 6px rgba(4,120,87,0.25); border: none; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Cargar directamente las 11 facturas físicas auditadas de Octubre 2026 en la bandeja">
               <span>⚡ Cargar Lote Auditado Octubre (11 Facturas)</span>
             </button>
-            <button type="button" class="btn btn-primary" onclick="document.getElementById('input-files-carga-masiva-pdf').click()" style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('input-files-carga-masiva-pdf').click()" style="display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: 0.80rem; padding: 6px 12px;">
               <span>📁 Seleccionar Facturas PDF</span>
             </button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="limpiarBandejaStaging()" title="Limpiar bandeja">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="limpiarBandejaStaging()" title="Limpiar bandeja" style="font-size: 0.78rem; padding: 6px 10px;">
               🗑️ Vaciar
             </button>
           </div>
         </div>
 
-        <!-- Zona Drag & Drop -->
+        <!-- Zona Drag & Drop Compacta Horizontal -->
         <div class="pdf-dropzone" id="pdf-dropzone-box"
+          style="padding: 8px 16px; margin: 0; min-height: 46px; border: 2px dashed #38bdf8; background: #f0f9ff; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0;"
           onclick="document.getElementById('input-files-carga-masiva-pdf').click()"
           ondragover="event.preventDefault(); this.classList.add('dragover');"
           ondragleave="this.classList.remove('dragover');"
           ondrop="event.preventDefault(); this.classList.remove('dragover'); procesarArchivosPDFMasivos(event.dataTransfer.files);">
-          <span class="pdf-dropzone-icon">📥</span>
-          <strong style="color: #0369a1; font-size: 0.95rem; display: block;">Arrastra y suelta aquí tus facturas en formato PDF</strong>
-          <span style="font-size: 0.76rem; color: #64748b; margin-top: 2px; display: block;">
-            Soporta archivos individuales y archivos PDF multipágina (cada página se desglosa automáticamente como un comprobante independiente con visor).
-          </span>
+          <span style="font-size: 1.4rem; line-height: 1;">📥</span>
+          <div>
+            <strong style="color: #0369a1; font-size: 0.88rem; display: inline-block;">Arrastra y suelta aquí tus facturas en formato PDF</strong>
+            <span style="font-size: 0.74rem; color: #64748b; margin-left: 8px;">(Soporta comprobantes individuales y PDF multipágina con desglose automático)</span>
+          </div>
         </div>
 
         <!-- Barra de Progreso de Análisis -->
-        <div id="staging-progress-container" style="display: none; margin: 12px 0;">
+        <div id="staging-progress-container" style="display: none; margin: 0; flex-shrink: 0;">
           <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: #0369a1;">
             <span id="staging-progress-text">Analizando comprobantes...</span>
           </div>
-          <div class="staging-progress-bar-wrap">
+          <div class="staging-progress-bar-wrap" style="margin-top: 4px;">
             <div class="staging-progress-bar-fill" id="staging-progress-bar"></div>
           </div>
         </div>
 
         <!-- Tarjetas KPIs de la Bandeja de Staging -->
-        <div class="staging-kpi-grid" style="margin-top: 14px;">
-          <div class="staging-kpi-card">
+        <div class="staging-kpi-grid" style="margin: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; flex-shrink: 0;">
+          <div class="staging-kpi-card" style="padding: 8px 12px;">
             <div class="kpi-label">Comprobantes en Bandeja</div>
-            <div class="kpi-value" id="kpi-staging-total">0</div>
+            <div class="kpi-value" id="kpi-staging-total" style="font-size: 1.1rem;">0</div>
           </div>
-          <div class="staging-kpi-card" style="border-left: 4px solid #0284c7;">
+          <div class="staging-kpi-card" style="border-left: 4px solid #0284c7; padding: 8px 12px;">
             <div class="kpi-label">Listos para Asentar</div>
-            <div class="kpi-value" id="kpi-staging-listos" style="color: #0284c7;">0</div>
+            <div class="kpi-value" id="kpi-staging-listos" style="color: #0284c7; font-size: 1.1rem;">0</div>
           </div>
-          <div class="staging-kpi-card" style="border-left: 4px solid #f59e0b;">
+          <div class="staging-kpi-card" style="border-left: 4px solid #f59e0b; padding: 8px 12px;">
             <div class="kpi-label">Con Observaciones</div>
-            <div class="kpi-value" id="kpi-staging-alertas" style="color: #d97706;">0</div>
+            <div class="kpi-value" id="kpi-staging-alertas" style="color: #d97706; font-size: 1.1rem;">0</div>
           </div>
-          <div class="staging-kpi-card">
+          <div class="staging-kpi-card" style="padding: 8px 12px;">
             <div class="kpi-label">Total Base + IVA (Bs.)</div>
             <div class="kpi-value" id="kpi-staging-tot-bs" style="font-size: 0.95rem;">Bs. 0,00</div>
           </div>
-          <div class="staging-kpi-card">
+          <div class="staging-kpi-card" style="padding: 8px 12px;">
             <div class="kpi-label">Referencia en Dólares ($)</div>
             <div class="kpi-value" id="kpi-staging-tot-usd" style="font-size: 0.95rem; color: #15803d;">$0.00 USD</div>
           </div>
         </div>
 
-        <!-- Barra de Acción Masiva -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <strong style="color: #0B2447; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
-            <span>📋 Previsualización y Revisión de Facturas (Staging):</span>
-          </strong>
+        <!-- Barra de Acción Masiva y Ayuda Visual de Navegación -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin: 0; flex-shrink: 0; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="color: #0B2447; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
+              <span>📋 Previsualización y Revisión de Facturas (Staging):</span>
+            </strong>
+            <span style="font-size: 0.72rem; color: #0284c7; background: #e0f2fe; padding: 2px 8px; border-radius: 4px; font-weight: 700;">
+              ↔ Desliza la barra horizontal para ver todos los campos y botones de acción
+            </span>
+          </div>
           <button type="button" class="btn btn-emerald" id="btn-asentar-todo-staging" onclick="asentarTodasFacturasValidadas()" disabled style="font-weight: 800; font-size: 0.82rem; padding: 6px 14px;">
             ⚡ Asentar Todo el Lote Válido
           </button>
         </div>
 
-        <!-- Tabla de Staging -->
-        <div class="table-responsive" style="max-height: 420px; overflow-y: auto; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">
-          <table class="data-table" id="table-staging-facturas-pdf" style="margin: 0;">
-            <thead>
+        <!-- Tabla de Staging Ampliada con Scroll Bidireccional y Cabecera Sticky -->
+        <div class="table-responsive" style="flex: 1; min-height: 380px; overflow-x: auto; overflow-y: auto; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">
+          <table class="data-table" id="table-staging-facturas-pdf" style="margin: 0; min-width: 1890px; width: 100%; border-collapse: separate; border-spacing: 0;">
+            <thead style="position: sticky; top: 0; z-index: 20;">
               <tr style="background: #0B2447; color: #ffffff; font-size: 0.75rem;">
-                <th style="width: 35px; text-align: center; background: #0B2447; color: #fff;">#</th>
-                <th style="width: 170px; background: #0B2447; color: #fff;">DOCUMENTO PDF</th>
-                <th style="width: 130px; background: #0B2447; color: #fff;">FECHA EMISIÓN</th>
-                <th style="background: #0B2447; color: #fff;">PROVEEDOR (RIF / RAZÓN SOCIAL)</th>
-                <th style="width: 110px; background: #0B2447; color: #fff;">FACTURA / CONTROL</th>
-                <th style="width: 180px; background: #0B2447; color: #fff;">CLASIFICACIÓN CONTABLE</th>
-                <th style="width: 140px; text-align: right; background: #0B2447; color: #fff;">BASE IMPONIBLE (BS)</th>
-                <th style="width: 140px; text-align: right; background: #0B2447; color: #fff;">TOTAL FACTURA</th>
-                <th style="width: 120px; text-align: center; background: #0B2447; color: #fff;">ESTADO</th>
-                <th style="width: 155px; text-align: center; background: #0B2447; color: #fff;">ACCIÓN</th>
+                <th style="width: 40px; min-width: 40px; text-align: center; background: #0B2447; color: #fff; padding: 10px 6px;">#</th>
+                <th style="width: 195px; min-width: 195px; background: #0B2447; color: #fff; padding: 10px 8px;">DOCUMENTO PDF</th>
+                <th style="width: 145px; min-width: 145px; background: #0B2447; color: #fff; padding: 10px 8px;">FECHA EMISIÓN</th>
+                <th style="width: 250px; min-width: 250px; background: #0B2447; color: #fff; padding: 10px 8px;">PROVEEDOR (RIF / RAZÓN SOCIAL)</th>
+                <th style="width: 140px; min-width: 140px; background: #0B2447; color: #fff; padding: 10px 8px;">FACTURA / CONTROL</th>
+                <th style="width: 210px; min-width: 210px; background: #0B2447; color: #fff; padding: 10px 8px;">CLASIFICACIÓN CONTABLE</th>
+                <th style="width: 150px; min-width: 150px; text-align: right; background: #0B2447; color: #fff; padding: 10px 8px;">BASE IMPONIBLE (BS)</th>
+                <th style="width: 155px; min-width: 155px; text-align: right; background: #0B2447; color: #fff; padding: 10px 8px;">TOTAL FACTURA</th>
+                <th style="width: 235px; min-width: 235px; text-align: center; background: #0B2447; color: #fff; padding: 10px 8px;">ESTADO</th>
+                <th style="width: 385px; min-width: 385px; text-align: center; background: #0B2447; color: #fff; padding: 10px 8px;">ACCIÓN</th>
               </tr>
             </thead>
             <tbody id="tbody-staging-compras-pdf">
@@ -5696,7 +5702,7 @@
       </div>
 
       <!-- Pie del Modal -->
-      <div class="modal-footer" style="background: #f1f5f9; padding: 12px 22px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+      <div class="modal-footer" style="background: #f1f5f9; padding: 10px 20px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
         <div style="font-size: 0.74rem; color: #64748b;">
           💡 <strong>Regla Contable SENIAT:</strong> Al asentar, las facturas de <em>Mercancía</em> alimentan el inventario y Kardex, mientras que <em>Activos</em> y <em>Gastos</em> aplican exclusivamente a crédito fiscal y deducibilidad.
         </div>
@@ -5709,8 +5715,8 @@
   <!-- ====================================================================== -->
   <!-- MODAL SECUNDARIO: VISOR Y AUDITORÍA DETALLADA DE FACTURA (CON ASIENTO)  -->
   <!-- ====================================================================== -->
-  <div class="modal-overlay" id="modal-visor-pdf-factura" style="display: none; z-index: 1090;">
-    <div class="modal-box" style="max-width: 1300px; width: 95vw; height: 92vh; display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 12px; border: 1.5px solid #0284c7; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+  <div class="modal-overlay" id="modal-visor-pdf-factura" style="display: none; z-index: 1090; padding: 10px;">
+    <div class="modal-box" style="max-width: 98vw !important; width: 98vw !important; height: 96vh !important; max-height: 96vh !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; padding: 0 !important; border-radius: 12px !important; border: 1.5px solid #0284c7 !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5) !important;">
       
       <!-- Encabezado Modal -->
       <div class="modal-header" style="background: linear-gradient(135deg, #0B2447 0%, #0369a1 100%); color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
