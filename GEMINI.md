@@ -67,6 +67,10 @@
 * **Modo Exclusivo de Consulta y Reimpresión Oficial:** En períodos cerrados, el módulo de retenciones opera estrictamente en modo de solo lectura, permitiendo visualizar e imprimir los comprobantes en PDF oficial (`PA SNAT/2026/00093`) sin alterar la contabilidad ni la base imponible declarada.
 * **Reapertura Autorizada:** Únicamente previa reapertura formal del período fiscal (`EN_PROCESO`) para tramitar una rectificativa fiscal, se habilitará la edición controlada de los comprobantes.
 
+## 8. Identidad Visual SUMA del Sistema vs. Exclusividad del Cliente en Reportes e Informes
+* **Alcance Estricto en la Interfaz del Software (`SUMA | Unión Contable Global`):** El branding oficial **SUMA** (`ucg-brand-kit`) se aplica **exclusivamente en la interfaz del sistema** (Pantalla Login, Splash de carga, Sidebar oscuro `#0f172a` con isotipo RGBA transparente `SUMA_Isotipo_SinFondo.png` sin recuadro blanco, Topbar, Favicon y pie de autoría como proveedor tecnológico `"Desarrollado por Unión Contable Global — ¡Unimos números, contamos éxitos!"`), bajo la especialidad **`SUMA • Inventario & Fiscal`** y conservando la arquitectura nativa (**Cloudflare Pages + HTML/CSS/JS Vanilla + Turso**).
+* **Exclusividad Absoluta del Cliente en Reportes e Informes:** Todos los **reportes, informes, certificados y libros impresos o exportados** (`Libro de Compras`, `Libro de Ventas`, `Libro Oficial de Inventarios Art. 177 RISLR`, `Kardex`, `Informes de Auditoría y Cruce Fiscal`, `Resúmenes Excel/PDF`, `Comprobantes Fiscales`) pertenecen **100% al cliente INVERSIONES DG 67, C.A.** (`RIF: J-50700865-7`). Queda estrictamente prohibido incluir logotipos o encabezados de marca `SUMA` o `Unión Contable Global` en dichos documentos.
+
 
 
 
