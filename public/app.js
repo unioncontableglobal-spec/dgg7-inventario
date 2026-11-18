@@ -2337,7 +2337,11 @@ function imprimirKardexProducto() {
   const printHtml = `
     <div class="print-preview-container seniat-official-doc">
       <div class="print-preview-header seniat-official-header">
-        <div><img src="LOGOUCG.png" alt="Logo UCG" style="height: 50px; object-fit: contain;" onerror="this.style.display='none'"></div>
+        <div style="border-right: 1px solid #cbd5e1; padding-right: 10px; font-size: 8.5px;">
+          <div style="font-weight:900; color:#000080;">INVERSIONES DG 67, C.A.</div>
+          <div style="font-family:monospace; color:#334155;">RIF: J-50700865-7</div>
+          <div style="color:#64748b;">Control Auxiliar de Almacén</div>
+        </div>
         <div style="text-align: center;">
           <div style="font-size: 9px; font-weight: 800; color: #334155;">REPÚBLICA BOLIVARIANA DE VENEZUELA • SENIAT • PA SNAT/2026/00093</div>
           <div style="font-size: 13px; font-weight: 900; color: #000080; margin: 2px 0;">TARJETA MAYOR AUXILIAR DE INVENTARIO BIMONETARIA (KARDEX ART. 177 RISLR)</div>
@@ -2402,8 +2406,8 @@ function imprimirKardexProducto() {
           <div style="font-size: 8px; color:#475569;">Control Físico y Soportes</div>
         </div>
         <div>
-          <div class="sig-line">CONTADOR PÚBLICO (AUDITORÍA)</div>
-          <div style="font-size: 8px; color:#475569;">UNIÓN CONTABLE GLOBAL</div>
+          <div class="sig-line">CONTADOR PÚBLICO COLEGIADO</div>
+          <div style="font-size: 8px; color:#475569;">Revisión Contable • C.P.C. N° ____________</div>
         </div>
         <div>
           <div class="sig-line">INVERSIONES DG 67, C.A.</div>
@@ -2716,7 +2720,11 @@ async function imprimirCierreMensualInventario() {
   const printHtml = `
     <div class="print-preview-container seniat-official-doc">
       <div class="print-preview-header seniat-official-header">
-        <div><img src="LOGOUCG.png" alt="Logo UCG" style="height: 50px; object-fit: contain;" onerror="this.style.display='none'"></div>
+        <div style="border-right: 1px solid #cbd5e1; padding-right: 10px; font-size: 8.5px;">
+          <div style="font-weight:900; color:#000080;">INVERSIONES DG 67, C.A.</div>
+          <div style="font-family:monospace; color:#334155;">RIF: J-50700865-7</div>
+          <div style="color:#64748b;">Control Auxiliar de Almacén</div>
+        </div>
         <div style="text-align: center;">
           <div style="font-size: 9px; font-weight: 800; color: #334155;">REPÚBLICA BOLIVARIANA DE VENEZUELA • SENIAT</div>
           <div style="font-size: 13.5px; font-weight: 900; color: #000080; margin: 2px 0;">RESUMEN ANUAL DE CONCILIACIÓN Y CIERRE MENSUAL DE INVENTARIOS</div>
@@ -2724,7 +2732,7 @@ async function imprimirCierreMensualInventario() {
           <div style="font-size: 8px; color: #475569;">Av. Sur 11 entre esquinas Bolívar y Miranda, Casa N° 112, Urb. San Agustín del Norte, Caracas</div>
         </div>
         <div style="text-align: right; font-size: 8.5px; border-left: 1px solid #cbd5e1; padding-left: 10px;">
-          <div style="font-weight:900; color:#000080;">UNIÓN CONTABLE GLOBAL</div>
+          <div style="font-weight:900; color:#000080;">REGISTRO AUXILIAR</div>
           <div>Control Continuo Art. 177 ISLR</div>
           <div>Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
         </div>
@@ -2771,8 +2779,8 @@ async function imprimirCierreMensualInventario() {
           <div style="font-size: 8px; color:#475569;">Control de Entradas y Salidas</div>
         </div>
         <div>
-          <div class="sig-line">CONTADOR PÚBLICO (AUDITORÍA)</div>
-          <div style="font-size: 8px; color:#475569;">UNIÓN CONTABLE GLOBAL</div>
+          <div class="sig-line">CONTADOR PÚBLICO COLEGIADO</div>
+          <div style="font-size: 8px; color:#475569;">Revisión Contable • C.P.C. N° ____________</div>
         </div>
         <div>
           <div class="sig-line">INVERSIONES DG 67, C.A.</div>
@@ -4903,7 +4911,7 @@ function imprimirLibroCompras() {
         </div>
         <div>
           <div class="sig-line">REVISADO POR CONTADOR PÚBLICO</div>
-          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">UNIÓN CONTABLE GLOBAL • CPC N°</div>
+          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">C.P.C. Colegiado N° ____________</div>
         </div>
         <div>
           <div class="sig-line">REPRESENTANTE LEGAL / SELLO HÚMEDO</div>
@@ -6230,7 +6238,7 @@ function imprimirLibroVentas() {
         </div>
         <div>
           <div class="sig-line">REVISADO POR CONTADOR PÚBLICO</div>
-          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">UNIÓN CONTABLE GLOBAL • CPC N°</div>
+          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">C.P.C. Colegiado N° ____________</div>
         </div>
         <div>
           <div class="sig-line">REPRESENTANTE LEGAL / SELLO HÚMEDO</div>

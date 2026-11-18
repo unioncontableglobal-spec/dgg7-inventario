@@ -8,13 +8,16 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Colores Corporativos Ejecutivos Oficiales (Estándar Google / SAP Fiori Horizon) */
-  --ucg-navy: #1e3a8a;
+  /* Colores Corporativos Ejecutivos Oficiales (SUMA | Unión Contable Global) */
+  --suma-dark: #0f172a;
+  --suma-blue: #0284c7;
+  --suma-cyan: #38bdf8;
+  --ucg-navy: #0B2447;
   /* Navy Corporativo Ejecutivo */
   --ucg-navy-dark: #0f172a;
   /* Slate 900 Oscuro */
-  --ucg-blue-accent: #2563eb;
-  /* Azul Profesional */
+  --ucg-blue-accent: #0284c7;
+  /* Azul Institucional SUMA */
   --ucg-blue-light: #eff6ff;
   /* Fondo Azul Muy Claro */
   --ucg-blue-border: #dbeafe;
@@ -103,39 +106,40 @@ body {
   background-color: var(--bg-body);
 }
 
-/* 1. BARRA LATERAL IZQUIERDA (COMPACTA, ESTÉTICA Y CERO SOBRECARGA) */
+/* 1. BARRA LATERAL IZQUIERDA OSCURA (#0f172a — ESTÁNDAR SUMA ERP) */
 .app-sidebar {
-  width: 240px;
-  min-width: 240px;
-  max-width: 240px;
+  width: 248px;
+  min-width: 248px;
+  max-width: 248px;
   flex-shrink: 0;
   height: 100vh;
   position: sticky;
   top: 0;
-  background: #ffffff;
-  border-right: 1px solid var(--border-light);
+  background: linear-gradient(180deg, #091122 0%, #0f172a 100%);
+  border-right: 1px solid rgba(56, 189, 248, 0.16);
   display: flex;
   flex-direction: column;
   z-index: 100;
-  box-shadow: 1px 0 10px rgba(0, 0, 128, 0.03);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.18);
   user-select: none;
 }
 
-/* 1.1 Brand Asesoría */
+/* 1.1 Brand SUMA+ (Sin Caja Blanca) */
 .sidebar-brand {
-  padding: 10px 14px;
+  padding: 14px 14px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--border-light);
-  background: #ffffff;
+  gap: 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 17, 34, 0.5);
 }
 
 .sidebar-logo {
-  height: 30px;
-  width: auto;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 128, 0.1));
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.45));
 }
 
 .sidebar-brand-text {
@@ -144,12 +148,32 @@ body {
   min-width: 0;
 }
 
+.sidebar-suma-title {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  line-height: 1;
+}
+
+.sidebar-suma-word {
+  font-size: 1.38rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.025em;
+}
+
+.sidebar-suma-plus {
+  font-size: 1.38rem;
+  font-weight: 900;
+  color: #38bdf8;
+}
+
 .sidebar-close-btn {
   display: none;
-  background: transparent;
-  border: none;
-  color: #64748b;
-  font-size: 1.25rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 1.1rem;
   font-weight: 700;
   cursor: pointer;
   padding: 4px 8px;
@@ -160,8 +184,8 @@ body {
 }
 
 .sidebar-close-btn:hover {
-  background: #f1f5f9;
-  color: #0B2447;
+  background: rgba(56, 189, 248, 0.2);
+  color: #ffffff;
 }
 
 @media (max-width: 1150px) {
@@ -172,39 +196,44 @@ body {
   }
 }
 
-.sidebar-agency-tag {
-  font-size: 0.52rem;
+.sidebar-agency-title {
+  font-size: 0.56rem;
   font-weight: 800;
-  color: var(--ucg-blue-accent);
+  color: #38bdf8;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  margin-top: 2px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
-  line-height: 1;
 }
 
-.sidebar-agency-title {
-  font-size: 0.76rem;
+.sidebar-specialty-badge {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.54rem;
   font-weight: 800;
-  color: var(--ucg-navy);
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-  margin-top: 1px;
+  letter-spacing: 0.06em;
+  color: #e0f2fe;
+  background: rgba(2, 132, 199, 0.3);
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
 /* 1.2 Ficha Fiscal Compacta del Contribuyente */
 .sidebar-client-box {
-  margin: 8px 10px;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  margin: 10px 10px 6px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   transition: all 0.15s ease;
 }
 
 .sidebar-client-box:hover {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(56, 189, 248, 0.42);
 }
 
 .client-box-top {
@@ -217,7 +246,8 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #16a34a;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
   display: inline-block;
   flex-shrink: 0;
   animation: pulseDot 2s infinite;
@@ -243,7 +273,7 @@ body {
 .sidebar-client-name {
   font-size: 0.74rem;
   font-weight: 800;
-  color: var(--ucg-navy-dark);
+  color: #ffffff;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -255,21 +285,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .sidebar-client-rif {
   font-size: 0.67rem;
-  color: #475569;
+  color: #94a3b8;
   font-weight: 700;
 }
 
 .client-tag-pill {
-  font-size: 0.58rem;
+  font-size: 0.57rem;
   font-weight: 700;
-  color: #1e40af;
-  background: #dbeafe;
-  padding: 1px 5px;
+  color: #bae6fd;
+  background: rgba(2, 132, 199, 0.3);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.02em;
 }
@@ -281,9 +312,9 @@ body {
   padding: 4px 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 1.5px;
+  gap: 2px;
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
 }
 
 .sidebar-nav::-webkit-scrollbar {
@@ -291,17 +322,17 @@ body {
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.35);
   border-radius: 3px;
 }
 
 .nav-section-title {
   font-size: 0.56rem;
   font-weight: 800;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 8px 8px 2px;
+  letter-spacing: 0.09em;
+  padding: 10px 8px 3px;
   user-select: none;
 }
 
@@ -310,11 +341,11 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 9px;
-  border-radius: 6px;
+  padding: 6.5px 9px;
+  border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
-  color: #334155;
+  color: #cbd5e1;
   font-family: inherit;
   font-size: 0.76rem;
   font-weight: 600;
@@ -330,7 +361,7 @@ body {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  stroke: #64748b;
+  stroke: #94a3b8;
   transition: stroke 0.15s ease;
 }
 
@@ -342,28 +373,28 @@ body {
 }
 
 .sidebar-nav .nav-tab:hover {
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: #e2e8f0;
+  background: rgba(56, 189, 248, 0.1);
+  color: #ffffff;
+  border-color: rgba(56, 189, 248, 0.22);
   transform: none;
 }
 
 .sidebar-nav .nav-tab:hover svg {
-  stroke: var(--ucg-navy);
+  stroke: #38bdf8;
 }
 
 .sidebar-nav .nav-tab.active {
-  background: #eff6ff !important;
-  color: #1e3a8a !important;
-  border-color: transparent !important;
-  border-left: 3px solid #2563eb !important;
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.36), rgba(56, 189, 248, 0.12)) !important;
+  color: #ffffff !important;
+  border-color: rgba(56, 189, 248, 0.22) !important;
+  border-left: 3px solid #38bdf8 !important;
   box-shadow: none !important;
   transform: none !important;
   font-weight: 700 !important;
 }
 
 .sidebar-nav .nav-tab.active svg {
-  stroke: #2563eb !important;
+  stroke: #38bdf8 !important;
 }
 
 .nav-badge-pill {
@@ -375,38 +406,34 @@ body {
   letter-spacing: 0.03em;
   margin-left: auto;
   flex-shrink: 0;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-}
-  flex-shrink: 0;
-  background: #dbeafe;
-  color: var(--ucg-blue-accent);
+  background: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+  border: 1px solid rgba(56, 189, 248, 0.28);
 }
 
 .sidebar-nav .nav-tab.active .nav-badge-pill {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(56, 189, 248, 0.32);
   color: #ffffff;
 }
 
 /* 1.4 Footer del Menú Lateral */
 .sidebar-footer {
-  padding: 8px 10px;
-  border-top: 1px solid var(--border-light);
-  background: #ffffff;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 13, 27, 0.88);
 }
 
 .cloud-badge-sidebar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 6px;
+  padding: 6px 10px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 7px;
   font-size: 0.70rem;
   font-weight: 700;
-  color: #166534;
+  color: #6ee7b7;
   transition: all 0.15s ease;
 }
 
@@ -419,14 +446,14 @@ body {
 .cloud-title {
   font-size: 0.68rem;
   font-weight: 800;
-  color: #166534;
+  color: #6ee7b7;
   line-height: 1.1;
 }
 
 .cloud-sub {
   font-size: 0.60rem;
-  color: #15803d;
-  line-height: 1;
+  color: #a7f3d0;
+  line-height: 1.1;
 }
 
 .status-pulse {
@@ -494,6 +521,17 @@ body {
   align-items: center;
   gap: 7px;
   font-size: 0.76rem;
+}
+
+.crumb-suma {
+  font-weight: 800;
+  color: #0284c7;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.71rem;
+  letter-spacing: 0.01em;
 }
 
 .crumb-company {
@@ -2147,7 +2185,7 @@ input:focus {
 
 
 /* ==========================================================================
-   MÓDULO DE LOGIN & ACCESO CORPORATIVO (UNIÓN CONTABLE GLOBAL)
+   MÓDULO DE LOGIN & ENTRADA DEL SISTEMA (SUMA • UNIÓN CONTABLE GLOBAL)
    ========================================================================== */
 .login-screen-overlay {
   position: fixed;
@@ -2156,7 +2194,10 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 20% 30%, #071529 0%, #0B2447 50%, #19376D 100%);
+  background:
+    radial-gradient(ellipse at 12% 18%, rgba(2, 132, 199, 0.28) 0%, transparent 48%),
+    radial-gradient(ellipse at 88% 82%, rgba(56, 189, 248, 0.16) 0%, transparent 46%),
+    linear-gradient(155deg, #050b18 0%, #0b162b 52%, #0f172a 100%);
   padding: 24px;
   overflow-y: auto;
   box-sizing: border-box;
@@ -2164,13 +2205,13 @@ input:focus {
 
 .login-container {
   display: grid;
-  grid-template-columns: 1.18fr 1fr;
-  max-width: 1060px;
+  grid-template-columns: 1.15fr 1fr;
+  max-width: 1080px;
   width: 100%;
-  min-height: 620px;
-  background: #FFFFFF;
-  border-radius: 20px;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(25, 167, 206, 0.35);
+  min-height: 630px;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(56, 189, 248, 0.25);
   overflow: hidden;
   animation: loginFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -2187,146 +2228,185 @@ input:focus {
   }
 }
 
-/* Panel Izquierdo: Branding & Datos Fiscales */
+/* Panel Izquierdo: Identidad SUMA & Entidad Asignada */
 .login-brand-panel {
-  background: linear-gradient(145deg, #071529 0%, #0B2447 60%, #102C57 100%);
-  color: #FFFFFF;
-  padding: 40px 36px;
+  background:
+    radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.14) 0%, transparent 45%),
+    linear-gradient(160deg, #070f21 0%, #0f172a 55%, #112447 100%);
+  color: #ffffff;
+  padding: 34px 34px 28px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-right: 1px solid rgba(25, 167, 206, 0.25);
+  gap: 16px;
+  border-right: 1px solid rgba(56, 189, 248, 0.18);
   position: relative;
 }
 
 .login-brand-panel::before {
   content: '';
   position: absolute;
-  top: -40px;
-  left: -40px;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(25, 167, 206, 0.25) 0%, transparent 70%);
+  inset: 0;
+  background-image: radial-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.45;
   pointer-events: none;
+}
+
+.login-hero-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .login-brand-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.login-logo-wrapper {
-  background: #FFFFFF;
-  border-radius: 12px;
-  padding: 6px;
-  border: 2px solid #19A7CE;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-  flex-shrink: 0;
-}
-
-.login-logo-img {
-  height: 52px;
-  width: auto;
-  display: block;
-}
-
-.login-firm-badge {
-  display: block;
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  color: #19A7CE;
-  font-weight: 800;
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.login-firm-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #FFFFFF;
   margin: 0;
-  letter-spacing: -0.01em;
 }
 
-.login-firm-slogan {
-  font-size: 0.78rem;
-  font-style: italic;
-  color: #93c5fd;
-  margin: 2px 0 0 0;
+.login-suma-lockup {
+  width: 100%;
+  max-width: 315px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 20px rgba(56, 189, 248, 0.22));
 }
 
-/* Box del Sistema */
-.login-system-box {
+.login-edition-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edition-pill-primary {
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #e0f2fe;
+  background: rgba(2, 132, 199, 0.32);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.edition-pill-muted {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(25, 167, 206, 0.3);
-  border-left: 4px solid #19A7CE;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 4px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Tarjeta del Módulo Activo */
+.login-system-box {
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-left: 3.5px solid #38bdf8;
+  border-radius: 14px;
+  padding: 15px 17px;
+}
+
+.login-system-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 8px;
+}
+
+.system-icon-chip {
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
-  padding: 16px 18px;
-  margin-bottom: 20px;
+  background: rgba(2, 132, 199, 0.28);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .login-system-tag {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 800;
-  color: #19A7CE;
-  letter-spacing: 0.08em;
+  color: #38bdf8;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .login-system-title {
-  font-size: 1.18rem;
+  font-size: 1.06rem;
   font-weight: 800;
-  color: #FFFFFF;
-  margin: 4px 0 2px 0;
-}
-
-.login-system-subtitle {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 6px;
+  color: #ffffff;
+  margin: 2px 0 0 0;
+  line-height: 1.25;
 }
 
 .login-system-desc {
   font-size: 0.76rem;
   color: #cbd5e1;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* Ficha Fiscal */
+/* Ficha Fiscal del Cliente */
 .login-fiscal-card {
-  background: rgba(11, 36, 71, 0.75);
+  position: relative;
+  z-index: 1;
+  background: rgba(9, 17, 34, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 14px 16px;
-  margin-bottom: 24px;
 }
 
 .login-fiscal-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
 }
 
 .fiscal-pulse-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10B981;
-  box-shadow: 0 0 8px #10B981;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
 }
 
 .fiscal-header-title {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  color: #19A7CE;
-  letter-spacing: 0.06em;
+  color: #38bdf8;
+  letter-spacing: 0.07em;
+}
+
+.fiscal-iva-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .login-fiscal-body {
@@ -2339,7 +2419,7 @@ input:focus {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   gap: 10px;
 }
 
@@ -2357,7 +2437,7 @@ input:focus {
 
 .fiscal-value.highlight {
   font-weight: 800;
-  color: #FFFFFF;
+  color: #ffffff;
 }
 
 .fiscal-value.highlight-rif {
@@ -2367,15 +2447,17 @@ input:focus {
 }
 
 .login-brand-footer {
+  position: relative;
+  z-index: 1;
   margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .security-pills {
   display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 7px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
@@ -2383,65 +2465,107 @@ input:focus {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.68rem;
-  background: rgba(25, 167, 206, 0.15);
-  border: 1px solid rgba(25, 167, 206, 0.35);
-  color: #7dd3fc;
+  font-size: 0.66rem;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #bae6fd;
   padding: 3px 8px;
   border-radius: 6px;
   font-weight: 600;
 }
 
 .developer-credit {
-  font-size: 0.74rem;
+  font-size: 0.71rem;
   color: #94a3b8;
+  line-height: 1.4;
 }
 
 .developer-credit strong {
-  color: #19A7CE;
+  color: #38bdf8;
 }
 
-/* Panel Derecho: Formulario */
+/* Panel Derecho: Formulario Moderno */
 .login-form-panel {
-  padding: 44px 38px;
+  padding: 38px 38px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: #FFFFFF;
+  background: #ffffff;
 }
 
 .login-form-content {
   width: 100%;
-  max-width: 380px;
+  max-width: 390px;
   margin: 0 auto;
 }
 
 .form-title-group {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
-.lock-icon-badge {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: #e0f2fe;
-  border: 1.5px solid #19A7CE;
+.login-form-brand-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.login-form-isotipo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(2, 132, 199, 0.22));
+}
+
+.login-form-brand-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.login-form-kicker {
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: #0284c7;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.login-form-entity {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.login-access-pill {
+  margin-left: auto;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .form-main-title {
-  font-size: 1.6rem;
+  font-size: 1.58rem;
   font-weight: 800;
-  color: #0B2447;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.02em;
+  color: #0f172a;
+  margin: 0 0 5px 0;
+  letter-spacing: -0.025em;
 }
 
 .form-sub-title {
-  font-size: 0.84rem;
+  font-size: 0.83rem;
   color: #64748b;
   margin: 0;
   line-height: 1.45;
@@ -2567,10 +2691,10 @@ input:focus {
 .btn-login-submit {
   width: 100%;
   height: 48px;
-  background: linear-gradient(135deg, #0B2447 0%, #19376D 100%);
-  color: #FFFFFF;
-  border: none;
-  border-radius: 10px;
+  background: linear-gradient(135deg, #0f172a 0%, #0284c7 100%);
+  color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
   font-size: 0.96rem;
   font-weight: 800;
   display: flex;
@@ -2579,13 +2703,13 @@ input:focus {
   gap: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(11, 36, 71, 0.35);
+  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.28);
 }
 
 .btn-login-submit:hover {
-  background: linear-gradient(135deg, #081d3a 0%, #102C57 100%);
+  background: linear-gradient(135deg, #091122 0%, #0369a1 100%);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(11, 36, 71, 0.45);
+  box-shadow: 0 10px 24px rgba(2, 132, 199, 0.38);
 }
 
 .btn-login-submit:active {
@@ -2809,20 +2933,15 @@ body {
   }
 
   .login-brand-header {
-    gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: 4px;
   }
 
-  .login-logo-img {
-    height: 44px;
-  }
-
-  .login-firm-title {
-    font-size: 1.15rem;
+  .login-suma-lockup {
+    max-width: 250px;
   }
 
   .login-system-title {
-    font-size: 1.05rem;
+    font-size: 0.98rem;
   }
 
   .login-fiscal-card {
@@ -2873,6 +2992,10 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 8px;
+  }
+
+  .crumb-suma {
+    display: none;
   }
 
   .crumb-company {

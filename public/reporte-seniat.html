@@ -6,9 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0B2447">
   <title>LIBRO OFICIAL DE INVENTARIOS SENIAT (ART. 177 RISLR & ART. 32-35 CÓDIGO DE COMERCIO) - INVERSIONES DG 67, C.A.</title>
-  <link rel="icon" type="image/png" href="LOGOUCG.png">
-  <link rel="shortcut icon" type="image/png" href="LOGOUCG.png">
-  <link rel="apple-touch-icon" href="LOGOUCG.png">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230B2447'/><text x='50%' y='56%' font-family='sans-serif' font-weight='900' font-size='22' fill='%23ffffff' text-anchor='middle'>DG67</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
@@ -131,7 +129,7 @@
     /* Fiscal Header */
     .fiscal-header {
       display: grid;
-      grid-template-columns: 120px 1fr 200px;
+      grid-template-columns: 220px 1fr 220px;
       align-items: center;
       gap: 14px;
       padding-bottom: 10px;
@@ -139,10 +137,19 @@
       margin-bottom: 10px;
     }
 
-    .ucg-logo {
-      height: 52px;
-      width: auto;
-      object-fit: contain;
+    .client-header-badge {
+      border-right: 1px solid #cbd5e1;
+      padding-right: 10px;
+      font-size: 8px;
+      color: var(--text-muted);
+    }
+
+    .client-header-name {
+      font-size: 10px;
+      font-weight: 900;
+      color: var(--ucg-navy);
+      text-transform: uppercase;
+      line-height: 1.15;
     }
 
     .header-center { text-align: center; }
@@ -467,10 +474,12 @@
   <!-- Official Sheet -->
   <div class="report-sheet" id="print-area">
 
-    <!-- Fiscal Header -->
+    <!-- Fiscal Header (Exclusivo del Contribuyente) -->
     <header class="fiscal-header">
-      <div>
-        <img src="LOGOUCG.png" alt="Unión Contable Global" class="ucg-logo" onerror="this.style.display='none'">
+      <div class="client-header-badge">
+        <div class="client-header-name">INVERSIONES DG 67, C.A.</div>
+        <div style="font-family: monospace; font-weight: 800; color: #1e40af; margin-top: 2px;">RIF: J-50700865-7</div>
+        <div style="margin-top: 1px;">Libro Oficial de Inventarios</div>
       </div>
       <div class="header-center">
         <div class="seniat-flag">República Bolivariana de Venezuela • Ministerio del Poder Popular de Economía y Finanzas • SENIAT</div>
@@ -478,8 +487,8 @@
         <div class="report-legal-ref" id="doc-legal-sub">Método de Valoración: Costo Promedio Ponderado Móvil • Moneda de Curso Legal (Bolívares VES) • Art. 32–35 Código de Comercio</div>
       </div>
       <div class="header-agency">
-        <div class="agency-name">Unión Contable Global</div>
-        <div>Auditoría Tributaria & Mercantil</div>
+        <div class="agency-name">REGISTRO LEGAL ART. 177</div>
+        <div>Control Tributario &amp; Mercantil</div>
         <div style="font-size: 7.5px; margin-top: 2px;" id="lbl-fecha-emision">Emisión: --</div>
       </div>
     </header>
@@ -578,8 +587,8 @@
       </div>
 
       <div class="signature-card">
-        <div class="sig-name">UNIÓN CONTABLE GLOBAL</div>
-        <div class="sig-role">Revisado y Auditado por Contador Público</div>
+        <div class="sig-name">CONTADOR PÚBLICO COLEGIADO</div>
+        <div class="sig-role">Revisión Contable y Tributaria (C.P.C.)</div>
         <div style="margin-top: 14px; font-size: 7.5px; color: var(--text-muted);">C.P.C. N°: _____________________</div>
       </div>
 
