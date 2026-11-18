@@ -29,6 +29,15 @@ import {
   crearProductoAuditoria,
   toggleAuditadoProducto
 } from './lib/auditoria_punto_cero.js';
+import {
+  CATALOGO_CONCEPTOS_ISLR,
+  SERVICIO_A_CONCEPTOS,
+  normalizarTipoContribuyente,
+  resolverConceptoISLR,
+  syncCatalogoConceptosISLR,
+  obtenerDatosXmlISLR,
+  adecuarCodigosRetencionesPeriodo
+} from './functions/lib/islr_seniat.js';
 
 dotenv.config();
 
@@ -1253,7 +1262,23 @@ app.get('/api/proveedores', async (req, res) => {
       GROUP BY p.id
       ORDER BY p.razon_social ASC
     `);
-    res.json(result.rows);
+    res.json((result.rows || []).map(p => {
+      const resIslr = resolverConceptoISLR({
+        tipoServicio: p.tipo_servicio,
+        rif: p.rif,
+        tipoPersona: p.tipo_persona,
+        codigoActual: p.codigo_concepto_islr
+      });
+      return {
+        ...p,
+        tipo_persona: resIslr.tipo_contribuyente,
+        codigo_concepto_islr: (p.codigo_concepto_islr && p.codigo_concepto_islr !== '055') || resIslr.tipo_contribuyente === 'PJ-D'
+          ? (p.codigo_concepto_islr || resIslr.codigo_sugerido)
+          : resIslr.codigo_sugerido,
+        codigo_sugerido_seniat: resIslr.codigo_sugerido,
+        tarifa_sugerida_seniat: resIslr.concepto_sugerido.pct_tarifa
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1271,18 +1296,22 @@ app.post('/api/proveedores', async (req, res) => {
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
     const retencionNum = Number(porcentaje_retencion) || 0.0;
-    const cleanTipoPers = tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
+    const cleanTipoPers = normalizarTipoContribuyente(cleanRif, tipo_persona);
+    const resIslr = resolverConceptoISLR({ tipoServicio: cleanTipo, rif: cleanRif, tipoPersona: cleanTipoPers });
+    const cleanCodIslr = codigo_concepto_islr || resIslr.codigo_sugerido;
 
     const result = await db.execute({
       sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id`,
-      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, cleanTipoPers, direccion_fiscal || '', codigo_concepto_islr || '055']
+      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, cleanTipoPers, direccion_fiscal || '', cleanCodIslr]
     });
 
     res.json({
       success: true,
       id: result.rows?.[0]?.id,
+      codigo_concepto_islr: cleanCodIslr,
+      tipo_persona: cleanTipoPers,
       message: 'Proveedor registrado exitosamente en el sistema fiscal'
     });
   } catch (error) {
@@ -1301,6 +1330,9 @@ app.put('/api/proveedores/:id', async (req, res) => {
     const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
     const retencionNum = Number(porcentaje_retencion) || 0.0;
+    const resolvedTipoPers = normalizarTipoContribuyente(cleanRif, tipo_persona);
+    const resIslr = resolverConceptoISLR({ tipoServicio: cleanTipo, rif: cleanRif, tipoPersona: resolvedTipoPers });
+    const resolvedCodIslr = codigo_concepto_islr || resIslr.codigo_sugerido;
 
     await db.execute({
       sql: `UPDATE proveedores 
@@ -1311,11 +1343,11 @@ app.put('/api/proveedores/:id', async (req, res) => {
                 porcentaje_retencion = ?,
                 telefono = ?,
                 email = ?,
-                tipo_persona = COALESCE(?, tipo_persona),
+                tipo_persona = ?,
                 direccion_fiscal = COALESCE(?, direccion_fiscal),
-                codigo_concepto_islr = COALESCE(?, codigo_concepto_islr)
+                codigo_concepto_islr = ?
             WHERE id = ?`,
-      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, tipo_persona || null, direccion_fiscal !== undefined ? direccion_fiscal : null, codigo_concepto_islr || null, id]
+      args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, resolvedTipoPers, direccion_fiscal !== undefined ? direccion_fiscal : null, resolvedCodIslr, id]
     });
 
     // Cascade update to libro_compras
@@ -1346,12 +1378,17 @@ app.put('/api/proveedores/:id', async (req, res) => {
 app.patch('/api/proveedores/:id/clasificacion', async (req, res) => {
   try {
     const { id } = req.params;
-    const { tipo_servicio, aplica_inventario } = req.body;
+    const { tipo_servicio, aplica_inventario, codigo_concepto_islr } = req.body;
     const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
 
+    const provRes = await db.execute({ sql: "SELECT rif, tipo_persona FROM proveedores WHERE id = ?", args: [id] }).catch(() => ({ rows: [] }));
+    const provRow = provRes.rows[0] || {};
+    const resIslr = resolverConceptoISLR({ tipoServicio: tipo_servicio, rif: provRow.rif, tipoPersona: provRow.tipo_persona });
+    const codIslr = codigo_concepto_islr || resIslr.codigo_sugerido;
+
     await db.execute({
-      sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ? WHERE id = ?`,
-      args: [tipo_servicio, aplicaInvInt, id]
+      sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ?, tipo_persona = ?, codigo_concepto_islr = ? WHERE id = ?`,
+      args: [tipo_servicio, aplicaInvInt, resIslr.tipo_contribuyente, codIslr, id]
     });
 
     const nuevoEstatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
@@ -3965,8 +4002,8 @@ app.put('/api/islr/config', async (req, res) => {
 // 11.2 Catálogo de Conceptos Decreto 1.808 SENIAT
 app.get('/api/islr/conceptos', async (req, res) => {
   try {
-    const result = await db.execute("SELECT * FROM conceptos_islr_seniat ORDER BY codigo ASC");
-    res.json(result.rows);
+    await syncCatalogoConceptosISLR(db);
+    res.json(CATALOGO_CONCEPTOS_ISLR);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3976,9 +4013,41 @@ app.get('/api/islr/conceptos', async (req, res) => {
 app.get('/api/islr/proximo-numero', async (req, res) => {
   try {
     const periodo = req.query.periodo || '2026-10';
+    const libroCompraId = req.query.libro_compra_id;
+    const nroFactura = req.query.nro_factura;
+    const rif = req.query.rif;
+
+    if (libroCompraId || (nroFactura && rif)) {
+      let findSql = `
+        SELECT ri.id, ri.nro_comprobante, ri.periodo
+        FROM retenciones_islr ri
+        JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id
+        WHERE 1=1
+      `;
+      const findArgs = [];
+      if (libroCompraId) {
+        findSql += ` AND rid.libro_compra_id = ?`;
+        findArgs.push(libroCompraId);
+      } else {
+        findSql += ` AND rid.nro_factura = ? AND ri.sujeto_rif = ?`;
+        findArgs.push(nroFactura, rif);
+      }
+      findSql += ` ORDER BY ri.id ASC LIMIT 1`;
+
+      const existingRes = await db.execute({ sql: findSql, args: findArgs }).catch(() => ({ rows: [] }));
+      if (existingRes.rows.length > 0) {
+        const ex = existingRes.rows[0];
+        return res.json({
+          periodo: ex.periodo || periodo,
+          nro_comprobante: ex.nro_comprobante,
+          retencion_id: ex.id,
+          es_existente: true
+        });
+      }
+    }
+
     const yyyymm = String(periodo).replace('-', '').slice(0, 6);
 
-    // Buscar el máximo secuencial para el período o global
     const [resPer, resGlobal] = await Promise.all([
       db.execute({
         sql: "SELECT nro_comprobante FROM retenciones_islr WHERE nro_comprobante LIKE ? ORDER BY nro_comprobante DESC LIMIT 1",
@@ -3999,7 +4068,7 @@ app.get('/api/islr/proximo-numero', async (req, res) => {
     }
 
     const nroComprobante = `${yyyymm}${String(nextSeq).padStart(8, '0')}`;
-    res.json({ periodo, nro_comprobante: nroComprobante });
+    res.json({ periodo, nro_comprobante: nroComprobante, es_existente: false });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -4013,6 +4082,7 @@ app.get('/api/islr/facturas-disponibles', async (req, res) => {
       SELECT 
         lc.*,
         p.id as prov_id,
+        p.tipo_servicio as prov_tipo_servicio,
         COALESCE(p.tipo_persona, CASE WHEN lc.rif LIKE 'V%' OR lc.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
         COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
         COALESCE(p.email, '') as email,
@@ -4020,7 +4090,7 @@ app.get('/api/islr/facturas-disponibles', async (req, res) => {
         COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
         ri.nro_comprobante as comprobante_islr_emitido
       FROM libro_compras lc
-      LEFT JOIN proveedores p ON lc.rif = p.rif
+      LEFT JOIN proveedores p ON UPPER(REPLACE(REPLACE(lc.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', ''))
       LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
       LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
       WHERE 1=1
@@ -4036,7 +4106,26 @@ app.get('/api/islr/facturas-disponibles', async (req, res) => {
     }
     sql += ` ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
     const result = await db.execute({ sql, args });
-    res.json(result.rows);
+    const enriched = (result.rows || []).map(f => {
+      const tipoSrv = f.tipo_servicio && !['MERCANCIA_REPUESTOS', 'ACTIVO_FIJO_EQUIPOS', 'GASTOS_OPERATIVOS_VARIOS'].includes(f.tipo_servicio)
+        ? f.tipo_servicio
+        : (f.prov_tipo_servicio || f.tipo_servicio || 'CONTRATISTAS_OBRAS_SERVICIOS');
+      const resIslr = resolverConceptoISLR({
+        tipoServicio: tipoSrv,
+        rif: f.rif,
+        tipoPersona: f.tipo_persona,
+        codigoActual: f.codigo_concepto_islr
+      });
+      return {
+        ...f,
+        tipo_servicio_efectivo: resIslr.tipo_servicio,
+        tipo_persona: resIslr.tipo_contribuyente,
+        codigo_concepto_islr: resIslr.codigo_sugerido,
+        pct_tarifa_sugerida: resIslr.concepto_sugerido.pct_tarifa,
+        pct_base_sugerida: resIslr.concepto_sugerido.pct_base
+      };
+    });
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -4151,7 +4240,7 @@ app.post('/api/islr/comprobantes', async (req, res) => {
     const cfg = cfgRes.rows[0] || { valor_ut_bs: 43.00, factor_sustraendo: 83.3334 };
     const utBs = Number(valor_ut_aplicado || cfg.valor_ut_bs || 43.00);
     const factorSust = Number(cfg.factor_sustraendo || 83.3334);
-    const tipoPersona = sujeto_tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
+    const tipoPersona = normalizarTipoContribuyente(cleanRif, sujeto_tipo_persona);
 
     // Calcular totales y validar cada línea
     let totDocBs = 0;
@@ -4282,11 +4371,11 @@ app.post('/api/islr/comprobantes', async (req, res) => {
       });
     }
 
-    // Actualizar email y dirección del proveedor si aplica
+    // Actualizar email, dirección y código ISLR del proveedor si aplica
     if (cleanRif) {
       await db.execute({
-        sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ? WHERE rif = ?`,
-        args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, cleanRif]
+        sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ?, codigo_concepto_islr = ? WHERE UPPER(REPLACE(REPLACE(rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(?, '-', ''), ' ', ''))`,
+        args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, codigoPrincipal, cleanRif]
       });
     }
 
@@ -4314,77 +4403,101 @@ app.delete('/api/islr/comprobantes/:id', async (req, res) => {
   }
 });
 
-// 11.9 Exportación Oficial XML SENIAT para Declaración Mensual de Retenciones ISLR
+// 11.9 Previsualización, Auditoría y Validación XSD XML SENIAT
+app.get('/api/islr/xml-preview', async (req, res) => {
+  try {
+    const periodo = req.query.periodo || '2026-10';
+    const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
+    const [data, cerrado] = await Promise.all([
+      obtenerDatosXmlISLR(db, targetPeriodo),
+      isPeriodoDeclarado(targetPeriodo, db)
+    ]);
+    res.json({
+      ...data,
+      is_cerrado: cerrado,
+      servicio_a_conceptos: SERVICIO_A_CONCEPTOS
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.9b Exportación Oficial XML SENIAT para Declaración Mensual de Retenciones ISLR
 app.get('/api/islr/export-xml', async (req, res) => {
   try {
-    const periodo = req.query.periodo || '2026-09';
-    const yyyymm = String(periodo).replace('-', '');
+    const periodo = req.query.periodo || '2026-10';
+    const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
+    const data = await obtenerDatosXmlISLR(db, targetPeriodo);
 
-    const [cfgRes, itemsRes] = await Promise.all([
-      db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1"),
-      db.execute({
-        sql: `
-          SELECT 
-            r.nro_comprobante,
-            r.periodo,
-            r.sujeto_rif,
-            r.sujeto_razon_social,
-            d.fecha_factura,
-            d.nro_factura,
-            d.nro_control,
-            d.codigo_concepto,
-            d.base_imponible_bs,
-            d.pct_tarifa,
-            d.impuesto_retenido_bs
-          FROM retenciones_islr r
-          JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
-          WHERE r.periodo = ?
-          ORDER BY r.nro_comprobante ASC, d.nro_operacion ASC
-        `,
-        args: [periodo]
-      })
-    ]);
-
-    const cfg = cfgRes.rows[0] || { agente_rif: 'J-50700865-7' };
-    const cleanAgenteRif = String(cfg.agente_rif || 'J507008657').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-
-    const xmlLines = [
-      `<?xml version="1.0" encoding="ISO-8859-1"?>`,
-      `<RelacionRetencionesISLR RifAgente="${cleanAgenteRif}" Periodo="${yyyymm}">`
-    ];
-
-    for (const row of itemsRes.rows) {
-      const cleanRifRetenido = String(row.sujeto_rif || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      const cleanFactura = String(row.nro_factura || '0').replace(/[^A-Z0-9]/gi, '').slice(0, 20) || '0';
-      const cleanControl = String(row.nro_control || 'NA').replace(/[^A-Z0-9]/gi, '').slice(0, 20) || 'NA';
-      const codConcepto = String(row.codigo_concepto || '055').padStart(3, '0');
-      const montoOp = Number(row.base_imponible_bs || 0).toFixed(2);
-      const pctRet = Number(row.pct_tarifa || 0).toFixed(2);
-
-      // Fecha en formato DD/MM/AAAA exigido por el validador XML del SENIAT
-      let fechaOp = String(row.fecha_factura || '');
-      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaOp)) {
-        const [y, m, d] = fechaOp.split('-');
-        fechaOp = `${d}/${m}/${y}`;
-      }
-
-      xmlLines.push(`  <DetalleRetencion>`);
-      xmlLines.push(`    <RifRetenido>${cleanRifRetenido}</RifRetenido>`);
-      xmlLines.push(`    <NumeroFactura>${cleanFactura}</NumeroFactura>`);
-      xmlLines.push(`    <NumeroControl>${cleanControl}</NumeroControl>`);
-      xmlLines.push(`    <FechaOperacion>${fechaOp}</FechaOperacion>`);
-      xmlLines.push(`    <CodigoConcepto>${codConcepto}</CodigoConcepto>`);
-      xmlLines.push(`    <MontoOperacion>${montoOp}</MontoOperacion>`);
-      xmlLines.push(`    <PorcentajeRetencion>${pctRet}</PorcentajeRetencion>`);
-      xmlLines.push(`  </DetalleRetencion>`);
-    }
-
-    xmlLines.push(`</RelacionRetencionesISLR>`);
-    const xmlContent = xmlLines.join('\n');
-
-    res.setHeader('Content-Disposition', `attachment; filename="RELACION_ISLR_${cleanAgenteRif}_${yyyymm}.xml"`);
+    res.setHeader('Content-Disposition', `attachment; filename="XML_relacionRetencionesISLR_${data.yyyymm}.xml"`);
     res.setHeader('Content-Type', 'application/xml; charset=ISO-8859-1');
-    res.send(xmlContent);
+    res.send(data.xml);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.9c Adecuar Códigos ISLR según Tipo de Servicio y Tipo de Contribuyente
+app.post('/api/islr/adecuar-codigos', async (req, res) => {
+  try {
+    const targetPeriodo = req.body?.periodo || '2026-10';
+    if (await isPeriodoDeclarado(targetPeriodo, db)) {
+      return res.status(403).json({
+        error: `El período fiscal ${targetPeriodo} se encuentra DECLARADO y CERRADO formalmente ante el SENIAT (Forma 30). No se permite modificar comprobantes emitidos.`
+      });
+    }
+    const resAdec = await adecuarCodigosRetencionesPeriodo(db, targetPeriodo);
+    res.json({
+      success: true,
+      actualizadas: resAdec.actualizadas,
+      message: resAdec.actualizadas > 0
+        ? `Se adecuaron ${resAdec.actualizadas} línea(s) de retención según su Tipo de Servicio y Tipo de Contribuyente.`
+        : 'Todas las retenciones del período ya cumplen exactamente con su Tipo de Servicio y Contribuyente.',
+      preview: { ...resAdec.previewActualizado, is_cerrado: false }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11.9d Datos JSON para exportación Excel ISLR desde cliente
+app.get('/api/islr/export-excel-data', async (req, res) => {
+  try {
+    const { periodo } = req.query;
+    let sql = `
+      SELECT 
+        r.nro_comprobante as "N° COMPROBANTE (14 DÍGITOS)",
+        r.periodo as "PERÍODO FISCAL",
+        r.fecha_emision as "FECHA EMISIÓN",
+        r.hora_emision as "HORA EMISIÓN",
+        r.sujeto_rif as "RIF SUJETO RETENIDO",
+        r.sujeto_razon_social as "RAZÓN SOCIAL PROVEEDOR",
+        r.sujeto_tipo_persona as "TIPO PERSONA",
+        r.sujeto_email as "CORREO OBLIGATORIO (PA 00093)",
+        d.nro_operacion as "N° OP",
+        d.fecha_factura as "FECHA FACTURA",
+        d.nro_factura as "N° FACTURA",
+        d.nro_control as "N° CONTROL",
+        d.codigo_concepto as "CÓD. CONCEPTO",
+        d.descripcion_concepto as "DESCRIPCIÓN CONCEPTO",
+        d.monto_total_bs as "MONTO TOTAL DOC. (BS)",
+        d.base_imponible_bs as "BASE IMPONIBLE (BS)",
+        d.pct_base as "% BASE",
+        d.pct_tarifa as "% TARIFA ISLR",
+        d.sustraendo_bs as "SUSTRAENDO (BS)",
+        d.impuesto_retenido_bs as "ISLR RETENIDO (BS)"
+      FROM retenciones_islr r
+      JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
+      WHERE 1=1
+    `;
+    const args = [];
+    if (periodo && periodo !== 'TODOS') {
+      sql += ` AND r.periodo = ?`;
+      args.push(periodo);
+    }
+    sql += ` ORDER BY r.periodo ASC, r.nro_comprobante ASC, d.nro_operacion ASC`;
+    const result = await db.execute({ sql, args });
+    res.json(result.rows || []);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -28,7 +28,7 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="/extractor-compras.js?v=20261109_v12"></script>
+  <script src="/extractor-compras.js?v=20261117_v1"></script>
 </head>
 
 <body>
@@ -2538,9 +2538,18 @@
                 <option value="TODOS">Todos los Tipos de Servicio</option>
                 <option value="MERCANCIA_REPUESTOS">📦 Mercancía / Repuestos</option>
                 <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Asesoría</option>
+                <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles</option>
+                <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios</option>
                 <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas / Máquinas Fiscales</option>
+                <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional</option>
+                <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento Inmuebles</option>
+                <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento Bienes Muebles</option>
+                <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles</option>
+                <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda</option>
+                <option value="PUBLICIDAD_RADIO">📻 Publicidad en Radio</option>
                 <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
                 <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Alimentación / Consumo</option>
+                <option value="ACTIVO_FIJO_EQUIPOS">🏭 Activo Fijo y Mobiliario</option>
                 <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
               </select>
             </div>
@@ -2987,11 +2996,19 @@
               <select id="prov-panel-tipo" onchange="filterProveedoresPanel()">
                 <option value="TODOS">Todos los Tipos de Servicio</option>
                 <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
-                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (053/055)</option>
+                <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (002/004)</option>
+                <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas y Servicios Generales (053/055)</option>
+                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales (053/055)</option>
+                <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional (071/072)</option>
+                <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento de Inmuebles (057/058)</option>
+                <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento de Bienes Muebles (061/062)</option>
+                <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles (018/019)</option>
+                <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda (083/084)</option>
+                <option value="PUBLICIDAD_RADIO">📻 Publicidad Radio (086)</option>
                 <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
                 <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
-                <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+                <option value="ACTIVO_FIJO_EQUIPOS">🏭 Activo Fijo y Mobiliario</option>
                 <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
               </select>
             </div>
@@ -3274,11 +3291,19 @@
                 <select id="prov-filter-tipo" onchange="filterProveedoresFiscalTable()">
                   <option value="TODOS">Todos los Tipos de Servicio</option>
                   <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Honorarios</option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
+                  <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles</option>
+                  <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas y Servicios Generales</option>
                   <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Máquinas Fiscales y Sistemas</option>
+                  <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional</option>
+                  <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento de Inmuebles</option>
+                  <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento Bienes Muebles</option>
+                  <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles</option>
+                  <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda</option>
+                  <option value="PUBLICIDAD_RADIO">📻 Publicidad en Radio</option>
                   <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
                   <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
-                  <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+                  <option value="ACTIVO_FIJO_EQUIPOS">🏭 Activo Fijo y Mobiliario</option>
                   <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
                 </select>
               </div>
@@ -3983,13 +4008,19 @@
                   Gasto:</label>
                 <select id="m-comp-tipo" class="form-control">
                   <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario Tienda)</option>
-                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (Unión Contable
-                    Global)</option>
-                  <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas, Software y Máquinas Fiscales</option>
-                  <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento de Instalaciones
-                  </option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (053/055)</option>
+                  <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios Profesionales No Mercantiles (002/004)</option>
+                  <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (053/055)</option>
+                  <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas, Software y Máquinas Fiscales (053/055)</option>
+                  <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional (071/072)</option>
+                  <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento de Inmuebles (057/058)</option>
+                  <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento Bienes Muebles (061/062)</option>
+                  <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles (018/019)</option>
+                  <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda (083/084)</option>
+                  <option value="PUBLICIDAD_RADIO">📻 Publicidad en Emisoras de Radio (086)</option>
+                  <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento de Instalaciones</option>
                   <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
-                  <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo, Mobiliario y Equipos</option>
+                  <option value="ACTIVO_FIJO_EQUIPOS">🏭 Activo Fijo, Mobiliario y Equipos</option>
                   <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos Deducibles</option>
                 </select>
               </div>
@@ -4274,7 +4305,8 @@
           <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
               <label>RIF Fiscal:</label>
-              <input type="text" id="m-prov-rif" class="form-control" placeholder="J-12345678-9" required>
+              <input type="text" id="m-prov-rif" class="form-control" placeholder="J-12345678-9"
+                onchange="actualizarSugerenciaIslrProveedor(true)" required>
             </div>
             <div class="form-group">
               <label>Razón Social:</label>
@@ -4285,14 +4317,22 @@
 
           <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
-              <label>Clasificación de Servicio:</label>
-              <select id="m-prov-tipo" class="form-control">
-                <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
-                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales</option>
-                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+              <label>Clasificación de Servicio / Actividad (Decreto 1.808):</label>
+              <select id="m-prov-tipo" class="form-control" onchange="actualizarSugerenciaIslrProveedor(true)">
+                <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario - No retiene ISLR)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría Administrativa (053/055)</option>
+                <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios Profesionales No Mercantiles (002/004)</option>
+                <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Ejecución Obras y Servicios (053/055)</option>
+                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos, Sistemas y Máquinas Fiscales (053/055)</option>
+                <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional (071/072)</option>
+                <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento de Inmuebles (057/058)</option>
+                <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento de Bienes Muebles / Equipos (061/062)</option>
+                <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles (018/019)</option>
+                <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda (083/084)</option>
+                <option value="PUBLICIDAD_RADIO">📻 Publicidad en Emisoras de Radio (086)</option>
+                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento Menor</option>
                 <option value="GASTOS_CONSUMO_ALIMENTOS">☕ Consumo y Alimentación</option>
-                <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activo Fijo y Mobiliario</option>
+                <option value="ACTIVO_FIJO_EQUIPOS">🏭 Activo Fijo y Mobiliario</option>
                 <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos</option>
               </select>
             </div>
@@ -4318,15 +4358,22 @@
             </div>
           </div>
 
-          <div class="form-grid" style="grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 12px;">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1.4fr; gap: 14px; margin-bottom: 12px;">
             <div class="form-group">
-              <label>Tipo de Persona (Decreto 1.808):</label>
-              <select id="m-prov-tipo-persona" class="form-control">
+              <label>Tipo de Contribuyente (Decreto 1.808):</label>
+              <select id="m-prov-tipo-persona" class="form-control" onchange="actualizarSugerenciaIslrProveedor(true)">
                 <option value="PJ-D">PJ-D • Persona Jurídica Domiciliada</option>
                 <option value="PN-R">PN-R • Persona Natural Residente</option>
                 <option value="PN-NR">PN-NR • Persona Natural No Residente</option>
                 <option value="PJ-ND">PJ-ND • Persona Jurídica No Domiciliada</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label>Código Concepto ISLR (SENIAT XML):</label>
+              <select id="m-prov-codigo-islr" class="form-control">
+                <option value="">-- Automático / No Aplica --</option>
+              </select>
+              <small id="m-prov-islr-preview" style="display:block; margin-top:4px; font-size:0.72rem; color:#0B2447; font-weight:700;"></small>
             </div>
             <div class="form-group">
               <label>Dirección / Domicilio Fiscal:</label>
@@ -5156,15 +5203,15 @@
               <div class="form-group" style="margin:0;">
                 <label>N° de RIF (V/E/J/G/P-XXXXXXXX-X) *:</label>
                 <input type="text" id="m-islr-rif" class="form-control font-mono font-bold" placeholder="J-50714716-9"
-                  required onblur="detectarTipoPersonaPorRifISLR(this.value)">
+                  required onblur="detectarTipoPersonaPorRifISLR(this.value)" onchange="detectarTipoPersonaPorRifISLR(this.value)">
               </div>
               <div class="form-group" style="margin:0;">
                 <label>Nombre o Razón Social del Proveedor *:</label>
                 <input type="text" id="m-islr-razon" class="form-control" placeholder="UNION GLOBAL 333, C.A." required>
               </div>
               <div class="form-group" style="margin:0;">
-                <label>Tipo de Persona (Decreto 1.808) *:</label>
-                <select id="m-islr-tipo-persona" class="form-control font-bold" onchange="recalcularLineasISLR()"
+                <label>Tipo de Contribuyente (Decreto 1.808) *:</label>
+                <select id="m-islr-tipo-persona" class="form-control font-bold" onchange="aplicarServicioYContribuyenteEnModalISLR(true)"
                   required>
                   <option value="PJ-D">PJ-D • Persona Jurídica Domiciliada</option>
                   <option value="PN-R">PN-R • Persona Natural Residente (Con Sustraendo)</option>
@@ -5174,20 +5221,37 @@
               </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1.6fr 1.4fr 1.2fr; gap: 12px;">
+            <div style="display: grid; grid-template-columns: 1.4fr 1.2fr 1.3fr 1.1fr; gap: 10px;">
               <div class="form-group" style="margin:0;">
-                <label>Dirección / Domicilio Fiscal del Sujeto Retenido *:</label>
+                <label>Dirección / Domicilio Fiscal *:</label>
                 <input type="text" id="m-islr-direccion" class="form-control"
                   placeholder="Dirección fiscal completa del proveedor" required>
               </div>
               <div class="form-group" style="margin:0;">
-                <label style="color: #0B2447; font-weight: 800;">📧 Correo Electrónico Proveedor (OBLIGATORIO PA 00093)
-                  *:</label>
+                <label style="color: #0B2447; font-weight: 800;">📧 Correo Electrónico Proveedor *:</label>
                 <input type="email" id="m-islr-email" class="form-control" placeholder="facturacion@proveedor.com"
                   style="border: 1.5px solid #19A7CE; background: #f0f9ff; font-weight: 700;" required>
               </div>
               <div class="form-group" style="margin:0;">
-                <label>Concepto General de la Retención:</label>
+                <label style="color: #0B2447; font-weight: 800;">⚖️ Tipo de Servicio (Auto-Código XML):</label>
+                <select id="m-islr-tipo-servicio" class="form-control font-bold" onchange="aplicarServicioYContribuyenteEnModalISLR(true)"
+                  style="border: 1.5px solid #3F5B8F; background: #ffffff;">
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Asesoría Contable / Admin (053/055)</option>
+                  <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (002/004)</option>
+                  <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (053/055)</option>
+                  <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos / Sistemas (053/055)</option>
+                  <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional (071/072)</option>
+                  <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento de Inmuebles (057/058)</option>
+                  <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento Bienes Muebles (061/062)</option>
+                  <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles (018/019)</option>
+                  <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda (083/084)</option>
+                  <option value="PUBLICIDAD_RADIO">📻 Publicidad en Radio (086)</option>
+                  <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Mantenimiento / Contratistas (053/055)</option>
+                  <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Servicios Operativos (053/055)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Concepto General en Comprobante:</label>
                 <input type="text" id="m-islr-concepto-general" class="form-control" value="ASESORIA ADMINISTRATIVA"
                   required>
               </div>
@@ -5296,6 +5360,121 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL: GENERADOR, AUDITORÍA Y DESCARGA XML OFICIAL SENIAT (ISLR)       -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-xml-seniat-islr" style="display: none;">
+    <div class="modal-box" style="max-width: 1180px; width: 96%; max-height: 92vh; overflow-y: auto; border-top: 4px solid #0B2447;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0B2447 0%, #3F5B8F 100%); color: #FFFFFF;">
+        <div>
+          <h3 style="color: #FFFFFF; font-weight: 800; margin: 0;">📄 Declaración Mensual XML SENIAT — Relación de Retenciones ISLR</h3>
+          <div style="font-size: 0.76rem; color: #BAE6FD; margin-top: 2px;">
+            Esquema XSD Portal SENIAT (ISO-8859-1) • Decreto N° 1.808 según Tipo de Servicio y Tipo de Contribuyente
+          </div>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF;" onclick="closeModal('modal-xml-seniat-islr')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <!-- Barra Superior de Período y Agente -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <span style="font-size: 0.72rem; font-weight: 800; color: #475569; text-transform: uppercase;">Período XML:</span>
+              <select id="m-xml-periodo-select" class="form-control" style="display: inline-block; width: auto; min-width: 170px; margin-left: 6px; padding: 4px 10px; font-weight: 800;" onchange="abrirModalXMLSeniatISLR(this.value)"></select>
+            </div>
+            <div style="font-size: 0.8rem; color: #0B2447;">
+              Agente: <strong id="xml-agente-info">INVERSIONES DG 67, C.A. • RIF XML: J507008657</strong>
+            </div>
+          </div>
+          <div id="xml-periodo-status-badge"></div>
+        </div>
+
+        <!-- KPIs Ejecutivos XML -->
+        <div class="kpi-grid" style="margin-bottom: 14px;">
+          <div class="kpi-card" style="border-top: 3px solid #0B2447;">
+            <div class="kpi-label">OPERACIONES XML (&lt;DetalleRetencion&gt;)</div>
+            <div class="kpi-value font-mono" id="xml-kpi-lineas" style="color: #0B2447;">0</div>
+            <div class="sub-ref-usd" id="xml-kpi-yyyymm">Periodo AAAAMM</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #3F5B8F;">
+            <div class="kpi-label">TOTAL MONTO OPERACIÓN (BASE XML)</div>
+            <div class="kpi-value font-mono" id="xml-kpi-monto-op" style="color: #3F5B8F;">Bs. 0,00</div>
+            <div class="sub-ref-usd" id="xml-kpi-monto-op-usd">$0.00 USD</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #19A7CE;">
+            <div class="kpi-label">TOTAL ISLR RETENIDO</div>
+            <div class="kpi-value font-mono" id="xml-kpi-retenido" style="color: #0B2447;">Bs. 0,00</div>
+            <div class="sub-ref-usd" id="xml-kpi-retenido-usd">$0.00 USD</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #10b981;">
+            <div class="kpi-label">VALIDACIÓN ESQUEMA XSD SENIAT</div>
+            <div class="kpi-value" id="xml-kpi-xsd" style="font-size: 0.95rem;">Evaluando...</div>
+            <div class="sub-ref-usd" id="xml-kpi-legal-sub">Auditoría Decreto 1.808</div>
+          </div>
+        </div>
+
+        <!-- Alertas de Validación XSD / Consistencia Legal / Facturas Pendientes -->
+        <div id="xml-alertas-container" style="margin-bottom: 14px;"></div>
+
+        <!-- Barra de Resumen y Acciones -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+          <div id="xml-resumen-conceptos" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-adecuar-codigos-xml" class="btn btn-sm"
+              style="background: #f59e0b; color: #FFFFFF; font-weight: 800; border: none;"
+              onclick="adecuarCodigosXMLPeriodo()">
+              🔧 Adecuar Códigos al Servicio y Contribuyente
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="copiarCodigoXMLSeniat()">
+              📋 Copiar XML
+            </button>
+            <button type="button" id="btn-descargar-xml-seniat" class="btn btn-sm"
+              style="background: #0B2447; color: #FFFFFF; font-weight: 800; border: 1px solid #19A7CE;"
+              onclick="descargarArchivoXMLSeniat()">
+              ⬇️ Descargar XML Oficial SENIAT
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla de Auditoría de Líneas XML -->
+        <div class="panel-card table-panel" style="margin-bottom: 14px;">
+          <div class="table-responsive" style="max-height: 290px; overflow-y: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>N° COMPROBANTE</th>
+                  <th>SUJETO RETENIDO / RIF XML</th>
+                  <th class="text-center">CONTRIB.</th>
+                  <th>TIPO DE SERVICIO</th>
+                  <th class="text-center">CÓD. XML</th>
+                  <th>FACTURA / CONTROL (XML)</th>
+                  <th class="text-center">FECHA OP.</th>
+                  <th class="text-right">MONTO OP. (BS)</th>
+                  <th class="text-center">% RET</th>
+                  <th class="text-center">ESTADO XSD / LEGAL</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-xml-seniat-detalles">
+                <tr><td colspan="10" class="text-center">Cargando auditoría XML...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Visor del Código Fuente XML SENIAT -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="font-size: 0.78rem; font-weight: 800; color: #0B2447; margin: 0;">
+              Vista Previa del Archivo XML Oficial (<code>&lt;RelacionRetencionesISLR&gt;</code> • Codificación ISO-8859-1):
+            </label>
+            <span id="xml-filename-label" class="font-mono" style="font-size: 0.75rem; color: #475569; font-weight: 700;"></span>
+          </div>
+          <pre id="xml-seniat-code-preview" style="background: #0f172a; color: #e2e8f0; border: 1.5px solid #334155; border-radius: 8px; padding: 12px 14px; font-size: 0.76rem; line-height: 1.45; max-height: 240px; overflow: auto; margin: 0; white-space: pre;"></pre>
+        </div>
       </div>
     </div>
   </div>
@@ -5835,7 +6014,18 @@
               <select id="det-modal-tipo-servicio" class="form-control" style="font-size: 0.82rem; font-weight: 800;" onchange="sincronizarDetalleHaciaStaging('tipo_servicio', this.value)">
                 <option value="MERCANCIA_REPUESTOS">📦 Mercancía / Repuestos (Afecta Stock e Inventario)</option>
                 <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activos Fijos / Equipos (Solo Crédito Fiscal)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">📑 Gastos Operativos / Servicios (Crédito Fiscal y Gasto)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Asesoría (ISLR 053/055)</option>
+                <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (ISLR 002/004)</option>
+                <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (ISLR 053/055)</option>
+                <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos y Sistemas (ISLR 053/055)</option>
+                <option value="FLETES_Y_TRANSPORTE">🚚 Fletes y Transporte Nacional (ISLR 071/072)</option>
+                <option value="ARRENDAMIENTO_INMUEBLES">🏢 Arrendamiento Inmuebles (ISLR 057/058)</option>
+                <option value="ARRENDAMIENTO_MUEBLES">🔩 Arrendamiento Muebles (ISLR 061/062)</option>
+                <option value="COMISIONES_MERCANTILES">🤝 Comisiones Mercantiles (ISLR 018/019)</option>
+                <option value="PUBLICIDAD_Y_PROPAGANDA">📣 Publicidad y Propaganda (ISLR 083/084)</option>
+                <option value="PUBLICIDAD_RADIO">📻 Publicidad Radio (ISLR 086)</option>
+                <option value="GASTOS_MANTENIMIENTO_FERRETERIA">🔧 Ferretería y Mantenimiento</option>
+                <option value="GASTOS_OPERATIVOS_VARIOS">📑 Otros Gastos Operativos / Servicios</option>
               </select>
             </div>
 
@@ -5898,7 +6088,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261111_v1"></script>
+  <script src="app.js?v=20261117_v1"></script>
 </body>
 
 </html>

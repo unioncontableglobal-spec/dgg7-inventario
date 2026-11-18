@@ -19,6 +19,15 @@ import {
   crearProductoAuditoria,
   toggleAuditadoProducto
 } from '../lib/auditoria_punto_cero.js';
+import {
+  CATALOGO_CONCEPTOS_ISLR,
+  SERVICIO_A_CONCEPTOS,
+  normalizarTipoContribuyente,
+  resolverConceptoISLR,
+  syncCatalogoConceptosISLR,
+  obtenerDatosXmlISLR,
+  adecuarCodigosRetencionesPeriodo
+} from '../lib/islr_seniat.js';
 
 const TURSO_URL = 'libsql://inventario-dg67-unioncontableglobal-spec.aws-us-east-1.turso.io';
 const TURSO_AUTH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI3NzEzNTEsImlkIjoiMDFhMTY5N2YtYTAwMS03MjNlLWI5NTYtNWExYjA0Yjk2OGI5Iiwia2lkIjoiUVl1M2JpWWk5QUZtZXY4TmZod0x4Z0FDMG9RQ0VGNXBfemt5MmxMZHdkVSIsInJpZCI6ImM4YzJkOTQzLTFmMjctNDBkYi1iNTk1LTI1OTAyNGRkYzUzOSJ9.kYMvoWFHgysur-aq2okfAawMCpTmjCa8wld7JH9kkN9esWS9sZSRNMU0RfnUABAr9mq_WHBw2_ps2LueRoH-Aw';
@@ -409,7 +418,24 @@ export async function onRequest(context) {
         GROUP BY p.id
         ORDER BY p.razon_social ASC
       `);
-      return jsonResponse(res.rows);
+      const normalizedRows = (res.rows || []).map(p => {
+        const resIslr = resolverConceptoISLR({
+          tipoServicio: p.tipo_servicio,
+          rif: p.rif,
+          tipoPersona: p.tipo_persona,
+          codigoActual: p.codigo_concepto_islr
+        });
+        return {
+          ...p,
+          tipo_persona: resIslr.tipo_contribuyente,
+          codigo_concepto_islr: (p.codigo_concepto_islr && p.codigo_concepto_islr !== '055') || resIslr.tipo_contribuyente === 'PJ-D'
+            ? (p.codigo_concepto_islr || resIslr.codigo_sugerido)
+            : resIslr.codigo_sugerido,
+          codigo_sugerido_seniat: resIslr.codigo_sugerido,
+          tarifa_sugerida_seniat: resIslr.concepto_sugerido.pct_tarifa
+        };
+      });
+      return jsonResponse(normalizedRows);
     }
 
     if (path === '/api/proveedores' && method === 'POST') {
@@ -418,29 +444,39 @@ export async function onRequest(context) {
       const cleanRazon = String(b.razon_social || '').trim();
       if (!cleanRif || !cleanRazon) return jsonResponse({ error: 'RIF y Razón Social son requeridos' }, 400);
 
+      const tipoSrv = b.tipo_servicio || 'MERCANCIA_REPUESTOS';
+      const tipoPers = normalizarTipoContribuyente(cleanRif, b.tipo_persona);
+      const resIslr = resolverConceptoISLR({ tipoServicio: tipoSrv, rif: cleanRif, tipoPersona: tipoPers });
+      const codIslr = b.codigo_concepto_islr || resIslr.codigo_sugerido;
+
       const ins = await db.execute({
         sql: `INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
         args: [
-          cleanRif, cleanRazon, b.tipo_servicio || 'MERCANCIA_REPUESTOS',
+          cleanRif, cleanRazon, tipoSrv,
           b.aplica_inventario ? 1 : 0, Number(b.porcentaje_retencion) || 0.0,
           b.telefono || null, b.email || null,
-          b.tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D'),
-          b.direccion_fiscal || '', b.codigo_concepto_islr || '055'
+          tipoPers,
+          b.direccion_fiscal || '', codIslr
         ]
       });
-      return jsonResponse({ success: true, id: ins.rows[0]?.id, message: 'Proveedor creado' });
+      return jsonResponse({ success: true, id: ins.rows[0]?.id, message: 'Proveedor creado', codigo_concepto_islr: codIslr, tipo_persona: tipoPers });
     }
 
     if (path.startsWith('/api/proveedores/') && path.endsWith('/clasificacion') && method === 'PATCH') {
       const id = path.replace('/api/proveedores/', '').replace('/clasificacion', '');
       const b = await request.json();
-      const { tipo_servicio, aplica_inventario } = b;
+      const { tipo_servicio, aplica_inventario, codigo_concepto_islr } = b;
       const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
 
+      const provActualRes = await db.execute({ sql: "SELECT rif, tipo_persona FROM proveedores WHERE id = ?", args: [id] }).catch(() => ({ rows: [] }));
+      const provActual = provActualRes.rows[0] || {};
+      const resIslr = resolverConceptoISLR({ tipoServicio: tipo_servicio, rif: provActual.rif, tipoPersona: provActual.tipo_persona });
+      const codIslr = codigo_concepto_islr || resIslr.codigo_sugerido;
+
       await db.execute({
-        sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ? WHERE id = ?`,
-        args: [tipo_servicio, aplicaInvInt, id]
+        sql: `UPDATE proveedores SET tipo_servicio = ?, aplica_inventario = ?, tipo_persona = ?, codigo_concepto_islr = ? WHERE id = ?`,
+        args: [tipo_servicio, aplicaInvInt, resIslr.tipo_contribuyente, codIslr, id]
       });
 
       const nuevoEstatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
@@ -461,7 +497,7 @@ export async function onRequest(context) {
 
       return jsonResponse({
         success: true,
-        message: `Proveedor ID #${id} clasificado como ${aplicaInvInt ? 'Proveedor de Mercancía' : 'Gasto/Servicio'}`
+        message: `Proveedor ID #${id} clasificado como ${aplicaInvInt ? 'Proveedor de Mercancía' : 'Gasto/Servicio'} (Cód. ISLR ${codIslr})`
       });
     }
 
@@ -475,6 +511,10 @@ export async function onRequest(context) {
       const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
       const retencionNum = Number(porcentaje_retencion) || 0.0;
 
+      const resolvedTipoPers = normalizarTipoContribuyente(cleanRif, tipo_persona);
+      const resIslr = resolverConceptoISLR({ tipoServicio: cleanTipo, rif: cleanRif, tipoPersona: resolvedTipoPers });
+      const resolvedCodIslr = codigo_concepto_islr || resIslr.codigo_sugerido;
+
       await db.execute({
         sql: `UPDATE proveedores 
               SET rif = COALESCE(?, rif),
@@ -484,11 +524,11 @@ export async function onRequest(context) {
                   porcentaje_retencion = ?,
                   telefono = ?,
                   email = ?,
-                  tipo_persona = COALESCE(?, tipo_persona),
+                  tipo_persona = ?,
                   direccion_fiscal = COALESCE(?, direccion_fiscal),
-                  codigo_concepto_islr = COALESCE(?, codigo_concepto_islr)
+                  codigo_concepto_islr = ?
               WHERE id = ?`,
-        args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, tipo_persona || null, direccion_fiscal !== undefined ? direccion_fiscal : null, codigo_concepto_islr || null, id]
+        args: [cleanRif, cleanRazon, cleanTipo, aplicaInvInt, retencionNum, telefono || null, email || null, resolvedTipoPers, direccion_fiscal !== undefined ? direccion_fiscal : null, resolvedCodIslr, id]
       });
 
       const nuevoEstatus = aplicaInvInt === 0 ? 'NO_APLICA_GASTO' : 'NO_CONCILIADO';
@@ -3001,8 +3041,8 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/islr/conceptos' && method === 'GET') {
-      const res = await db.execute("SELECT * FROM conceptos_retencion_islr WHERE activo = 1 ORDER BY codigo ASC");
-      return jsonResponse(res.rows);
+      await syncCatalogoConceptosISLR(db);
+      return jsonResponse(CATALOGO_CONCEPTOS_ISLR);
     }
 
     if (path === '/api/islr/comprobantes' && method === 'GET') {
@@ -3086,6 +3126,7 @@ export async function onRequest(context) {
         SELECT 
           lc.*,
           p.id as prov_id,
+          p.tipo_servicio as prov_tipo_servicio,
           COALESCE(p.tipo_persona, CASE WHEN lc.rif LIKE 'V%' OR lc.rif LIKE 'E%' THEN 'PN-R' ELSE 'PJ-D' END) as tipo_persona,
           COALESCE(p.direccion_fiscal, '') as direccion_fiscal,
           COALESCE(p.email, '') as email,
@@ -3093,7 +3134,7 @@ export async function onRequest(context) {
           COALESCE(p.codigo_concepto_islr, '055') as codigo_concepto_islr,
           ri.nro_comprobante as comprobante_islr_emitido
         FROM libro_compras lc
-        LEFT JOIN proveedores p ON lc.rif = p.rif
+        LEFT JOIN proveedores p ON UPPER(REPLACE(REPLACE(lc.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', ''))
         LEFT JOIN retenciones_islr_detalles rid ON rid.libro_compra_id = lc.id
         LEFT JOIN retenciones_islr ri ON ri.id = rid.retencion_id
         WHERE 1=1
@@ -3109,7 +3150,26 @@ export async function onRequest(context) {
       }
       sql += ` ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
       const result = await db.execute({ sql, args });
-      return jsonResponse(result.rows);
+      const enriched = (result.rows || []).map(f => {
+        const tipoSrv = f.tipo_servicio && !['MERCANCIA_REPUESTOS', 'ACTIVO_FIJO_EQUIPOS', 'GASTOS_OPERATIVOS_VARIOS'].includes(f.tipo_servicio)
+          ? f.tipo_servicio
+          : (f.prov_tipo_servicio || f.tipo_servicio || 'CONTRATISTAS_OBRAS_SERVICIOS');
+        const resIslr = resolverConceptoISLR({
+          tipoServicio: tipoSrv,
+          rif: f.rif,
+          tipoPersona: f.tipo_persona,
+          codigoActual: f.codigo_concepto_islr
+        });
+        return {
+          ...f,
+          tipo_servicio_efectivo: resIslr.tipo_servicio,
+          tipo_persona: resIslr.tipo_contribuyente,
+          codigo_concepto_islr: resIslr.codigo_sugerido,
+          pct_tarifa_sugerida: resIslr.concepto_sugerido.pct_tarifa,
+          pct_base_sugerida: resIslr.concepto_sugerido.pct_base
+        };
+      });
+      return jsonResponse(enriched);
     }
 
     if (path.startsWith('/api/islr/comprobantes/') && method === 'GET') {
@@ -3219,7 +3279,7 @@ export async function onRequest(context) {
       const cfg = cfgRes.rows[0] || { valor_ut_bs: 43.00, factor_sustraendo: 83.3334 };
       const utBs = Number(valor_ut_aplicado || cfg.valor_ut_bs || 43.00);
       const factorSust = Number(cfg.factor_sustraendo || 83.3334);
-      const tipoPersona = sujeto_tipo_persona || (cleanRif.startsWith('V') || cleanRif.startsWith('E') ? 'PN-R' : 'PJ-D');
+      const tipoPersona = normalizarTipoContribuyente(cleanRif, sujeto_tipo_persona);
 
       let totDocBs = 0;
       let totBaseBs = 0;
@@ -3464,8 +3524,8 @@ export async function onRequest(context) {
 
       if (cleanRif) {
         await db.execute({
-          sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ? WHERE rif = ?`,
-          args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, cleanRif]
+          sql: `UPDATE proveedores SET email = ?, direccion_fiscal = ?, tipo_persona = ?, codigo_concepto_islr = ? WHERE UPPER(REPLACE(REPLACE(rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(?, '-', ''), ' ', ''))`,
+          args: [cleanEmail, String(sujeto_direccion || '').trim(), tipoPersona, codigoPrincipal, cleanRif]
         });
       }
 
@@ -3531,6 +3591,92 @@ export async function onRequest(context) {
         await db.execute({ sql: "UPDATE empresas SET email = ? WHERE id = 1", args: [agente_email] }).catch(() => {});
       }
       return jsonResponse({ success: true, message: 'Configuración fiscal actualizada.' });
+    }
+
+    if (path === '/api/islr/xml-preview' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo') || '2026-10';
+      const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
+      const [data, cerrado] = await Promise.all([
+        obtenerDatosXmlISLR(db, targetPeriodo),
+        isPeriodoDeclarado(targetPeriodo, db)
+      ]);
+      return jsonResponse({
+        ...data,
+        is_cerrado: cerrado,
+        servicio_a_conceptos: SERVICIO_A_CONCEPTOS
+      });
+    }
+
+    if (path === '/api/islr/export-xml' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo') || '2026-10';
+      const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
+      const data = await obtenerDatosXmlISLR(db, targetPeriodo);
+      const fileName = `XML_relacionRetencionesISLR_${data.yyyymm}.xml`;
+      return new Response(data.xml, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/xml; charset=ISO-8859-1',
+          'Content-Disposition': `attachment; filename="${fileName}"`,
+          ...corsHeaders
+        }
+      });
+    }
+
+    if (path === '/api/islr/adecuar-codigos' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const targetPeriodo = body.periodo || '2026-10';
+      if (await isPeriodoDeclarado(targetPeriodo, db)) {
+        return jsonResponse({
+          error: `El período fiscal ${targetPeriodo} se encuentra DECLARADO y CERRADO formalmente ante el SENIAT (Forma 30). No se permite modificar comprobantes emitidos.`
+        }, 403);
+      }
+      const resAdec = await adecuarCodigosRetencionesPeriodo(db, targetPeriodo);
+      return jsonResponse({
+        success: true,
+        actualizadas: resAdec.actualizadas,
+        message: resAdec.actualizadas > 0
+          ? `Se adecuaron ${resAdec.actualizadas} línea(s) de retención según su Tipo de Servicio y Tipo de Contribuyente.`
+          : 'Todas las retenciones del período ya cumplen exactamente con su Tipo de Servicio y Contribuyente.',
+        preview: { ...resAdec.previewActualizado, is_cerrado: false }
+      });
+    }
+
+    if (path === '/api/islr/export-excel-data' && method === 'GET') {
+      const periodo = url.searchParams.get('periodo');
+      let sql = `
+        SELECT 
+          r.nro_comprobante as "N° COMPROBANTE (14 DÍGITOS)",
+          r.periodo as "PERÍODO FISCAL",
+          r.fecha_emision as "FECHA EMISIÓN",
+          r.hora_emision as "HORA EMISIÓN",
+          r.sujeto_rif as "RIF SUJETO RETENIDO",
+          r.sujeto_razon_social as "RAZÓN SOCIAL PROVEEDOR",
+          r.sujeto_tipo_persona as "TIPO PERSONA",
+          r.sujeto_email as "CORREO OBLIGATORIO (PA 00093)",
+          d.nro_operacion as "N° OP",
+          d.fecha_factura as "FECHA FACTURA",
+          d.nro_factura as "N° FACTURA",
+          d.nro_control as "N° CONTROL",
+          d.codigo_concepto as "CÓD. CONCEPTO",
+          d.descripcion_concepto as "DESCRIPCIÓN CONCEPTO",
+          d.monto_total_bs as "MONTO TOTAL DOC. (BS)",
+          d.base_imponible_bs as "BASE IMPONIBLE (BS)",
+          d.pct_base as "% BASE",
+          d.pct_tarifa as "% TARIFA ISLR",
+          d.sustraendo_bs as "SUSTRAENDO (BS)",
+          d.impuesto_retenido_bs as "ISLR RETENIDO (BS)"
+        FROM retenciones_islr r
+        JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
+        WHERE 1=1
+      `;
+      const args = [];
+      if (periodo && periodo !== 'TODOS') {
+        sql += ` AND r.periodo = ?`;
+        args.push(periodo);
+      }
+      sql += ` ORDER BY r.periodo ASC, r.nro_comprobante ASC, d.nro_operacion ASC`;
+      const resRows = await db.execute({ sql, args });
+      return jsonResponse(resRows.rows || []);
     }
 
     if (path === '/api/reportes/mes-a-mes' && method === 'GET') {

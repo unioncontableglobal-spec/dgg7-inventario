@@ -1063,7 +1063,18 @@ function renderBandejaStagingFacturas() {
             ${isAsentado ? 'disabled' : ''} onchange="cambiarClasificacionStaging(${idx}, this.value)">
             <option value="MERCANCIA_REPUESTOS" ${f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'selected' : ''}>📦 Mercancía (Inventario)</option>
             <option value="ACTIVO_FIJO_EQUIPOS" ${f.tipo_servicio === 'ACTIVO_FIJO_EQUIPOS' ? 'selected' : ''}>🏢 Activo Fijo / Equipos</option>
-            <option value="SERVICIOS_CONTABLES_Y_LEGALES" ${f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES' ? 'selected' : ''}>📑 Gasto / Servicios</option>
+            <option value="SERVICIOS_CONTABLES_Y_LEGALES" ${f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES' ? 'selected' : ''}>⚖️ Asesoría Contable (053/055)</option>
+            <option value="HONORARIOS_NO_MERCANTILES" ${f.tipo_servicio === 'HONORARIOS_NO_MERCANTILES' ? 'selected' : ''}>🎓 Honorarios Prof. (002/004)</option>
+            <option value="CONTRATISTAS_OBRAS_SERVICIOS" ${f.tipo_servicio === 'CONTRATISTAS_OBRAS_SERVICIOS' ? 'selected' : ''}>🛠️ Contratistas / Obras (053/055)</option>
+            <option value="SERVICIOS_TECNICOS_Y_SISTEMAS" ${f.tipo_servicio === 'SERVICIOS_TECNICOS_Y_SISTEMAS' ? 'selected' : ''}>💻 Sistemas / Técnicos (053/055)</option>
+            <option value="FLETES_Y_TRANSPORTE" ${f.tipo_servicio === 'FLETES_Y_TRANSPORTE' ? 'selected' : ''}>🚚 Fletes / Transporte (071/072)</option>
+            <option value="ARRENDAMIENTO_INMUEBLES" ${f.tipo_servicio === 'ARRENDAMIENTO_INMUEBLES' ? 'selected' : ''}>🏢 Arrend. Inmuebles (057/058)</option>
+            <option value="ARRENDAMIENTO_MUEBLES" ${f.tipo_servicio === 'ARRENDAMIENTO_MUEBLES' ? 'selected' : ''}>🔩 Arrend. Muebles (061/062)</option>
+            <option value="COMISIONES_MERCANTILES" ${f.tipo_servicio === 'COMISIONES_MERCANTILES' ? 'selected' : ''}>🤝 Comisiones Merc. (018/019)</option>
+            <option value="PUBLICIDAD_Y_PROPAGANDA" ${f.tipo_servicio === 'PUBLICIDAD_Y_PROPAGANDA' ? 'selected' : ''}>📣 Publicidad (083/084)</option>
+            <option value="PUBLICIDAD_RADIO" ${f.tipo_servicio === 'PUBLICIDAD_RADIO' ? 'selected' : ''}>📻 Publicidad Radio (086)</option>
+            <option value="GASTOS_MANTENIMIENTO_FERRETERIA" ${f.tipo_servicio === 'GASTOS_MANTENIMIENTO_FERRETERIA' ? 'selected' : ''}>🔧 Mantenimiento (053/055)</option>
+            <option value="GASTOS_OPERATIVOS_VARIOS" ${f.tipo_servicio === 'GASTOS_OPERATIVOS_VARIOS' ? 'selected' : ''}>📑 Otros Gastos / Servicios</option>
           </select>
           <div style="font-size: 0.70rem; color: #64748b; margin-top: 3px; font-weight: 600;">
             ${f.aplica_inventario === 1 ? '✓ Genera Entrada de Almacén' : '• Sin afectación de stock'}

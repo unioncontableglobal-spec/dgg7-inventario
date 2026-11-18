@@ -2961,6 +2961,120 @@ async function loadProveedoresFiscal() {
   }
 }
 
+const SERVICIO_A_CONCEPTOS_CLIENT = {
+  HONORARIOS_NO_MERCANTILES:       { 'PN-R': '002', 'PN-NR': '003', 'PJ-D': '004', 'PJ-ND': '005' },
+  COMISIONES_MERCANTILES:          { 'PN-R': '018', 'PN-NR': '020', 'PJ-D': '019', 'PJ-ND': '021' },
+  CONTRATISTAS_OBRAS_SERVICIOS:    { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  SERVICIOS_CONTABLES_Y_LEGALES:   { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  SERVICIOS_TECNICOS_Y_SISTEMAS:   { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  GASTOS_MANTENIMIENTO_FERRETERIA: { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  GASTOS_OPERATIVOS_VARIOS:        { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  ARRENDAMIENTO_INMUEBLES:         { 'PN-R': '057', 'PN-NR': '059', 'PJ-D': '058', 'PJ-ND': '060' },
+  ARRENDAMIENTO_MUEBLES:           { 'PN-R': '061', 'PN-NR': '063', 'PJ-D': '062', 'PJ-ND': '064' },
+  FLETES_Y_TRANSPORTE:             { 'PN-R': '071', 'PN-NR': '071', 'PJ-D': '072', 'PJ-ND': '072' },
+  PUBLICIDAD_Y_PROPAGANDA:         { 'PN-R': '083', 'PN-NR': '083', 'PJ-D': '084', 'PJ-ND': '085' },
+  PUBLICIDAD_RADIO:                { 'PN-R': '083', 'PN-NR': '083', 'PJ-D': '086', 'PJ-ND': '085' },
+  MERCANCIA_REPUESTOS:             { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  ACTIVO_FIJO_EQUIPOS:             { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' },
+  GASTOS_CONSUMO_ALIMENTOS:        { 'PN-R': '053', 'PN-NR': '054', 'PJ-D': '055', 'PJ-ND': '056' }
+};
+
+const CATALOGO_CONCEPTOS_FALLBACK_ISLR = [
+  { codigo: '002', descripcion: 'Honorarios Profesionales No Mercantiles (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
+  { codigo: '003', descripcion: 'Honorarios Profesionales No Mercantiles (PN-NR)', tipo_persona: 'PN-NR', pct_base: 90, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '004', descripcion: 'Honorarios Profesionales No Mercantiles (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '005', descripcion: 'Honorarios Profesionales No Mercantiles (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 90, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '018', descripcion: 'Comisiones Mercantiles y Otras Comisiones (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
+  { codigo: '019', descripcion: 'Comisiones Mercantiles y Otras Comisiones (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '020', descripcion: 'Comisiones Mercantiles y Otras Comisiones (PN-NR)', tipo_persona: 'PN-NR', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '021', descripcion: 'Comisiones Mercantiles y Otras Comisiones (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '053', descripcion: 'Ejecución de Obras y Prestación de Servicios (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 1, aplica_sustraendo: 1 },
+  { codigo: '054', descripcion: 'Ejecución de Obras y Prestación de Servicios (PN-NR)', tipo_persona: 'PN-NR', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '055', descripcion: 'Contratistas, Servicios y Asesoría Empresarial (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 2, aplica_sustraendo: 0 },
+  { codigo: '056', descripcion: 'Ejecución de Obras y Prestación de Servicios (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '057', descripcion: 'Arrendamiento de Bienes Inmuebles (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
+  { codigo: '058', descripcion: 'Arrendamiento de Bienes Inmuebles (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '059', descripcion: 'Arrendamiento de Bienes Inmuebles (PN-NR)', tipo_persona: 'PN-NR', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '060', descripcion: 'Arrendamiento de Bienes Inmuebles (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '061', descripcion: 'Arrendamiento de Bienes Muebles (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
+  { codigo: '062', descripcion: 'Arrendamiento de Bienes Muebles (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '063', descripcion: 'Arrendamiento de Bienes Muebles (PN-NR)', tipo_persona: 'PN-NR', pct_base: 100, pct_tarifa: 34, aplica_sustraendo: 0 },
+  { codigo: '064', descripcion: 'Arrendamiento de Bienes Muebles (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '071', descripcion: 'Gastos de Transporte / Fletes Nacionales (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 1, aplica_sustraendo: 1 },
+  { codigo: '072', descripcion: 'Gastos de Transporte / Fletes Nacionales (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 0 },
+  { codigo: '083', descripcion: 'Publicidad y Propaganda Comercial (PN-R)', tipo_persona: 'PN-R', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
+  { codigo: '084', descripcion: 'Publicidad y Propaganda Comercial (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '085', descripcion: 'Publicidad y Propaganda Comercial (PJ-ND)', tipo_persona: 'PJ-ND', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
+  { codigo: '086', descripcion: 'Publicidad en Emisoras de Radio (PJ-D)', tipo_persona: 'PJ-D', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 0 }
+];
+
+const LEGACY_CODIGO_ISLR_MAP = {
+  '001': '002',
+  '016': '019',
+  '027': '057',
+  '029': '058',
+  '031': '061',
+  '033': '062',
+  '039': '071',
+  '041': '072',
+  '047': '083',
+  '049': '084'
+};
+
+const SERVICIOS_CATALOGO_OPTIONS = [
+  ['MERCANCIA_REPUESTOS', '📦 Repuestos / Mercancía (Inventario)'],
+  ['SERVICIOS_CONTABLES_Y_LEGALES', '⚖️ Servicios Contables y Asesoría (053/055)'],
+  ['HONORARIOS_NO_MERCANTILES', '🎓 Honorarios No Mercantiles (002/004)'],
+  ['CONTRATISTAS_OBRAS_SERVICIOS', '🛠️ Contratistas / Obras y Servicios (053/055)'],
+  ['SERVICIOS_TECNICOS_Y_SISTEMAS', '💻 Servicios Técnicos y Sistemas (053/055)'],
+  ['FLETES_Y_TRANSPORTE', '🚚 Fletes y Transporte Nacional (071/072)'],
+  ['ARRENDAMIENTO_INMUEBLES', '🏢 Arrendamiento de Inmuebles (057/058)'],
+  ['ARRENDAMIENTO_MUEBLES', '🔩 Arrendamiento Bienes Muebles (061/062)'],
+  ['COMISIONES_MERCANTILES', '🤝 Comisiones Mercantiles (018/019)'],
+  ['PUBLICIDAD_Y_PROPAGANDA', '📣 Publicidad y Propaganda (083/084)'],
+  ['PUBLICIDAD_RADIO', '📻 Publicidad en Radio (086)'],
+  ['GASTOS_MANTENIMIENTO_FERRETERIA', '🔧 Ferretería y Mantenimiento'],
+  ['GASTOS_CONSUMO_ALIMENTOS', '☕ Consumo y Alimentación'],
+  ['ACTIVO_FIJO_EQUIPOS', '🏭 Activo Fijo y Mobiliario'],
+  ['GASTOS_OPERATIVOS_VARIOS', '📑 Otros Gastos Operativos']
+];
+
+function renderOpcionesServicioHtml(selectedValue) {
+  const val = selectedValue || 'MERCANCIA_REPUESTOS';
+  return SERVICIOS_CATALOGO_OPTIONS.map(([code, label]) =>
+    `<option value="${code}" ${val === code ? 'selected' : ''}>${label}</option>`
+  ).join('');
+}
+
+function getConceptosIslrDisponibles() {
+  return (typeof islrState !== 'undefined' && Array.isArray(islrState.conceptos) && islrState.conceptos.length > 0)
+    ? islrState.conceptos
+    : CATALOGO_CONCEPTOS_FALLBACK_ISLR;
+}
+
+function normalizarTipoContribuyenteClient(rif, explicitTipo) {
+  const cleanRif = String(rif || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const explicit = String(explicitTipo || '').trim().toUpperCase();
+  if (cleanRif.startsWith('V') || cleanRif.startsWith('E')) {
+    return explicit === 'PN-NR' ? 'PN-NR' : 'PN-R';
+  }
+  if (cleanRif.startsWith('J') || cleanRif.startsWith('G') || cleanRif.startsWith('C')) {
+    return explicit === 'PJ-ND' ? 'PJ-ND' : 'PJ-D';
+  }
+  if (['PN-R', 'PN-NR', 'PJ-D', 'PJ-ND'].includes(explicit)) return explicit;
+  return 'PJ-D';
+}
+
+function resolverConceptoIslrClient(tipoServicio, rif, tipoPersonaExplicito) {
+  const tipoContribuyente = normalizarTipoContribuyenteClient(rif, tipoPersonaExplicito);
+  const cleanSrv = String(tipoServicio || 'CONTRATISTAS_OBRAS_SERVICIOS').trim().toUpperCase();
+  const mapSrv = SERVICIO_A_CONCEPTOS_CLIENT[cleanSrv] || SERVICIO_A_CONCEPTOS_CLIENT.CONTRATISTAS_OBRAS_SERVICIOS;
+  const codigoSugerido = mapSrv[tipoContribuyente] || (tipoContribuyente === 'PN-R' ? '053' : '055');
+  const catalogo = getConceptosIslrDisponibles();
+  const concepto = catalogo.find(c => c.codigo === codigoSugerido) || CATALOGO_CONCEPTOS_FALLBACK_ISLR[0];
+  return { tipoContribuyente, tipoServicio: cleanSrv, codigoSugerido, concepto };
+}
+
 function renderProveedoresFiscal(provs) {
   const tbody = document.getElementById('tbody-proveedores-fiscal');
   if (!tbody) return;
@@ -2980,13 +3094,7 @@ function renderProveedoresFiscal(provs) {
         <td class="font-bold">${p.razon_social}</td>
         <td>
           <select class="prov-select-type" onchange="saveProveedorClasificacion(${p.id}, this)">
-            <option value="MERCANCIA_REPUESTOS" ${tipo === 'MERCANCIA_REPUESTOS' ? 'selected' : ''}>📦 Repuestos / Mercancía (Inventario)</option>
-            <option value="SERVICIOS_CONTABLES_Y_LEGALES" ${tipo === 'SERVICIOS_CONTABLES_Y_LEGALES' ? 'selected' : ''}>⚖️ Servicios Contables / Honorarios</option>
-            <option value="SERVICIOS_TECNICOS_Y_SISTEMAS" ${tipo === 'SERVICIOS_TECNICOS_Y_SISTEMAS' ? 'selected' : ''}>💻 Máquinas Fiscales y Sistemas</option>
-            <option value="GASTOS_MANTENIMIENTO_FERRETERIA" ${tipo === 'GASTOS_MANTENIMIENTO_FERRETERIA' ? 'selected' : ''}>🔧 Mantenimiento / Ferretería</option>
-            <option value="GASTOS_CONSUMO_ALIMENTOS" ${tipo === 'GASTOS_CONSUMO_ALIMENTOS' ? 'selected' : ''}>☕ Consumo y Alimentación</option>
-            <option value="ACTIVO_FIJO_EQUIPOS" ${tipo === 'ACTIVO_FIJO_EQUIPOS' ? 'selected' : ''}>🏢 Activo Fijo y Mobiliario</option>
-            <option value="GASTOS_OPERATIVOS_VARIOS" ${tipo === 'GASTOS_OPERATIVOS_VARIOS' ? 'selected' : ''}>📑 Otros Gastos Operativos</option>
+            ${renderOpcionesServicioHtml(tipo)}
           </select>
         </td>
         <td class="text-center" id="badge-inv-${p.id}">
@@ -6660,22 +6768,24 @@ function renderProveedoresDirectorio(proveedores) {
       ? `<span class="badge" style="background:#e0f2fe; color:#0369a1; cursor:pointer;" onclick="toggleAplicaInventarioDirecto(${p.id}, 1)">✅ SÍ (Afecta Almacén)</span>`
       : `<span class="badge" style="background:#fef3c7; color:#92400e; cursor:pointer;" onclick="toggleAplicaInventarioDirecto(${p.id}, 0)">❌ NO (Gasto/Servicio)</span>`;
 
+    const tipoContrib = normalizarTipoContribuyenteClient(p.rif, p.tipo_persona);
+    const codIslrProv = (!isInv && p.codigo_concepto_islr) ? (LEGACY_CODIGO_ISLR_MAP[p.codigo_concepto_islr] || p.codigo_concepto_islr) : '';
+
     return `
       <tr>
-        <td class="font-mono font-bold" style="color: var(--ucg-navy);">${p.rif || 'S/RIF'}</td>
+        <td class="font-mono font-bold" style="color: var(--ucg-navy);">
+          <div>${p.rif || 'S/RIF'}</div>
+          <div style="font-size: 10px; font-weight: 700; color: #3F5B8F; margin-top: 2px;">
+            ${tipoContrib}${codIslrProv ? ` • XML Cód. ${codIslrProv}` : ''}
+          </div>
+        </td>
         <td>
           <strong>${p.razon_social}</strong>
           ${p.telefono ? `<div style="font-size: 11px; color: var(--text-muted);">📞 ${p.telefono}</div>` : ''}
         </td>
         <td>
           <select class="form-control" style="font-size: 11px; padding: 4px 8px;" onchange="cambiarTipoServicioDirecto(${p.id}, this.value, ${p.aplica_inventario})">
-            <option value="MERCANCIA_REPUESTOS" ${p.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'selected' : ''}>📦 Repuestos / Mercancía</option>
-            <option value="SERVICIOS_CONTABLES_Y_LEGALES" ${p.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES' ? 'selected' : ''}>⚖️ Servicios Contables / Asesoría</option>
-            <option value="SERVICIOS_TECNICOS_Y_SISTEMAS" ${p.tipo_servicio === 'SERVICIOS_TECNICOS_Y_SISTEMAS' ? 'selected' : ''}>💻 Sistemas / Máquinas Fiscales</option>
-            <option value="GASTOS_MANTENIMIENTO_FERRETERIA" ${p.tipo_servicio === 'GASTOS_MANTENIMIENTO_FERRETERIA' ? 'selected' : ''}>🔧 Ferretería y Mantenimiento</option>
-            <option value="GASTOS_CONSUMO_ALIMENTOS" ${p.tipo_servicio === 'GASTOS_CONSUMO_ALIMENTOS' ? 'selected' : ''}>☕ Consumo y Alimentación</option>
-            <option value="ACTIVO_FIJO_EQUIPOS" ${p.tipo_servicio === 'ACTIVO_FIJO_EQUIPOS' ? 'selected' : ''}>🏢 Activo Fijo y Equipos</option>
-            <option value="GASTOS_OPERATIVOS_VARIOS" ${p.tipo_servicio === 'GASTOS_OPERATIVOS_VARIOS' ? 'selected' : ''}>📑 Otros Gastos Operativos</option>
+            ${renderOpcionesServicioHtml(p.tipo_servicio)}
           </select>
         </td>
         <td class="text-center">${invBadge}</td>
@@ -6729,6 +6839,54 @@ async function eliminarProveedorDirecto(id, razonSocial) {
 }
 window.eliminarProveedorDirecto = eliminarProveedorDirecto;
 
+function actualizarSugerenciaIslrProveedor(autoSet = true, codigoExplicito = null) {
+  const rifEl = document.getElementById('m-prov-rif');
+  const tipoEl = document.getElementById('m-prov-tipo');
+  const tpEl = document.getElementById('m-prov-tipo-persona');
+  const codEl = document.getElementById('m-prov-codigo-islr');
+  const prevEl = document.getElementById('m-prov-islr-preview');
+  const chkInv = document.getElementById('m-prov-aplica-inv');
+  if (!rifEl || !tipoEl || !tpEl || !codEl) return;
+
+  const rifVal = rifEl.value.trim().toUpperCase();
+  const tipoServicio = tipoEl.value || 'MERCANCIA_REPUESTOS';
+  const tpNorm = normalizarTipoContribuyenteClient(rifVal, tpEl.value);
+  tpEl.value = tpNorm;
+
+  if (autoSet && chkInv) {
+    chkInv.checked = (tipoServicio === 'MERCANCIA_REPUESTOS');
+  }
+
+  const conceptos = getConceptosIslrDisponibles();
+  codEl.innerHTML = `<option value="">-- No Aplica / Mercancía --</option>` +
+    conceptos.map(c => `<option value="${c.codigo}">[${c.codigo}] ${c.descripcion} (${c.pct_tarifa}%)</option>`).join('');
+
+  const { codigoSugerido, concepto } = resolverConceptoIslrClient(tipoServicio, rifVal, tpNorm);
+  const esMercancia = (tipoServicio === 'MERCANCIA_REPUESTOS');
+
+  if (codigoExplicito) {
+    const cleanExp = LEGACY_CODIGO_ISLR_MAP[codigoExplicito] || codigoExplicito;
+    codEl.value = cleanExp;
+  } else if (autoSet) {
+    codEl.value = esMercancia ? '' : codigoSugerido;
+  } else if (!esMercancia) {
+    codEl.value = codigoSugerido;
+  }
+
+  if (prevEl) {
+    if (esMercancia && !codEl.value) {
+      prevEl.textContent = `📦 Mercancía de inventario (${tpNorm}) — Sin retención ISLR`;
+      prevEl.style.color = '#475569';
+    } else {
+      const selC = conceptos.find(c => c.codigo === (codEl.value || codigoSugerido)) || concepto;
+      const sustTxt = selC.aplica_sustraendo ? ' • Con Sustraendo' : '';
+      prevEl.textContent = `✓ XML SENIAT: Cód. ${selC.codigo} (${selC.pct_tarifa}% ${tpNorm}${sustTxt})`;
+      prevEl.style.color = '#0B2447';
+    }
+  }
+}
+window.actualizarSugerenciaIslrProveedor = actualizarSugerenciaIslrProveedor;
+
 function openModalNuevoProveedor(id = null) {
   const form = document.getElementById('form-nuevo-proveedor');
   form.reset();
@@ -6741,19 +6899,21 @@ function openModalNuevoProveedor(id = null) {
       document.getElementById('m-prov-rif').value = prov.rif || '';
       document.getElementById('m-prov-razon').value = prov.razon_social || '';
       document.getElementById('m-prov-tipo').value = prov.tipo_servicio || 'MERCANCIA_REPUESTOS';
-      document.getElementById('m-prov-ret-pct').value = String(prov.porcentaje_retencion || '75.0');
+      document.getElementById('m-prov-ret-pct').value = String(prov.porcentaje_retencion || '0.0');
       document.getElementById('m-prov-telefono').value = prov.telefono || '';
       document.getElementById('m-prov-email').value = prov.email || '';
       const tpEl = document.getElementById('m-prov-tipo-persona');
-      if (tpEl) tpEl.value = prov.tipo_persona || 'PJ-D';
+      if (tpEl) tpEl.value = normalizarTipoContribuyenteClient(prov.rif, prov.tipo_persona);
       const dirEl = document.getElementById('m-prov-direccion');
       if (dirEl) dirEl.value = prov.direccion_fiscal || '';
       document.getElementById('m-prov-aplica-inv').checked = (prov.aplica_inventario === 1);
+      actualizarSugerenciaIslrProveedor(false, prov.codigo_concepto_islr || null);
     }
   } else {
     document.getElementById('modal-prov-title').textContent = '🏢 Registrar Nuevo Proveedor';
     document.getElementById('m-prov-id').value = '';
     document.getElementById('m-prov-aplica-inv').checked = true;
+    actualizarSugerenciaIslrProveedor(true);
   }
 
   document.getElementById('modal-nuevo-proveedor').style.display = 'flex';
@@ -6766,15 +6926,17 @@ async function guardarProveedor(e) {
   btn.textContent = 'Guardando...';
 
   const id = document.getElementById('m-prov-id').value;
+  const rifVal = document.getElementById('m-prov-rif').value.trim().toUpperCase();
   const data = {
-    rif: document.getElementById('m-prov-rif').value.trim().toUpperCase(),
+    rif: rifVal,
     razon_social: document.getElementById('m-prov-razon').value.trim(),
     tipo_servicio: document.getElementById('m-prov-tipo').value,
     aplica_inventario: document.getElementById('m-prov-aplica-inv').checked ? 1 : 0,
-    porcentaje_retencion: parseFloat(document.getElementById('m-prov-ret-pct').value) || 75.0,
+    porcentaje_retencion: parseFloat(document.getElementById('m-prov-ret-pct').value) || 0.0,
     telefono: document.getElementById('m-prov-telefono').value.trim() || null,
     email: document.getElementById('m-prov-email').value.trim() || null,
-    tipo_persona: document.getElementById('m-prov-tipo-persona')?.value || 'PJ-D',
+    tipo_persona: normalizarTipoContribuyenteClient(rifVal, document.getElementById('m-prov-tipo-persona')?.value),
+    codigo_concepto_islr: document.getElementById('m-prov-codigo-islr')?.value || null,
     direccion_fiscal: document.getElementById('m-prov-direccion')?.value.trim() || ''
   };
 
@@ -6824,17 +6986,19 @@ async function toggleAplicaInventarioDirecto(id, actual) {
 }
 
 async function cambiarTipoServicioDirecto(id, tipo, aplica) {
+  const nuevoAplica = (tipo === 'MERCANCIA_REPUESTOS') ? 1 : 0;
   try {
     const res = await fetch(`/api/proveedores/${id}/clasificacion`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tipo_servicio: tipo,
-        aplica_inventario: aplica
+        aplica_inventario: nuevoAplica
       })
     });
-    if (!res.ok) throw new Error('Error al actualizar');
-    showToast('Clasificación de servicio actualizada', 'success');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al actualizar');
+    showToast(data.message || 'Clasificación de servicio actualizada', 'success');
     await loadProveedoresDirectorio();
   } catch (err) {
     showToast(err.message, 'error');
@@ -7103,16 +7267,24 @@ async function openModalEmitirRetencionISLR() {
 
   document.getElementById('box-islr-multimoneda-fields').style.display = 'none';
 
-  // Cargar proveedores y facturas disponibles del Libro de Compras
+  // Cargar catálogo Decreto 1.808, proveedores y facturas disponibles del Libro de Compras
   try {
-    const [provRes, facRes] = await Promise.all([
+    const [concRes, provRes, facRes] = await Promise.all([
+      fetch('/api/islr/conceptos'),
       fetch('/api/proveedores'),
       fetch('/api/islr/facturas-disponibles')
     ]);
+    const concs = await concRes.json();
     const provs = await provRes.json();
     const facs = await facRes.json();
+    if (Array.isArray(concs) && concs.length > 0) {
+      islrState.conceptos = concs;
+    }
     state.suppliers = provs;
     islrState.facturasDisponibles = (Array.isArray(facs) && facs.length > 0) ? facs : (fiscalStateNew.compras || []);
+
+    const selSrv = document.getElementById('m-islr-tipo-servicio');
+    if (selSrv) selSrv.value = 'CONTRATISTAS_OBRAS_SERVICIOS';
 
     const selProv = document.getElementById('m-islr-select-proveedor');
     if (selProv && Array.isArray(provs)) {
@@ -7125,8 +7297,9 @@ async function openModalEmitirRetencionISLR() {
       selFac.innerHTML = `<option value="">-- Seleccionar factura del Libro de Compras (${islrState.facturasDisponibles.length} disponibles) --</option>` +
         islrState.facturasDisponibles.map((f, i) => {
           const tagTipo = f.aplica_inventario === 0 ? '⚖️ SERVICIO/GASTO' : '📦 COMPRA';
+          const codTag = f.codigo_concepto_islr ? ` • Cód.${f.codigo_concepto_islr} (${f.pct_tarifa_sugerida || ''}%)` : '';
           const yaEmitido = f.comprobante_islr_emitido ? ` [Ya Retenido: ${f.comprobante_islr_emitido}]` : '';
-          return `<option value="${i}">[${f.periodo}] ${tagTipo} • ${f.razon_social} • Fact: ${f.nro_factura || 'S/N'} • Base: Bs. ${fmtBs(f.base_imponible_bs)}${yaEmitido}</option>`;
+          return `<option value="${i}">[${f.periodo}] ${tagTipo} • ${f.razon_social} • Fact: ${f.nro_factura || 'S/N'} • Base: Bs. ${fmtBs(f.base_imponible_bs)}${codTag}${yaEmitido}</option>`;
         }).join('');
     }
   } catch (err) {
@@ -7181,14 +7354,65 @@ function detectarTipoPersonaPorRifISLR(rifVal) {
   if (!clean) return;
   const selTipo = document.getElementById('m-islr-tipo-persona');
   if (selTipo) {
-    if (clean.startsWith('V') || clean.startsWith('E')) {
-      selTipo.value = 'PN-R';
-    } else if (clean.startsWith('J') || clean.startsWith('G')) {
-      selTipo.value = 'PJ-D';
+    selTipo.value = normalizarTipoContribuyenteClient(clean, selTipo.value);
+  }
+  aplicarServicioYContribuyenteEnModalISLR(true);
+}
+
+function aplicarServicioYContribuyenteEnModalISLR(actualizarFilas = true, codigoForzado = null) {
+  const rifVal = document.getElementById('m-islr-rif')?.value || '';
+  const selTipo = document.getElementById('m-islr-tipo-persona');
+  const selSrv = document.getElementById('m-islr-tipo-servicio');
+  if (!selTipo) return;
+
+  const tpNorm = normalizarTipoContribuyenteClient(rifVal, selTipo.value);
+  selTipo.value = tpNorm;
+
+  const tipoServicio = selSrv?.value || 'CONTRATISTAS_OBRAS_SERVICIOS';
+  const resolucion = resolverConceptoIslrClient(tipoServicio, rifVal, tpNorm);
+  const catalogo = getConceptosIslrDisponibles();
+
+  let targetCod = resolucion.codigoSugerido;
+  if (codigoForzado) {
+    const cleanForzado = LEGACY_CODIGO_ISLR_MAP[codigoForzado] || String(codigoForzado).padStart(3, '0');
+    const cObj = catalogo.find(c => c.codigo === cleanForzado);
+    if (cObj && cObj.tipo_persona === tpNorm) {
+      targetCod = cObj.codigo;
     }
   }
+
+  if (actualizarFilas) {
+    const concGenEl = document.getElementById('m-islr-concepto-general');
+    const mapConceptoGeneral = {
+      SERVICIOS_CONTABLES_Y_LEGALES: 'ASESORIA ADMINISTRATIVA Y CONTABLE',
+      HONORARIOS_NO_MERCANTILES: 'HONORARIOS PROFESIONALES NO MERCANTILES',
+      FLETES_Y_TRANSPORTE: 'FLETES Y TRANSPORTE NACIONAL',
+      ARRENDAMIENTO_INMUEBLES: 'ARRENDAMIENTO DE BIEN INMUEBLE',
+      ARRENDAMIENTO_MUEBLES: 'ARRENDAMIENTO DE BIENES MUEBLES',
+      COMISIONES_MERCANTILES: 'COMISIONES MERCANTILES',
+      PUBLICIDAD_Y_PROPAGANDA: 'PUBLICIDAD Y PROPAGANDA COMERCIAL',
+      PUBLICIDAD_RADIO: 'PUBLICIDAD EN EMISORA DE RADIO'
+    };
+    if (concGenEl && mapConceptoGeneral[tipoServicio]) {
+      concGenEl.value = mapConceptoGeneral[tipoServicio];
+    }
+
+    document.querySelectorAll('#tbody-modal-islr-items tr.islr-item-row').forEach(tr => {
+      const selConc = tr.querySelector('.islr-f-concepto');
+      if (selConc) {
+        selConc.value = targetCod;
+        const opt = selConc.options[selConc.selectedIndex];
+        if (opt) {
+          tr.querySelector('.islr-f-pct-base').value = parseFloat(opt.dataset.base) || resolucion.concepto.pct_base || 100;
+          tr.querySelector('.islr-f-pct-tarifa').value = parseFloat(opt.dataset.tarifa) || resolucion.concepto.pct_tarifa || 2;
+        }
+      }
+    });
+  }
+
   recalcularLineasISLR();
 }
+window.aplicarServicioYContribuyenteEnModalISLR = aplicarServicioYContribuyenteEnModalISLR;
 
 function seleccionarProveedorEnModalISLR(provId) {
   if (!provId) return;
@@ -7197,10 +7421,17 @@ function seleccionarProveedorEnModalISLR(provId) {
 
   document.getElementById('m-islr-rif').value = p.rif || '';
   document.getElementById('m-islr-razon').value = p.razon_social || '';
-  document.getElementById('m-islr-tipo-persona').value = p.tipo_persona || ((String(p.rif || '').startsWith('V') || String(p.rif || '').startsWith('E')) ? 'PN-R' : 'PJ-D');
+  document.getElementById('m-islr-tipo-persona').value = normalizarTipoContribuyenteClient(p.rif, p.tipo_persona);
   document.getElementById('m-islr-direccion').value = p.direccion_fiscal || 'CARACAS, DISTRITO CAPITAL';
   document.getElementById('m-islr-email').value = p.email || '';
-  recalcularLineasISLR();
+
+  const selSrv = document.getElementById('m-islr-tipo-servicio');
+  if (selSrv) {
+    const srvOptExists = Array.from(selSrv.options).some(o => o.value === p.tipo_servicio);
+    selSrv.value = srvOptExists ? p.tipo_servicio : 'CONTRATISTAS_OBRAS_SERVICIOS';
+  }
+  const codProv = (p.aplica_inventario === 0 && p.codigo_concepto_islr) ? p.codigo_concepto_islr : null;
+  aplicarServicioYContribuyenteEnModalISLR(true, codProv);
 }
 
 // Cargar Factura Directa con Autocalculo de Retenciones (Decreto 1808 • PA SNAT/2026/00093)
@@ -7281,29 +7512,58 @@ async function cargarFacturaDirectaEnModalISLR(f) {
     fecEmisionEl.value = fechaDoc;
   }
 
-  // 4. Datos del Sujeto Retenido (Proveedor)
+  // 4. Datos del Sujeto Retenido (Proveedor) y Clasificación Automática Decreto 1.808
   const cleanRif = String(f.rif || '').trim().toUpperCase();
   document.getElementById('m-islr-rif').value = cleanRif;
   document.getElementById('m-islr-razon').value = f.razon_social || '';
 
-  const tipoPers = f.tipo_persona || ((cleanRif.startsWith('V') || cleanRif.startsWith('E')) ? 'PN-R' : 'PJ-D');
+  const prov = (state.suppliers || []).find(p =>
+    String(p.rif || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase() === cleanRif.replace(/[^A-Za-z0-9]/g, '') ||
+    (f.proveedor_id && p.id === f.proveedor_id)
+  );
+  const isGenericSrv = s => !s || ['MERCANCIA_REPUESTOS', 'ACTIVO_FIJO_EQUIPOS', 'GASTOS_OPERATIVOS_VARIOS'].includes(s);
+  const tipoServicioEfectivo = f.tipo_servicio_efectivo || (!isGenericSrv(f.tipo_servicio) ? f.tipo_servicio : (!isGenericSrv(prov?.tipo_servicio) ? prov.tipo_servicio : (f.tipo_servicio || 'CONTRATISTAS_OBRAS_SERVICIOS')));
+
+  const resolucion = resolverConceptoIslrClient(tipoServicioEfectivo, cleanRif, f.tipo_persona || prov?.tipo_persona);
+  const tipoPers = resolucion.tipoContribuyente;
   document.getElementById('m-islr-tipo-persona').value = tipoPers;
 
-  const prov = (state.suppliers || []).find(p => p.rif === cleanRif || (f.proveedor_id && p.id === f.proveedor_id));
+  const selSrv = document.getElementById('m-islr-tipo-servicio');
+  if (selSrv) {
+    const srvOptExists = Array.from(selSrv.options).some(o => o.value === tipoServicioEfectivo);
+    selSrv.value = srvOptExists ? tipoServicioEfectivo : 'CONTRATISTAS_OBRAS_SERVICIOS';
+  }
+
   const dirFiscal = f.direccion_fiscal || prov?.direccion_fiscal || (cleanRif.includes('50714716') ? 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS' : 'CARACAS, DISTRITO CAPITAL');
   const emailProv = f.email || prov?.email || (cleanRif.includes('50714716') ? 'facturacion@unioncontableglobal.com' : 'administracion@proveedor.com');
 
   document.getElementById('m-islr-direccion').value = dirFiscal;
   document.getElementById('m-islr-email').value = emailProv;
-  document.getElementById('m-islr-concepto-general').value = (cleanRif.includes('50714716') || f.tipo_servicio === 'SERVICIOS_CONTABLES_Y_LEGALES')
-    ? 'ASESORIA ADMINISTRATIVA'
-    : 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS';
 
-  // 5. Configurar concepto según Decreto 1808 (Concepto 055 para PJ-D, 2% sobre base imponible)
-  const codConcepto = f.codigo_concepto_islr || (cleanRif.includes('50714716') ? '055' : (tipoPers === 'PN-R' ? '001' : '055'));
+  const mapConceptoGeneral = {
+    SERVICIOS_CONTABLES_Y_LEGALES: 'ASESORIA ADMINISTRATIVA',
+    HONORARIOS_NO_MERCANTILES: 'HONORARIOS PROFESIONALES NO MERCANTILES',
+    FLETES_Y_TRANSPORTE: 'FLETES Y TRANSPORTE NACIONAL',
+    ARRENDAMIENTO_INMUEBLES: 'ARRENDAMIENTO DE BIEN INMUEBLE',
+    ARRENDAMIENTO_MUEBLES: 'ARRENDAMIENTO DE BIENES MUEBLES',
+    COMISIONES_MERCANTILES: 'COMISIONES MERCANTILES',
+    PUBLICIDAD_Y_PROPAGANDA: 'PUBLICIDAD Y PROPAGANDA COMERCIAL',
+    PUBLICIDAD_RADIO: 'PUBLICIDAD EN EMISORA DE RADIO'
+  };
+  document.getElementById('m-islr-concepto-general').value =
+    cleanRif.includes('50714716')
+      ? 'ASESORIA ADMINISTRATIVA'
+      : (mapConceptoGeneral[tipoServicioEfectivo] || 'EJECUCIÓN DE OBRAS Y PRESTACIÓN DE SERVICIOS');
+
+  // 5. Configurar concepto según Decreto 1808 (Servicio x Contribuyente)
+  const rawCodFac = LEGACY_CODIGO_ISLR_MAP[f.codigo_concepto_islr] || f.codigo_concepto_islr;
+  const concFac = getConceptosIslrDisponibles().find(c => c.codigo === rawCodFac);
+  const codConcepto = (concFac && concFac.tipo_persona === tipoPers) ? concFac.codigo : resolucion.codigoSugerido;
+  const concFinal = getConceptosIslrDisponibles().find(c => c.codigo === codConcepto) || resolucion.concepto;
+
   const descConcepto = cleanRif.includes('50714716')
     ? 'ASESORIA 360 GLOBAL - CFT'
-    : (f.observaciones_cruce || (f.tipo_servicio === 'MERCANCIA_REPUESTOS' ? 'EJECUCIÓN DE OBRAS Y SUMINISTROS' : 'PRESTACIÓN DE SERVICIOS'));
+    : (f.observaciones_cruce || concFinal.descripcion.toUpperCase());
 
   // 6. Base y Total con soporte para total_bs / monto_total_bs
   const totBs = Number(f.total_bs !== undefined && f.total_bs !== null && f.total_bs !== '' ? f.total_bs : (f.monto_total_bs || 0));
@@ -7362,19 +7622,19 @@ function agregarFilaDetalleISLR(prefill = null) {
 
   const rowCount = tbody.querySelectorAll('tr').length + 1;
   const fechaEmision = document.getElementById('m-islr-fecha-emision')?.value || '30/10/2026';
-  const tipoPers = document.getElementById('m-islr-tipo-persona')?.value || 'PJ-D';
+  const rifActual = document.getElementById('m-islr-rif')?.value || '';
+  const tipoSrvActual = document.getElementById('m-islr-tipo-servicio')?.value || 'CONTRATISTAS_OBRAS_SERVICIOS';
+  const resolucionActual = resolverConceptoIslrClient(
+    tipoSrvActual,
+    rifActual,
+    document.getElementById('m-islr-tipo-persona')?.value || 'PJ-D'
+  );
 
-  const defaultCod = prefill?.codigo_concepto || (tipoPers === 'PN-R' ? '001' : '055');
-  const conceptosList = islrState.conceptos.length > 0 ? islrState.conceptos : [
-    { codigo: '001', descripcion: 'Honorarios Profesionales No Mercantiles (PN-R)', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 1 },
-    { codigo: '003', descripcion: 'Honorarios Profesionales No Mercantiles (PJ-D)', pct_base: 100, pct_tarifa: 5, aplica_sustraendo: 0 },
-    { codigo: '039', descripcion: 'Fletes y Transporte Nacional (PN-R)', pct_base: 100, pct_tarifa: 1, aplica_sustraendo: 1 },
-    { codigo: '041', descripcion: 'Fletes y Transporte Nacional (PJ-D)', pct_base: 100, pct_tarifa: 3, aplica_sustraendo: 0 },
-    { codigo: '053', descripcion: 'Ejecución de Obras y Servicios (PN-R)', pct_base: 100, pct_tarifa: 1, aplica_sustraendo: 1 },
-    { codigo: '055', descripcion: 'Ejecución de Obras, Servicios y Asesoría (PJ-D)', pct_base: 100, pct_tarifa: 2, aplica_sustraendo: 0 }
-  ];
+  const rawPrefCod = prefill?.codigo_concepto ? (LEGACY_CODIGO_ISLR_MAP[prefill.codigo_concepto] || prefill.codigo_concepto) : null;
+  const defaultCod = rawPrefCod || resolucionActual.codigoSugerido;
+  const conceptosList = getConceptosIslrDisponibles();
 
-  const foundConcept = conceptosList.find(c => c.codigo === defaultCod) || conceptosList[conceptosList.length - 1];
+  const foundConcept = conceptosList.find(c => c.codigo === defaultCod) || resolucionActual.concepto || conceptosList[0];
 
   const tr = document.createElement('tr');
   tr.className = 'islr-item-row';
@@ -7390,7 +7650,7 @@ function agregarFilaDetalleISLR(prefill = null) {
       <select class="form-control islr-f-concepto" style="padding:3px 6px; font-size:0.73rem; margin-bottom:3px; font-weight:700;" onchange="onCambioConceptoFilaISLR(this)">
         ${conceptosList.map(c => `<option value="${c.codigo}" data-base="${c.pct_base}" data-tarifa="${c.pct_tarifa}" data-sust="${c.aplica_sustraendo}" ${c.codigo === defaultCod ? 'selected' : ''}>[${c.codigo}] ${c.descripcion} (${c.pct_tarifa}%)</option>`).join('')}
       </select>
-      <input type="text" class="form-control islr-f-desc" value="${prefill?.descripcion_concepto || 'ASESORIA 360 GLOBAL - CFT'}" placeholder="Descripción en comprobante" style="padding:3px 6px; font-size:0.72rem;">
+      <input type="text" class="form-control islr-f-desc" value="${escapeHtml(prefill?.descripcion_concepto || foundConcept.descripcion.toUpperCase())}" placeholder="Descripción en comprobante" style="padding:3px 6px; font-size:0.72rem;">
     </td>
     <td><input type="number" step="0.01" class="form-control font-mono text-right islr-f-total" value="${prefill?.monto_total_bs !== undefined ? prefill.monto_total_bs : ''}" placeholder="0.00" style="padding:4px 6px; font-size:0.76rem;" oninput="recalcularLineasISLR()" required></td>
     <td><input type="number" step="0.01" class="form-control font-mono font-bold text-right islr-f-base" value="${prefill?.base_imponible_bs !== undefined ? prefill.base_imponible_bs : ''}" placeholder="0.00" style="padding:4px 6px; font-size:0.76rem; color:#0B2447;" oninput="recalcularLineasISLR()" required></td>
@@ -7543,7 +7803,11 @@ async function guardarComprobanteISLR(e) {
     proveedor_id: document.getElementById('m-islr-select-proveedor').value || null,
     sujeto_rif: document.getElementById('m-islr-rif').value.trim().toUpperCase(),
     sujeto_razon_social: document.getElementById('m-islr-razon').value.trim(),
-    sujeto_tipo_persona: document.getElementById('m-islr-tipo-persona').value,
+    sujeto_tipo_persona: normalizarTipoContribuyenteClient(
+      document.getElementById('m-islr-rif').value.trim(),
+      document.getElementById('m-islr-tipo-persona').value
+    ),
+    sujeto_tipo_servicio: document.getElementById('m-islr-tipo-servicio')?.value || 'CONTRATISTAS_OBRAS_SERVICIOS',
     sujeto_direccion: document.getElementById('m-islr-direccion').value.trim(),
     sujeto_email: email,
     concepto_general: document.getElementById('m-islr-concepto-general').value.trim(),
@@ -7663,15 +7927,317 @@ async function guardarConfigISLR(e) {
 }
 
 function exportarXMLSeniatISLR() {
-  const periodo = document.getElementById('islr-periodo-select')?.value || '2026-09';
-  const targetPeriodo = periodo === 'TODOS' ? '2026-09' : periodo;
-  window.open(`/api/islr/export-xml?periodo=${encodeURIComponent(targetPeriodo)}`, '_blank');
+  const periodo = document.getElementById('islr-periodo-select')?.value || '2026-10';
+  const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
+  abrirModalXMLSeniatISLR(targetPeriodo);
+}
+window.exportarXMLSeniatISLR = exportarXMLSeniatISLR;
+
+async function abrirModalXMLSeniatISLR(periodoOverride = null) {
+  const selMain = document.getElementById('islr-periodo-select');
+  const selModal = document.getElementById('m-xml-periodo-select');
+
+  const rawPeriodo = periodoOverride || (selMain?.value && selMain.value !== 'TODOS' ? selMain.value : '2026-10');
+  const targetPeriodo = rawPeriodo === 'TODOS' ? '2026-10' : rawPeriodo;
+
+  if (selModal) {
+    const opts = selMain
+      ? Array.from(selMain.options).filter(o => o.value && o.value !== 'TODOS').map(o => `<option value="${o.value}">${o.textContent}</option>`)
+      : [];
+    if (!opts.some(h => h.includes(`value="${targetPeriodo}"`))) {
+      opts.push(`<option value="${targetPeriodo}">${targetPeriodo}</option>`);
+    }
+    selModal.innerHTML = opts.join('');
+    selModal.value = targetPeriodo;
+  }
+
+  document.getElementById('modal-xml-seniat-islr').style.display = 'flex';
+  const tbody = document.getElementById('tbody-xml-seniat-detalles');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding:18px;">Auditando retenciones y generando XML oficial SENIAT...</td></tr>`;
+  const preEl = document.getElementById('xml-seniat-code-preview');
+  if (preEl) preEl.textContent = 'Generando estructura XML ISO-8859-1...';
+
+  try {
+    const res = await fetch(`/api/islr/xml-preview?periodo=${encodeURIComponent(targetPeriodo)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error consultando vista previa XML');
+    islrState.xmlPreview = data;
+    renderModalXMLSeniatISLR(data);
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:#dc2626;">${escapeHtml(err.message)}</td></tr>`;
+    showToast(err.message, 'error');
+  }
+}
+window.abrirModalXMLSeniatISLR = abrirModalXMLSeniatISLR;
+
+function renderModalXMLSeniatISLR(data) {
+  const tasaRef = typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(data.periodo) : 880.12;
+  const fmtUsdSub = val => (tasaRef > 0 ? `$${(Number(val || 0) / tasaRef).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD` : '$0.00 USD');
+
+  const elAgente = document.getElementById('xml-agente-info');
+  if (elAgente) elAgente.textContent = `${data.agente_razon_social} • RIF XML: ${data.rif_agente}`;
+
+  const elBadge = document.getElementById('xml-periodo-status-badge');
+  if (elBadge) {
+    elBadge.innerHTML = data.is_cerrado
+      ? `<span class="badge" style="background:#e2e8f0; color:#334155; font-weight:800; padding:5px 10px;">🔒 DECLARADO / CERRADO (Solo Lectura)</span>`
+      : `<span class="badge" style="background:#dcfce7; color:#166534; font-weight:800; padding:5px 10px;">🟢 PERÍODO ABIERTO</span>`;
+  }
+
+  document.getElementById('xml-kpi-lineas').textContent = String(data.total_lineas || 0);
+  document.getElementById('xml-kpi-yyyymm').textContent = `Periodo XML: ${data.yyyymm}`;
+  document.getElementById('xml-kpi-monto-op').textContent = `Bs. ${fmtBs(data.total_monto_operacion || 0)}`;
+  document.getElementById('xml-kpi-monto-op-usd').textContent = fmtUsdSub(data.total_monto_operacion);
+  document.getElementById('xml-kpi-retenido').textContent = `Bs. ${fmtBs(data.total_islr_retenido || 0)}`;
+  document.getElementById('xml-kpi-retenido-usd').textContent = fmtUsdSub(data.total_islr_retenido);
+
+  const xsdEl = document.getElementById('xml-kpi-xsd');
+  const xsdSub = document.getElementById('xml-kpi-legal-sub');
+  const errs = data.errores_validacion || [];
+  const warns = data.advertencias || [];
+  const pendientes = data.facturas_sin_retencion || [];
+
+  if (xsdEl) {
+    if (data.total_lineas === 0) {
+      xsdEl.textContent = 'SIN OPERACIONES';
+      xsdEl.style.color = '#64748b';
+    } else if (errs.length > 0) {
+      xsdEl.textContent = `⚠️ ${errs.length} ERROR(ES) XSD`;
+      xsdEl.style.color = '#dc2626';
+    } else if (warns.length > 0) {
+      xsdEl.textContent = `⚠️ ${warns.length} DESAJUSTE LEGAL`;
+      xsdEl.style.color = '#d97706';
+    } else {
+      xsdEl.textContent = '✅ APTO PARA SENIAT';
+      xsdEl.style.color = '#059669';
+    }
+  }
+  if (xsdSub) {
+    xsdSub.textContent = warns.length > 0
+      ? `${warns.length} diferencia(s) Servicio ↔ Contribuyente`
+      : '100% alineado al Decreto N° 1.808';
+  }
+
+  const btnAdecuar = document.getElementById('btn-adecuar-codigos-xml');
+  if (btnAdecuar) {
+    btnAdecuar.style.display = data.is_cerrado ? 'none' : 'inline-flex';
+    btnAdecuar.disabled = data.is_cerrado;
+    btnAdecuar.textContent = warns.length > 0
+      ? `🔧 Adecuar ${warns.length} Línea(s) al Servicio y Contribuyente`
+      : `🔧 Validar / Adecuar Códigos al Servicio`;
+  }
+
+  // Alertas XSD, Advertencias Legales y Facturas de Servicio Pendientes
+  const alertasEl = document.getElementById('xml-alertas-container');
+  if (alertasEl) {
+    const blocks = [];
+    if (errs.length > 0) {
+      blocks.push(`
+        <div style="background:#fef2f2; border:1.5px solid #fca5a5; border-left:5px solid #dc2626; border-radius:6px; padding:10px 14px; margin-bottom:8px;">
+          <div style="font-weight:800; color:#991b1b; font-size:0.8rem; margin-bottom:4px;">❌ Errores Críticos de Esquema XSD SENIAT:</div>
+          <ul style="margin:0; padding-left:18px; font-size:0.76rem; color:#7f1d1d;">
+            ${errs.map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+          </ul>
+        </div>
+      `);
+    }
+    if (warns.length > 0) {
+      blocks.push(`
+        <div style="background:#fffbeb; border:1.5px solid #fcd34d; border-left:5px solid #d97706; border-radius:6px; padding:10px 14px; margin-bottom:8px;">
+          <div style="font-weight:800; color:#92400e; font-size:0.8rem; margin-bottom:4px;">⚠️ Diferencias Detectadas entre Tipo de Servicio, Contribuyente y Código ISLR (Decreto 1.808):</div>
+          <ul style="margin:0; padding-left:18px; font-size:0.76rem; color:#78350f;">
+            ${warns.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
+          </ul>
+        </div>
+      `);
+    }
+    if (pendientes.length > 0) {
+      blocks.push(`
+        <div style="background:#eff6ff; border:1.5px solid #93c5fd; border-left:5px solid #1d4ed8; border-radius:6px; padding:10px 14px;">
+          <div style="font-weight:800; color:#1e3a8a; font-size:0.8rem; margin-bottom:6px;">
+            🧾 ${pendientes.length} Factura(s) de Servicio / Gasto en el Libro de Compras (${data.periodo}) SIN Comprobante ISLR emitido:
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${pendientes.map((f, idx) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; background:#ffffff; border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px; font-size:0.76rem;">
+                <div>
+                  <span class="font-mono font-bold">${f.fecha}</span> •
+                  <strong>${escapeHtml(f.razon_social)}</strong> (<span class="font-mono">${escapeHtml(f.rif)}</span>) •
+                  Fact: <strong>${escapeHtml(f.nro_factura)}</strong> •
+                  Base: <strong>Bs. ${fmtBs(f.base_imponible_bs)}</strong> •
+                  <span style="color:#1e40af; font-weight:700;">Sugerido Decreto 1.808: ${f.tipo_contribuyente_sugerido} • Cód. ${f.codigo_sugerido} (${f.tarifa_sugerida}%)</span>
+                </div>
+                ${data.is_cerrado ? '' : `
+                  <button type="button" class="btn btn-sm" style="background:#0B2447; color:#FFFFFF; font-weight:700; padding:3px 10px; font-size:0.72rem;"
+                    onclick="emitirRetencionDesdeXmlPendiente(${idx})">
+                    🧾 Emitir Retención
+                  </button>
+                `}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `);
+    }
+    alertasEl.innerHTML = blocks.join('');
+  }
+
+  // Resumen agrupado por Código de Concepto
+  const resEl = document.getElementById('xml-resumen-conceptos');
+  if (resEl) {
+    const grps = data.resumen_conceptos || [];
+    resEl.innerHTML = grps.length === 0
+      ? `<span style="font-size:0.76rem; color:#64748b;">Sin líneas agrupadas para este período.</span>`
+      : grps.map(g => `
+          <span style="background:#f1f5f9; border:1px solid #cbd5e1; color:#0B2447; border-radius:6px; padding:4px 9px; font-size:0.73rem; font-weight:700;">
+            Cód. ${g.codigo_concepto} (${g.tipo_contribuyente} • ${g.porcentaje}%): ${g.cantidad} op. • Ret. Bs. ${fmtBs(g.impuesto_retenido)}
+          </span>
+        `).join('');
+  }
+
+  // Tabla de Auditoría de Líneas XML
+  const tbody = document.getElementById('tbody-xml-seniat-detalles');
+  const detalles = data.detalles || [];
+  if (tbody) {
+    if (detalles.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding:18px; color:#64748b;">No hay retenciones ISLR emitidas para el período ${data.periodo}.</td></tr>`;
+    } else {
+      tbody.innerHTML = detalles.map(d => {
+        const estadoHtml = !d.xsd_valido
+          ? `<span class="badge" style="background:#fee2e2; color:#991b1b;">❌ XSD Error</span>`
+          : (!d.legal_consistente
+              ? `<span class="badge" style="background:#fef3c7; color:#92400e;">⚠️ Cód. Sug: ${d.codigo_sugerido} (${d.pct_tarifa_sugerido}%)</span>`
+              : `<span class="badge" style="background:#dcfce7; color:#166534;">✅ XSD + Legal OK</span>`);
+
+        return `
+          <tr>
+            <td class="font-mono font-bold" style="white-space:nowrap; font-size:0.74rem;">${d.nro_comprobante}</td>
+            <td>
+              <div style="font-weight:700; font-size:0.77rem;">${escapeHtml(d.sujeto_razon_social)}</div>
+              <div class="font-mono" style="font-size:0.71rem; color:#475569;">XML: <strong>${d.rif_xml}</strong></div>
+            </td>
+            <td class="text-center"><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:800;">${d.tipo_contribuyente}</span></td>
+            <td style="font-size:0.73rem;">${escapeHtml(d.tipo_servicio_label)}</td>
+            <td class="text-center font-mono font-bold" style="color:#0B2447;">${d.codigo_concepto}</td>
+            <td class="font-mono" style="font-size:0.74rem; white-space:nowrap;">Fact: <strong>${escapeHtml(d.nro_factura_xml)}</strong><br><span style="color:#64748b;">Ctrl: ${escapeHtml(d.nro_control_xml)}</span></td>
+            <td class="text-center font-mono" style="white-space:nowrap; font-size:0.75rem;">${d.fecha_operacion}</td>
+            <td class="text-right font-mono font-bold" style="white-space:nowrap;">Bs. ${fmtBs(d.monto_operacion)}<br><span style="font-size:0.68rem; color:#64748b;">XML: ${d.monto_operacion_xml}</span></td>
+            <td class="text-center font-mono font-bold">${d.porcentaje_xml}%</td>
+            <td class="text-center">${estadoHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  document.getElementById('xml-filename-label').textContent = `XML_relacionRetencionesISLR_${data.yyyymm}.xml`;
+  document.getElementById('xml-seniat-code-preview').textContent = data.xml || '';
 }
 
-function exportarExcelISLR() {
-  const periodo = document.getElementById('islr-periodo-select')?.value || 'TODOS';
-  window.open(`/api/islr/export-excel?periodo=${encodeURIComponent(periodo)}`, '_blank');
+async function adecuarCodigosXMLPeriodo() {
+  const dataActual = islrState.xmlPreview;
+  if (!dataActual) return;
+  if (dataActual.is_cerrado) {
+    showToast(`🔒 El período ${dataActual.periodo} está DECLARADO y cerrado (Forma 30). No admite modificaciones.`, 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-adecuar-codigos-xml');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Adecuando códigos...';
+  }
+
+  try {
+    const res = await fetch('/api/islr/adecuar-codigos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodo: dataActual.periodo })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Error adecuando códigos ISLR');
+
+    showToast(result.message, 'success');
+    if (result.preview) {
+      islrState.xmlPreview = result.preview;
+      renderModalXMLSeniatISLR(result.preview);
+    } else {
+      await abrirModalXMLSeniatISLR(dataActual.periodo);
+    }
+    if (typeof loadComprobantesISLR === 'function') loadComprobantesISLR();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
+window.adecuarCodigosXMLPeriodo = adecuarCodigosXMLPeriodo;
+
+function descargarArchivoXMLSeniat() {
+  const dataActual = islrState.xmlPreview;
+  const periodo = dataActual?.periodo || document.getElementById('m-xml-periodo-select')?.value || '2026-10';
+  if (dataActual && (!dataActual.total_lineas || dataActual.total_lineas === 0)) {
+    showToast(`No existen comprobantes de retención emitidos en ${periodo} para exportar el XML.`, 'error');
+    return;
+  }
+  if (dataActual && (dataActual.errores_validacion || []).length > 0) {
+    if (!confirm('Existen advertencias de formato XSD SENIAT en el período. ¿Deseas descargar el archivo XML de todas formas?')) {
+      return;
+    }
+  }
+  const link = document.createElement('a');
+  link.href = `/api/islr/export-xml?periodo=${encodeURIComponent(periodo)}`;
+  link.download = `XML_relacionRetencionesISLR_${String(periodo).replace('-', '')}.xml`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+window.descargarArchivoXMLSeniat = descargarArchivoXMLSeniat;
+
+async function copiarCodigoXMLSeniat() {
+  const code = document.getElementById('xml-seniat-code-preview')?.textContent || '';
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    showToast('Código XML SENIAT copiado al portapapeles.', 'success');
+  } catch {
+    showToast('No se pudo copiar automáticamente; selecciona el bloque XML manualmente.', 'error');
+  }
+}
+window.copiarCodigoXMLSeniat = copiarCodigoXMLSeniat;
+
+async function emitirRetencionDesdeXmlPendiente(idx) {
+  const fac = islrState.xmlPreview?.facturas_sin_retencion?.[idx];
+  if (!fac) return;
+  closeModal('modal-xml-seniat-islr');
+  await openModalEmitirRetencionISLR();
+  await cargarFacturaDirectaEnModalISLR(fac);
+}
+window.emitirRetencionDesdeXmlPendiente = emitirRetencionDesdeXmlPendiente;
+
+async function exportarExcelISLR() {
+  const periodo = document.getElementById('islr-periodo-select')?.value || 'TODOS';
+  try {
+    if (typeof XLSX === 'undefined') {
+      throw new Error('La librería Excel (SheetJS) no está disponible.');
+    }
+    const res = await fetch(`/api/islr/export-excel-data?periodo=${encodeURIComponent(periodo)}`);
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || 'Error obteniendo relación ISLR');
+    if (!Array.isArray(rows) || rows.length === 0) {
+      showToast('No hay comprobantes ISLR para exportar en el período seleccionado.', 'error');
+      return;
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'RETENCIONES_ISLR');
+    XLSX.writeFile(wb, `RELACION_RETENCIONES_ISLR_${periodo || 'HISTORICO'}.xlsx`);
+    showToast(`Excel generado (${rows.length} registros).`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+window.exportarExcelISLR = exportarExcelISLR;
 
 // ==========================================================================
 // PLANTILLA OFICIAL DE IMPRESIÓN PDF: COMPROBANTE DE RETENCIÓN DE ISLR
