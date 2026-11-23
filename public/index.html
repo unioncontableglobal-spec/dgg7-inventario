@@ -814,6 +814,12 @@
                 title="Ir a Configuración de Tasas Oficiales BCV">
                 ⚙️ Configurar Tasas BCV
               </button>
+              <button type="button" class="btn btn-primary" onclick="abrirModalReporteMensualInventario()"
+                id="btn-tab-reportes-mensuales"
+                style="background:#0f172a; border:1px solid #0284c7; color:#ffffff; font-weight:700;"
+                title="Consultar Cortes Mensuales (Inicial + Entradas - Salidas = Final) y Consolidado Enero–Diciembre 2026">
+                📊 Reportes Mensuales / Anual
+              </button>
               <a href="javascript:void(0)" onclick="exportarInventarioExcel(event)" class="btn btn-emerald" id="btn-tab-export-excel">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -861,6 +867,8 @@
                 <option value="2026-08-31">📅 Cierre Agosto 2026</option>
                 <option value="2026-09-30">📅 Cierre Septiembre 2026</option>
                 <option value="2026-10-31">📅 Cierre Octubre 2026</option>
+                <option value="2026-11-30">📅 Cierre Noviembre 2026</option>
+                <option value="2026-12-31">📅 Cierre Diciembre 2026 (Anual)</option>
               </select>
               <select id="inv-filter-cat">
                 <option value="TODAS">Todas las Categorías</option>
@@ -1757,9 +1765,9 @@
                 <thead>
                   <tr>
                     <th>PERÍODO / MES</th>
-                    <th class="text-center">TASA BCV CIERRE</th>
                     <th class="text-right">SALDO INICIAL</th>
                     <th class="text-right" style="color: #34d399;">COMPRAS (UND)</th>
+                    <th class="text-center">TASA BCV CIERRE</th>
                     <th class="text-right">COMPRAS ($ USD)</th>
                     <th class="text-right">COMPRAS (BS. CIERRE BCV)</th>
                     <th class="text-right" style="color: #fb7185;">VENTAS / SALIDAS</th>
@@ -5656,6 +5664,154 @@
   </div>
 
   <!-- ====================================================================== -->
+  <!-- MODAL: CENTRO DE REPORTES MENSUALES Y CONSOLIDADO ANUAL DE INVENTARIO   -->
+  <!-- ====================================================================== -->
+  <div class="modal-overlay" id="modal-reporte-mensual-inventario" style="display: none;">
+    <div class="modal-box" style="max-width: 1240px; width: 96vw; max-height: 94vh; overflow-y: auto; border-top: 4px solid #0284c7;">
+      <div class="modal-header" style="background: #0f172a; color: #FFFFFF; border-bottom: 2px solid #38bdf8; position: sticky; top: 0; z-index: 20;">
+        <div>
+          <div style="font-size: 0.72rem; color: #38bdf8; font-weight: 800; letter-spacing: 0.06em;">INVERSIONES DG 67, C.A. • RIF J-50700865-7 • ART. 177 RISLR</div>
+          <h3 style="color: #FFFFFF; font-size: 1.05rem; font-weight: 800; margin: 2px 0 0 0;">📊 Corte Mensual de Inventario (Entradas / Salidas) y Consolidado Enero – Diciembre 2026</h3>
+        </div>
+        <button class="modal-close" style="color: #FFFFFF;" onclick="closeModal('modal-reporte-mensual-inventario')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px; background: #f8fafc;">
+        <!-- Barra de filtros -->
+        <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; justify-content: space-between;">
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; flex: 1;">
+            <div style="min-width: 245px;">
+              <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px; text-transform:uppercase;">Período / Mes de Corte</label>
+              <select id="inv-rep-periodo" class="form-control" style="font-weight:700; color:#0f172a; border-color:#0284c7; background:#eff6ff;" onchange="onChangePeriodoModalInv()">
+                <option value="ANUAL_2026">📅 Consolidado Anual Ene – Dic 2026 (Mes a Mes)</option>
+                <option value="2025-12">🏁 Inventario Inicial (31/12/2025)</option>
+                <option value="2026-01">01 - Enero 2026 (Corte 31/01/2026)</option>
+                <option value="2026-02">02 - Febrero 2026 (Corte 28/02/2026)</option>
+                <option value="2026-03">03 - Marzo 2026 (Corte 31/03/2026)</option>
+                <option value="2026-04">04 - Abril 2026 (Corte 30/04/2026)</option>
+                <option value="2026-05">05 - Mayo 2026 (Corte 31/05/2026)</option>
+                <option value="2026-06">06 - Junio 2026 (Corte 30/06/2026)</option>
+                <option value="2026-07">07 - Julio 2026 (Corte 31/07/2026)</option>
+                <option value="2026-08">08 - Agosto 2026 (Corte 31/08/2026)</option>
+                <option value="2026-09">09 - Septiembre 2026 (Corte 30/09/2026)</option>
+                <option value="2026-10">10 - Octubre 2026 (Corte 31/10/2026)</option>
+                <option value="2026-11">11 - Noviembre 2026 (Corte 30/11/2026)</option>
+                <option value="2026-12">12 - Diciembre 2026 (Corte 31/12/2026)</option>
+                <option value="RANGO">📆 Rango Personalizado (Desde / Hasta)</option>
+              </select>
+            </div>
+            <div id="inv-rep-rango-box" style="display:none; gap:8px; align-items:flex-end;">
+              <div>
+                <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px;">Desde</label>
+                <input type="date" id="inv-rep-desde" class="form-control" value="2026-01-01" onchange="cargarReporteMensualInventario()">
+              </div>
+              <div>
+                <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px;">Hasta</label>
+                <input type="date" id="inv-rep-hasta" class="form-control" value="2026-12-31" onchange="cargarReporteMensualInventario()">
+              </div>
+            </div>
+            <div style="min-width: 155px;">
+              <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px; text-transform:uppercase;">Almacén</label>
+              <select id="inv-rep-almacen" class="form-control" onchange="cargarReporteMensualInventario()">
+                <option value="TODOS">Todos los Almacenes</option>
+              </select>
+            </div>
+            <div style="min-width: 210px;">
+              <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px; text-transform:uppercase;">Filtro de Artículos</label>
+              <select id="inv-rep-filtro-mov" class="form-control" onchange="renderReporteMensualInventario()">
+                <option value="TODOS">Todos los Artículos</option>
+                <option value="CON_MOVIMIENTO" selected>Solo con Entradas / Salidas del Período</option>
+                <option value="CON_EXISTENCIA">Con Saldo Inicial o Final ≠ 0</option>
+                <option value="STOCK_NEGATIVO">Alerta: Saldo Negativo (&lt; 0)</option>
+              </select>
+            </div>
+            <div style="min-width: 220px; flex: 1;">
+              <label style="display:block; font-size:0.72rem; font-weight:800; color:#334155; margin-bottom:4px; text-transform:uppercase;">Buscar Código / Descripción</label>
+              <input type="text" id="inv-rep-search" class="form-control" placeholder="Ej: COD-001, filtro, aceite..." oninput="debouncedRenderReporteMensual()">
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="cargarReporteMensualInventario()" title="Recalcular datos del servidor">🔄 Actualizar</button>
+            <button type="button" class="btn btn-emerald" onclick="exportarReporteMensualInventarioExcel()" title="Descargar Excel (.xlsx) con Detalle Art. 177 + Hoja Consolidado Ene–Dic">📥 Exportar Excel (.xlsx)</button>
+            <button type="button" class="btn btn-outline-pdf" onclick="abrirPdfArt177DesdeModal()" title="Abrir Libro Oficial Imprimible SENIAT (PDF)">🖨️ Libro Oficial / PDF Art. 177</button>
+          </div>
+        </div>
+
+        <!-- Banda informativa -->
+        <div id="inv-rep-meta" style="background:#ffffff; border:1px solid #e2e8f0; border-left:4px solid #0284c7; border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:0.8rem; color:#334155; display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px;">
+          <span>Cargando resumen fiscal de inventario...</span>
+        </div>
+
+        <!-- 4 KPIs Bimonetarios -->
+        <div id="inv-rep-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:14px;"></div>
+
+        <!-- Selector de Vista -->
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="btn-inv-rep-tab-consolidado" class="btn" onclick="cambiarVistaModalInvReporte('CONSOLIDADO')"
+              style="background:#0f172a; color:#ffffff; font-weight:700; border:1.5px solid #0284c7;">
+              📅 Consolidado Mes a Mes (Ene–Dic 2026)
+            </button>
+            <button type="button" id="btn-inv-rep-tab-detalle" class="btn btn-secondary" onclick="cambiarVistaModalInvReporte('DETALLE')"
+              style="font-weight:700;">
+              📦 Detalle Artículos (Inicial + Entradas - Salidas = Corte)
+            </button>
+          </div>
+          <div id="inv-rep-count-info" style="font-size:0.78rem; color:#475569; font-weight:600;"></div>
+        </div>
+
+        <!-- Vista 1: Consolidado Mes a Mes -->
+        <div id="inv-rep-vista-consolidado" class="table-responsive" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; max-height:46vh; overflow:auto;">
+          <table class="data-table" style="margin:0; font-size:0.78rem;">
+            <thead>
+              <tr>
+                <th>PERÍODO / MES</th>
+                <th class="text-right">TASA BCV CIERRE</th>
+                <th class="text-right">SALDO INICIAL</th>
+                <th class="text-right" style="color:#059669;">ENTRADAS (COMPRAS / AJUSTES)</th>
+                <th class="text-right" style="color:#be123c;">SALIDAS (VENTAS / OTROS)</th>
+                <th class="text-right" style="color:#0f172a;">INV. FINAL / CORTE</th>
+                <th class="text-center">DOCS</th>
+                <th class="text-center">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-inv-rep-consolidado">
+              <tr><td colspan="8" class="text-center">Cargando consolidado mensual...</td></tr>
+            </tbody>
+            <tfoot id="tfoot-inv-rep-consolidado"></tfoot>
+          </table>
+        </div>
+
+        <!-- Vista 2: Detalle por Artículo -->
+        <div id="inv-rep-vista-detalle" class="table-responsive" style="display:none; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; max-height:46vh; overflow:auto;">
+          <table class="data-table" style="margin:0; font-size:0.76rem;">
+            <thead>
+              <tr>
+                <th>CÓDIGO</th>
+                <th>ARTÍCULO / CATEGORÍA</th>
+                <th>ALMACÉN</th>
+                <th class="text-right">INICIAL</th>
+                <th class="text-right" style="color:#059669;">ENTRADAS</th>
+                <th class="text-right" style="color:#be123c;">SALIDAS</th>
+                <th class="text-right">FINAL CORTE</th>
+                <th class="text-right">COSTO PROM.</th>
+                <th class="text-right">VALOR CORTE</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-inv-rep-detalle">
+              <tr><td colspan="9" class="text-center">Seleccione un período para ver el detalle por artículo...</td></tr>
+            </tbody>
+            <tfoot id="tfoot-inv-rep-detalle"></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding:12px 20px; border-top:1px solid #e2e8f0; background:#ffffff; justify-content:space-between;">
+        <span style="font-size:0.75rem; color:#64748b;">Doble expresión monetaria simultánea (Bs. / $ USD a tasa oficial BCV) • Método Costo Promedio Ponderado Móvil</span>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-reporte-mensual-inventario')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
   <!-- MODAL: TASAS BCV DE CIERRE MENSUAL Y REVALORIZACIÓN DE MESES DECLARADOS-->
   <!-- ====================================================================== -->
   <div class="modal-overlay" id="modal-tasas-bcv" style="display: none;">
@@ -6097,7 +6253,7 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=20261117_v1"></script>
+  <script src="app.js?v=20261123_v1"></script>
 </body>
 
 </html>

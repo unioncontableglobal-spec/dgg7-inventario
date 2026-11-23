@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --ucg-navy: #000080;
@@ -415,12 +416,13 @@
         <select id="sel-vista" class="toolbar-select" style="background:#eff6ff; border-color:#2563eb;" onchange="cambiarModoVista()">
           <option value="ART_177">📊 1. Reporte Mensual Art. 177 RISLR (Entradas, Salidas Tipificadas y Costo Promedio)</option>
           <option value="CIERRE_ANUAL">⚖️ 2. Libro de Inventarios y Balances (Cierre Anual: Toma Física vs. Inventario Teórico)</option>
+          <option value="CONSOLIDADO_MENSUAL">📅 3. Consolidado Mensual Enero a Diciembre 2026 (Mes a Mes)</option>
         </select>
       </div>
 
       <div style="display: flex; gap: 6px;">
         <button class="btn btn-back" onclick="window.close()">Volver</button>
-        <a href="/api/export/libro-art177?formato=xlsx" id="btn-export-xlsx" class="btn btn-excel">📥 Exportar Excel (.xlsx)</a>
+        <a href="javascript:void(0)" onclick="exportarLibroArt177Excel(event)" id="btn-export-xlsx" class="btn btn-excel">📥 Exportar Excel (.xlsx)</a>
         <a href="/api/export/libro-art177?formato=csv" id="btn-export-csv" class="btn btn-csv">📄 Exportar CSV Auditable</a>
         <button class="btn btn-print" onclick="window.print()">
           🖨️ Imprimir / Guardar PDF Oficial
@@ -432,7 +434,8 @@
       <div class="toolbar-controls">
         <label style="font-size:10.5px; font-weight:700; color:#475569;">Período:</label>
         <select id="sel-periodo" class="toolbar-select" onchange="onChangePeriodo()">
-          <option value="ANUAL_2026">📅 Ejercicio Fiscal 2026 (Acumulado)</option>
+          <option value="ANUAL_2026">📅 Ejercicio Fiscal 2026 (Acumulado Ene–Dic)</option>
+          <option value="HISTORICO">🗂️ Histórico Completo (Dic 2025 – Dic 2026)</option>
           <option value="2025-12">🏁 Inventario Inicial al 31/12/2025</option>
           <option value="2026-01">01 - Enero 2026</option>
           <option value="2026-02">02 - Febrero 2026</option>
@@ -442,13 +445,17 @@
           <option value="2026-06">06 - Junio 2026</option>
           <option value="2026-07">07 - Julio 2026</option>
           <option value="2026-08">08 - Agosto 2026</option>
+          <option value="2026-09">09 - Septiembre 2026</option>
+          <option value="2026-10">10 - Octubre 2026</option>
+          <option value="2026-11">11 - Noviembre 2026</option>
+          <option value="2026-12">12 - Diciembre 2026</option>
           <option value="RANGO">📆 Rango de Fechas Personalizado</option>
         </select>
 
         <span id="box-rango-fechas" style="display:none; align-items:center; gap:4px;">
           <input type="date" id="inp-desde" class="toolbar-input" value="2026-01-01" onchange="cargarLibroInventarioSeniat()">
           <span>a</span>
-          <input type="date" id="inp-hasta" class="toolbar-input" value="2026-08-31" onchange="cargarLibroInventarioSeniat()">
+          <input type="date" id="inp-hasta" class="toolbar-input" value="2026-12-31" onchange="cargarLibroInventarioSeniat()">
         </span>
 
         <select id="sel-moneda" class="toolbar-select" onchange="renderTablaActual()">
@@ -463,7 +470,7 @@
         </select>
 
         <select id="sel-filtro-mov" class="toolbar-select" onchange="renderTablaActual()">
-          <option value="TODOS">📦 Catálogo Completo (658 Repuestos)</option>
+          <option value="TODOS">📦 Catálogo Completo (Todos los Repuestos)</option>
           <option value="CON_MOVIMIENTO">⚡ Solo con Movimiento en el Período</option>
           <option value="CON_EXISTENCIA">✅ Solo con Existencia Final &gt; 0</option>
         </select>
@@ -631,6 +638,9 @@
       if (vista === 'CIERRE_ANUAL') {
         mainTitle.textContent = 'LIBRO OFICIAL DE INVENTARIOS Y BALANCES - CIERRE DEL EJERCICIO (ART. 32–35 CÓDIGO DE COMERCIO)';
         boxAsiento.style.display = 'block';
+      } else if (vista === 'CONSOLIDADO_MENSUAL') {
+        mainTitle.textContent = 'REPORTE CONSOLIDADO MENSUAL DE INVENTARIOS (ENERO – DICIEMBRE 2026)';
+        boxAsiento.style.display = 'none';
       } else {
         mainTitle.textContent = 'REGISTRO ESPECIAL DE ENTRADAS Y SALIDAS DE INVENTARIO (ART. 177 REGLAMENTO LEY DE ISLR)';
         boxAsiento.style.display = 'none';
@@ -649,7 +659,7 @@
         query += `&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
       }
 
-      document.getElementById('btn-export-xlsx').href = `/api/export/libro-art177${query}&formato=xlsx`;
+      document.getElementById('btn-export-xlsx').href = 'javascript:void(0)';
       document.getElementById('btn-export-csv').href = `/api/export/libro-art177${query}&formato=csv`;
 
       const tbody = document.getElementById('report-tbody');
@@ -858,6 +868,95 @@
         return;
       }
 
+      if (vista === 'CONSOLIDADO_MENSUAL') {
+        const resumen = Array.isArray(datosLibroActual.resumen_mensual) ? datosLibroActual.resumen_mensual : [];
+        thead.innerHTML = `
+          <tr class="group-header">
+            <th colspan="3">PERÍODO FISCAL Y TASA OFICIAL BCV</th>
+            <th colspan="3" class="grp-inicial">1. INVENTARIO INICIAL</th>
+            <th colspan="3" class="grp-entradas">2. ENTRADAS (COMPRAS / AJUSTES)</th>
+            <th colspan="3" class="grp-salidas">3. SALIDAS (VENTAS / OTROS)</th>
+            <th colspan="3" class="grp-final">4. INVENTARIO FINAL DE CORTE</th>
+            <th>DOCS</th>
+          </tr>
+          <tr>
+            <th style="white-space:nowrap;">PERÍODO</th>
+            <th style="text-align:left;">MES / CORTE</th>
+            <th>TASA BCV (Bs./$)</th>
+            <th style="background:#eff6ff;">UND</th>
+            <th style="background:#eff6ff;">BOLÍVARES (Bs.)</th>
+            <th style="background:#eff6ff;">REF. ($ USD)</th>
+            <th style="background:#ecfdf5;">UND (Comp/Aj)</th>
+            <th style="background:#ecfdf5;">BOLÍVARES (Bs.)</th>
+            <th style="background:#ecfdf5;">REF. ($ USD)</th>
+            <th style="background:#fff1f2;">UND (Vta/Ot)</th>
+            <th style="background:#fff1f2;">BOLÍVARES (Bs.)</th>
+            <th style="background:#fff1f2;">REF. ($ USD)</th>
+            <th style="background:#e0e7ff;">UND</th>
+            <th style="background:#e0e7ff;">BOLÍVARES (Bs.)</th>
+            <th style="background:#e0e7ff;">REF. ($ USD)</th>
+            <th>MOVS</th>
+          </tr>
+        `;
+
+        if (resumen.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="16" class="text-center" style="padding:18px;">No hay datos consolidados disponibles.</td></tr>`;
+          tfoot.innerHTML = '';
+        } else {
+          tbody.innerHTML = resumen.map(m => `
+            <tr>
+              <td class="text-center font-mono font-bold" style="white-space:nowrap; color:var(--ucg-navy);">${m.periodo}</td>
+              <td class="font-bold" style="white-space:nowrap;">${m.nombre} <span style="font-size:7px; color:#64748b;">(${m.fecha_corte})</span></td>
+              <td class="text-right font-mono" style="white-space:nowrap;">Bs. ${fmtBs(m.tasa_bcv)}</td>
+              <td class="text-right font-mono">${fmtNum(m.saldo_inicial_und)}</td>
+              <td class="text-right font-mono font-bold">Bs. ${fmtBs(m.saldo_inicial_ves)}</td>
+              <td class="text-right font-mono" style="color:#475569;">${fmtUsd(m.saldo_inicial_usd)}</td>
+              <td class="text-right font-mono font-bold" style="color:#065f46;">+${fmtNum(m.entradas_und)} <span style="font-size:7px; font-weight:600;">(${m.ent_compras_und}/${m.ent_ajustes_und})</span></td>
+              <td class="text-right font-mono" style="color:#065f46;">Bs. ${fmtBs(m.entradas_ves)}</td>
+              <td class="text-right font-mono" style="color:#475569;">${fmtUsd(m.entradas_usd)}</td>
+              <td class="text-right font-mono font-bold" style="color:#9f1239;">-${fmtNum(m.salidas_und)} <span style="font-size:7px; font-weight:600;">(${m.sal_ventas_und}/${m.sal_otros_und})</span></td>
+              <td class="text-right font-mono" style="color:#9f1239;">Bs. ${fmtBs(m.salidas_ves)}</td>
+              <td class="text-right font-mono" style="color:#475569;">${fmtUsd(m.salidas_usd)}</td>
+              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--ucg-navy);">${fmtNum(m.saldo_final_und)}</td>
+              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--ucg-navy);">Bs. ${fmtBs(m.saldo_final_ves)}</td>
+              <td class="text-right font-mono" style="background:#f8fafc; color:#475569;">${fmtUsd(m.saldo_final_usd)}</td>
+              <td class="text-center font-mono">${m.total_docs || 0}</td>
+            </tr>
+          `).join('');
+
+          const meses2026 = resumen.filter(m => String(m.periodo).startsWith('2026-'));
+          const pIni = meses2026[0] || resumen[0];
+          const pFin = meses2026[meses2026.length - 1] || resumen[resumen.length - 1];
+          const totEntU = meses2026.reduce((s, m) => s + Number(m.entradas_und || 0), 0);
+          const totEntV = meses2026.reduce((s, m) => s + Number(m.entradas_ves || 0), 0);
+          const totEntD = meses2026.reduce((s, m) => s + Number(m.entradas_usd || 0), 0);
+          const totSalU = meses2026.reduce((s, m) => s + Number(m.salidas_und || 0), 0);
+          const totSalV = meses2026.reduce((s, m) => s + Number(m.salidas_ves || 0), 0);
+          const totSalD = meses2026.reduce((s, m) => s + Number(m.salidas_usd || 0), 0);
+          const totDocs = meses2026.reduce((s, m) => s + Number(m.total_docs || 0), 0);
+
+          tfoot.innerHTML = `
+            <tr>
+              <td colspan="3" class="text-right">CONSOLIDADO EJERCICIO FISCAL 2026 (ENERO – DICIEMBRE):</td>
+              <td class="text-right font-mono">${fmtNum(pIni.saldo_inicial_und)}</td>
+              <td class="text-right font-mono">Bs. ${fmtBs(pIni.saldo_inicial_ves)}</td>
+              <td class="text-right font-mono">${fmtUsd(pIni.saldo_inicial_usd)}</td>
+              <td class="text-right font-mono" style="color:#065f46;">+${fmtNum(totEntU)}</td>
+              <td class="text-right font-mono" style="color:#065f46;">Bs. ${fmtBs(totEntV)}</td>
+              <td class="text-right font-mono">${fmtUsd(totEntD)}</td>
+              <td class="text-right font-mono" style="color:#9f1239;">-${fmtNum(totSalU)}</td>
+              <td class="text-right font-mono" style="color:#9f1239;">Bs. ${fmtBs(totSalV)}</td>
+              <td class="text-right font-mono">${fmtUsd(totSalD)}</td>
+              <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtNum(pFin.saldo_final_und)}</td>
+              <td class="text-right font-mono" style="color:var(--ucg-navy);">Bs. ${fmtBs(pFin.saldo_final_ves)}</td>
+              <td class="text-right font-mono">${fmtUsd(pFin.saldo_final_usd)}</td>
+              <td class="text-center font-mono">${totDocs}</td>
+            </tr>
+          `;
+        }
+        return;
+      }
+
       // VISTA ESTÁNDAR OBLIGATORIA: ART. 177 RISLR CON SALIDAS TIPIFICADAS Y COSTO PROMEDIO PONDERADO
       thead.innerHTML = `
         <tr class="group-header">
@@ -953,6 +1052,90 @@
           <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtM(esVes ? tVesFin : tUsdFin)}</td>
         </tr>
       `;
+    }
+
+    async function exportarLibroArt177Excel(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!datosLibroActual) {
+        await cargarLibroInventarioSeniat();
+      }
+      if (!datosLibroActual) return;
+
+      const periodo = document.getElementById('sel-periodo')?.value || 'ANUAL_2026';
+      const almacen = document.getElementById('sel-almacen')?.value || 'TODOS';
+      const desde = document.getElementById('inp-desde')?.value || '';
+      const hasta = document.getElementById('inp-hasta')?.value || '';
+      let query = `?periodo=${encodeURIComponent(periodo)}&almacen=${encodeURIComponent(almacen)}`;
+      if (periodo === 'RANGO' && desde && hasta) query += `&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
+
+      if (typeof XLSX === 'undefined') {
+        window.open(`/api/export/libro-art177${query}&formato=csv`, '_blank');
+        return;
+      }
+
+      const items = Array.isArray(datosLibroActual.items) ? datosLibroActual.items : [];
+      const detalleRows = items.map((it, idx) => ({
+        'N°': idx + 1,
+        'CÓDIGO': it.codigo || '',
+        'DESCRIPCIÓN': it.descripcion || '',
+        'UND': it.unidad_medida || 'UND',
+        'CATEGORÍA': it.categoria || 'GENERAL',
+        'ALMACÉN': it.almacen || 'PRINCIPAL',
+        'INV. INICIAL (UND)': Number(it.cant_inicial || 0),
+        'INV. INICIAL (BS)': Number(it.monto_inicial_ves || 0),
+        'INV. INICIAL ($ USD)': Number(it.monto_inicial_usd || 0),
+        'ENTRADAS (UND)': Number(it.cant_entradas || 0),
+        'COMPRAS (UND)': Number(it.ent_compras_und || 0),
+        'AJUSTES ENT. (UND)': Number(it.ent_ajustes_und || 0),
+        'ENTRADAS (BS)': Number(it.monto_entradas_ves || 0),
+        'ENTRADAS ($ USD)': Number(it.monto_entradas_usd || 0),
+        'SALIDAS (UND)': Number(it.cant_salidas || 0),
+        'VENTAS (UND)': Number(it.sal_venta_und || 0),
+        'AUTOCONSUMO (UND)': Number(it.sal_autoconsumo_und || 0),
+        'RETIROS (UND)': Number(it.sal_retiro_und || 0),
+        'MUESTRAS (UND)': Number(it.sal_muestra_und || 0),
+        'MERMAS (UND)': Number(it.sal_merma_und || 0),
+        'AJUSTES SAL. (UND)': Number(it.sal_ajuste_und || 0),
+        'SALIDAS (BS)': Number(it.monto_salidas_ves || 0),
+        'SALIDAS ($ USD)': Number(it.monto_salidas_usd || 0),
+        'INV. FINAL CORTE (UND)': Number(it.cant_final || 0),
+        'COSTO PROM. (BS)': Number(it.costo_promedio_ves || 0),
+        'COSTO PROM. ($ USD)': Number(it.costo_unitario_usd || 0),
+        'INV. FINAL CORTE (BS)': Number(it.monto_final_ves || 0),
+        'INV. FINAL CORTE ($ USD)': Number(it.monto_final_usd || 0),
+        'CONTEO FÍSICO (UND)': Number(it.conteo_fisico ?? it.cant_final ?? 0),
+        'DIFERENCIA (UND)': Number(it.diferencia_unidades || 0)
+      }));
+
+      const consolidadoRows = (datosLibroActual.resumen_mensual || []).map(m => ({
+        'PERÍODO': m.periodo,
+        'MES': m.nombre,
+        'FECHA INICIO': m.fecha_inicio,
+        'FECHA CORTE': m.fecha_corte,
+        'TASA BCV CIERRE': Number(m.tasa_bcv || 0),
+        'SALDO INICIAL (UND)': Number(m.saldo_inicial_und || 0),
+        'SALDO INICIAL (BS)': Number(m.saldo_inicial_ves || 0),
+        'SALDO INICIAL ($ USD)': Number(m.saldo_inicial_usd || 0),
+        'ENTRADAS (UND)': Number(m.entradas_und || 0),
+        'COMPRAS (UND)': Number(m.ent_compras_und || 0),
+        'AJUSTES ENT. (UND)': Number(m.ent_ajustes_und || 0),
+        'ENTRADAS (BS)': Number(m.entradas_ves || 0),
+        'ENTRADAS ($ USD)': Number(m.entradas_usd || 0),
+        'SALIDAS (UND)': Number(m.salidas_und || 0),
+        'VENTAS (UND)': Number(m.sal_ventas_und || 0),
+        'OTRAS SAL. (UND)': Number(m.sal_otros_und || 0),
+        'SALIDAS (BS)': Number(m.salidas_ves || 0),
+        'SALIDAS ($ USD)': Number(m.salidas_usd || 0),
+        'INV. FINAL CORTE (UND)': Number(m.saldo_final_und || 0),
+        'INV. FINAL CORTE (BS)': Number(m.saldo_final_ves || 0),
+        'INV. FINAL CORTE ($ USD)': Number(m.saldo_final_usd || 0),
+        'DOCUMENTOS': Number(m.total_docs || 0)
+      }));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalleRows), 'DETALLE_ART_177');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidadoRows), 'CONSOLIDADO_ENE_DIC');
+      XLSX.writeFile(wb, `LIBRO_ART177_DG67_${periodo}_${almacen}.xlsx`);
     }
 
     document.addEventListener('DOMContentLoaded', () => {

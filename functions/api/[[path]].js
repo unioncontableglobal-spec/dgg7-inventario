@@ -28,6 +28,11 @@ import {
   obtenerDatosXmlISLR,
   adecuarCodigosRetencionesPeriodo
 } from '../lib/islr_seniat.js';
+import {
+  computeLibroInventarioArt177,
+  getMesAMesCompat,
+  mapItemsArt177ExportRows
+} from '../lib/libro_art177.js';
 
 const TURSO_URL = 'libsql://inventario-dg67-unioncontableglobal-spec.aws-us-east-1.turso.io';
 const TURSO_AUTH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI3NzEzNTEsImlkIjoiMDFhMTY5N2YtYTAwMS03MjNlLWI5NTYtNWExYjA0Yjk2OGI5Iiwia2lkIjoiUVl1M2JpWWk5QUZtZXY4TmZod0x4Z0FDMG9RQ0VGNXBfemt5MmxMZHdkVSIsInJpZCI6ImM4YzJkOTQzLTFmMjctNDBkYi1iNTk1LTI1OTAyNGRkYzUzOSJ9.kYMvoWFHgysur-aq2okfAawMCpTmjCa8wld7JH9kkN9esWS9sZSRNMU0RfnUABAr9mq_WHBw2_ps2LueRoH-Aw';
@@ -3680,21 +3685,47 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/reportes/mes-a-mes' && method === 'GET') {
-      const rawMovs = await db.execute(`
-        SELECT 
-          strftime('%Y-%m', m.fecha) as periodo,
-          SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad ELSE 0 END) as inicial_unidades,
-          SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as inicial_usd,
-          SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad ELSE 0 END) as compras_unidades,
-          SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as compras_usd,
-          SUM(CASE WHEN m.tipo = 'SALIDA_VENTA' THEN md.cantidad ELSE 0 END) as ventas_unidades,
-          COUNT(DISTINCT m.id) as total_docs
-        FROM movimientos m
-        JOIN movimiento_detalles md ON m.id = md.movimiento_id
-        GROUP BY periodo
-        ORDER BY periodo ASC
-      `);
-      return jsonResponse(rawMovs.rows);
+      const monthlyReport = await getMesAMesCompat(db);
+      return jsonResponse(monthlyReport);
+    }
+
+    if (path === '/api/reportes/libro-inventario-seniat' && method === 'GET') {
+      const data = await computeLibroInventarioArt177(db, {
+        periodo: url.searchParams.get('periodo') || 'ANUAL_2026',
+        desde: url.searchParams.get('desde') || '',
+        hasta: url.searchParams.get('hasta') || '',
+        almacen: url.searchParams.get('almacen') || 'TODOS',
+        categoria: url.searchParams.get('categoria') || 'TODAS'
+      });
+      return jsonResponse(data);
+    }
+
+    if (path === '/api/export/libro-art177' && method === 'GET') {
+      const formato = String(url.searchParams.get('formato') || 'csv').toLowerCase();
+      const data = await computeLibroInventarioArt177(db, {
+        periodo: url.searchParams.get('periodo') || 'ANUAL_2026',
+        desde: url.searchParams.get('desde') || '',
+        hasta: url.searchParams.get('hasta') || '',
+        almacen: url.searchParams.get('almacen') || 'TODOS',
+        categoria: url.searchParams.get('categoria') || 'TODAS'
+      });
+      const rows = mapItemsArt177ExportRows(data.items);
+      if (formato === 'json') {
+        return jsonResponse({ data, rows });
+      }
+      const headers = Object.keys(rows[0] || {});
+      const csvRows = [headers.join(';')];
+      for (const r of rows) {
+        csvRows.push(headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'));
+      }
+      const csvContent = '\uFEFF' + csvRows.join('\r\n');
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="LIBRO_INVENTARIO_ART177_${data.fechaFin}.csv"`,
+          ...corsHeaders
+        }
+      });
     }
 
     // ----------------------------------------------------
@@ -3789,34 +3820,40 @@ export async function onRequest(context) {
         sql: "SELECT tasa_bcv FROM tasas_bcv_periodo WHERE periodo = ?",
         args: [targetPeriodo]
       });
-      const tasaCorte = Number(tasaRes.rows[0]?.tasa_bcv || 889.58);
+      const cfgTasaRes = await db.execute("SELECT tasa_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1").catch(() => ({ rows: [] }));
+      const tasaCorte = Number(tasaRes.rows[0]?.tasa_bcv || cfgTasaRes.rows[0]?.tasa_bcv_activa_dia || 889.58);
 
-      const result = await db.execute(`
-        SELECT 
-          p.codigo as "CODIGO",
-          p.descripcion as "DESCRIPCION",
-          p.unidad_medida as "UND",
-          COALESCE(c.nombre, 'GENERAL') as "CATEGORIA",
-          COALESCE(a.nombre, 'PRINCIPAL') as "ALMACEN",
-          p.stock_minimo as "STOCK_MIN",
-          ROUND(COALESCE(SUM(CASE 
-            WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
-                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%')) 
-                 THEN md.cantidad 
-            WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
-                 OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%')) 
-                 THEN -md.cantidad 
-            ELSE 0 
-          END), 0), 2) as "STOCK_ACTUAL",
-          p.costo_referencial_usd as "COSTO_REF_USD"
-        FROM productos p
-        LEFT JOIN categorias c ON p.categoria_id = c.id
-        LEFT JOIN almacenes a ON p.almacen_id = a.id
-        LEFT JOIN movimiento_detalles md ON p.id = md.producto_id
-        LEFT JOIN movimientos m ON md.movimiento_id = m.id
-        GROUP BY p.id
-        ORDER BY p.codigo ASC
-      `);
+      const joinCond = fecha_corte ? "LEFT JOIN movimientos m ON md.movimiento_id = m.id AND m.fecha <= ?" : "LEFT JOIN movimientos m ON md.movimiento_id = m.id";
+      const result = await db.execute({
+        sql: `
+          SELECT 
+            p.codigo as "CODIGO",
+            p.descripcion as "DESCRIPCION",
+            p.unidad_medida as "UND",
+            COALESCE(c.nombre, 'GENERAL') as "CATEGORIA",
+            COALESCE(a.nombre, 'PRINCIPAL') as "ALMACEN",
+            p.stock_minimo as "STOCK_MIN",
+            ROUND(COALESCE(SUM(CASE 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   THEN md.cantidad 
+              WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   THEN -md.cantidad 
+              ELSE 0 
+            END), 0), 2) as "STOCK_ACTUAL",
+            p.costo_referencial_usd as "COSTO_REF_USD",
+            ROUND(p.costo_referencial_usd * ?, 2) as "COSTO_UNIT_BS"
+          FROM productos p
+          LEFT JOIN categorias c ON p.categoria_id = c.id
+          LEFT JOIN almacenes a ON p.almacen_id = a.id
+          LEFT JOIN movimiento_detalles md ON p.id = md.producto_id
+          ${joinCond}
+          GROUP BY p.id
+          ORDER BY p.codigo ASC
+        `,
+        args: fecha_corte ? [tasaCorte, fecha_corte] : [tasaCorte]
+      });
 
       const headers = Object.keys(result.rows[0] || {});
       const csvRows = [headers.join(';')];

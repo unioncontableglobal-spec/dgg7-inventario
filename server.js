@@ -38,6 +38,11 @@ import {
   obtenerDatosXmlISLR,
   adecuarCodigosRetencionesPeriodo
 } from './functions/lib/islr_seniat.js';
+import {
+  computeLibroInventarioArt177,
+  getMesAMesCompat,
+  mapItemsArt177ExportRows
+} from './functions/lib/libro_art177.js';
 
 dotenv.config();
 
@@ -644,92 +649,7 @@ app.get('/api/productos', async (req, res) => {
 // 3.1 Month by Month Inventory Evolution Report
 app.get('/api/reportes/mes-a-mes', async (req, res) => {
   try {
-    const rawMovs = await db.execute(`
-      SELECT 
-        strftime('%Y-%m', m.fecha) as periodo,
-        SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad ELSE 0 END) as inicial_unidades,
-        SUM(CASE WHEN m.tipo = 'INVENTARIO_INICIAL' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as inicial_usd,
-        SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad ELSE 0 END) as compras_unidades,
-        SUM(CASE WHEN m.tipo = 'ENTRADA_COMPRA' THEN md.cantidad * md.costo_unitario_usd ELSE 0 END) as compras_usd,
-        SUM(CASE WHEN m.tipo = 'SALIDA_VENTA' THEN md.cantidad ELSE 0 END) as ventas_unidades,
-        COUNT(DISTINCT m.id) as total_docs
-      FROM movimientos m
-      JOIN movimiento_detalles md ON m.id = md.movimiento_id
-      GROUP BY periodo
-      ORDER BY periodo ASC
-    `);
-
-    const periodNames = {
-      '2025-12': 'Diciembre 2025 (Inventario Inicial)',
-      '2026-01': 'Enero 2026',
-      '2026-02': 'Febrero 2026',
-      '2026-03': 'Marzo 2026',
-      '2026-04': 'Abril 2026',
-      '2026-05': 'Mayo 2026',
-      '2026-06': 'Junio 2026',
-      '2026-07': 'Julio 2026',
-      '2026-08': 'Agosto 2026',
-      '2026-09': 'Septiembre 2026',
-      '2026-10': 'Octubre 2026'
-    };
-
-    const periodDates = {
-      '2025-12': '2025-12-31',
-      '2026-01': '2026-01-31',
-      '2026-02': '2026-02-28',
-      '2026-03': '2026-03-31',
-      '2026-04': '2026-04-30',
-      '2026-05': '2026-05-31',
-      '2026-06': '2026-06-30',
-      '2026-07': '2026-07-31',
-      '2026-08': '2026-08-31',
-      '2026-09': '2026-09-30',
-      '2026-10': '2026-10-31'
-    };
-
-    const tasasRes = await db.execute("SELECT periodo, tasa_bcv, fecha_cierre, moneda FROM tasas_bcv_periodo");
-    const tasasMap = {};
-    for (const t of tasasRes.rows) {
-      tasasMap[t.periodo] = {
-        tasa_bcv: Number(t.tasa_bcv || 68.50),
-        fecha_cierre: t.fecha_cierre || periodDates[t.periodo] || '',
-        moneda: t.moneda || 'USD'
-      };
-    }
-
-    let runningStock = 0;
-    const monthlyReport = rawMovs.rows.map(row => {
-      const saldoInicialPeriodo = runningStock;
-      const entradas = (row.inicial_unidades || 0) + (row.compras_unidades || 0);
-      const salidas = (row.ventas_unidades || 0);
-      runningStock = saldoInicialPeriodo + entradas - salidas;
-
-      const tInfo = tasasMap[row.periodo] || { tasa_bcv: 68.50, fecha_cierre: periodDates[row.periodo] || '', moneda: 'USD' };
-      const inicialUsdNum = Math.round((row.inicial_usd || 0) * 100) / 100;
-      const inicialBsNum = Math.round(inicialUsdNum * tInfo.tasa_bcv * 100) / 100;
-      const comprasUsdNum = Math.round((row.compras_usd || 0) * 100) / 100;
-      const comprasBsNum = Math.round(comprasUsdNum * tInfo.tasa_bcv * 100) / 100;
-
-      return {
-        periodo: row.periodo,
-        nombre: periodNames[row.periodo] || row.periodo,
-        fechaCorte: periodDates[row.periodo] || `${row.periodo}-28`,
-        tasa_bcv_cierre: tInfo.tasa_bcv,
-        fecha_tasa_bcv: tInfo.fecha_cierre,
-        moneda: tInfo.moneda,
-        saldoInicial: Math.round(saldoInicialPeriodo * 10) / 10,
-        entradasInicial: row.inicial_unidades || 0,
-        inicialUsd: inicialUsdNum,
-        inicialBs: inicialBsNum,
-        compras: row.compras_unidades || 0,
-        comprasUsd: row.periodo === '2025-12' ? inicialUsdNum : comprasUsdNum,
-        comprasBs: row.periodo === '2025-12' ? inicialBsNum : comprasBsNum,
-        ventas: row.ventas_unidades || 0,
-        saldoFinal: Math.round(runningStock * 10) / 10,
-        totalDocs: row.total_docs
-      };
-    });
-
+    const monthlyReport = await getMesAMesCompat(db);
     res.json(monthlyReport);
   } catch (error) {
     console.error('Error fetching monthly report:', error);
@@ -738,298 +658,9 @@ app.get('/api/reportes/mes-a-mes', async (req, res) => {
 });
 
 // 3.2 Libro Oficial de Inventarios SENIAT (Art. 177 RISLR y Art. 32-35 Código de Comercio):
-// Calcula con Método de Costo Promedio Ponderado Móvil (CPP) en VES (Moneda de Curso Legal) y USD:
-// Inventario Inicial + Entradas (Compras/Ajustes) - Salidas Discriminadas (Venta, Autoconsumo, Retiro, Muestra, Merma) = Inventario Final
-async function computeLibroInventarioArt177({ periodo = 'ANUAL_2026', desde = '', hasta = '', almacen = 'TODOS', categoria = 'TODAS' }) {
-  let fechaInicio = '2026-01-01';
-  let fechaFin = '2026-12-31';
-
-  if (desde && hasta) {
-    fechaInicio = desde;
-    fechaFin = hasta;
-  } else if (periodo === '2025-12') {
-    fechaInicio = '2025-12-31';
-    fechaFin = '2025-12-31';
-  } else if (/^\d{4}-\d{2}$/.test(periodo)) {
-    fechaInicio = `${periodo}-01`;
-    const [y, m] = periodo.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    fechaFin = `${periodo}-${String(lastDay).padStart(2, '0')}`;
-  }
-
-  // 1. Traer catálogo de productos
-  const prodArgs = [];
-  let prodSql = `
-    SELECT 
-      p.id AS producto_id,
-      p.codigo,
-      p.descripcion,
-      p.unidad_medida,
-      COALESCE(c.nombre, 'GENERAL') AS categoria,
-      COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
-      p.stock_minimo,
-      p.costo_referencial_usd,
-      p.conteo_fisico_cierre,
-      p.fecha_conteo_fisico,
-      p.observacion_auditoria
-    FROM productos p
-    LEFT JOIN categorias c ON p.categoria_id = c.id
-    LEFT JOIN almacenes a ON p.almacen_id = a.id
-    WHERE 1=1
-  `;
-  if (categoria && categoria !== 'TODAS') {
-    prodSql += ` AND COALESCE(c.nombre, 'GENERAL') = ?`;
-    prodArgs.push(categoria);
-  }
-  if (almacen && almacen !== 'TODOS') {
-    prodSql += ` AND COALESCE(a.nombre, 'PRINCIPAL') = ?`;
-    prodArgs.push(almacen);
-  }
-  prodSql += ` ORDER BY p.codigo ASC`;
-
-  // 2. Traer todos los movimientos hasta fechaFin ordenados cronológicamente para cálculo exacto de Costo Promedio Ponderado (CPP)
-  const movsSql = `
-    SELECT 
-      md.producto_id,
-      md.cantidad,
-      md.costo_unitario_usd,
-      md.costo_unitario_ves,
-      m.id AS movimiento_id,
-      m.fecha,
-      m.tipo,
-      COALESCE(m.subtipo, CASE WHEN m.tipo='SALIDA_VENTA' THEN 'VENTA' WHEN m.tipo='ENTRADA_COMPRA' THEN 'COMPRA_NACIONAL' ELSE m.tipo END) AS subtipo,
-      m.numero_documento,
-      m.nro_control,
-      m.usuario_responsable,
-      COALESCE(m.tasa_bcv, 68.50) AS tasa_bcv
-    FROM movimiento_detalles md
-    JOIN movimientos m ON md.movimiento_id = m.id
-    WHERE m.fecha <= ?
-    ORDER BY m.fecha ASC, m.id ASC
-  `;
-
-  const [prodsRes, movsRes] = await Promise.all([
-    db.execute({ sql: prodSql, args: prodArgs }),
-    db.execute({ sql: movsSql, args: [fechaFin] })
-  ]);
-
-  // Agrupar movimientos por producto_id
-  const movsByProd = new Map();
-  for (const m of movsRes.rows) {
-    const pid = Number(m.producto_id);
-    if (!movsByProd.has(pid)) movsByProd.set(pid, []);
-    movsByProd.get(pid).push(m);
-  }
-
-  const isCorteInicial2025 = (fechaInicio === '2025-12-31' && fechaFin === '2025-12-31');
-
-  const items = prodsRes.rows.map(p => {
-    const pid = Number(p.producto_id);
-    const refUsd = Number(p.costo_referencial_usd || 0);
-    const prodMovs = movsByProd.get(pid) || [];
-
-    // Estado continuo de Costo Promedio Ponderado (CPP)
-    let stockActual = 0;
-    let cppUsd = refUsd;
-    let cppVes = Number((refUsd * 52.00).toFixed(2)); // Tasa base Dic 2025
-    let valTotalUsd = 0;
-    let valTotalVes = 0;
-
-    // Variables del período consultado [fechaInicio, fechaFin]
-    let cantInicial = 0, montoInicialUsd = 0, montoInicialVes = 0;
-    let snapshotInicialTomado = false;
-
-    let cantEntradas = 0, montoEntradasUsd = 0, montoEntradasVes = 0;
-    let cantSalidas = 0, montoSalidasUsd = 0, montoSalidasVes = 0;
-
-    // Discriminación normativa Art. 177 RISLR para Salidas
-    let salVentaUnd = 0, salVentaVes = 0, salVentaUsd = 0;
-    let salAutoconsumoUnd = 0, salAutoconsumoVes = 0;
-    let salRetiroUnd = 0, salRetiroVes = 0;
-    let salMuestraUnd = 0, salMuestraVes = 0;
-    let salMermaUnd = 0, salMermaVes = 0;
-    let salAjusteUnd = 0, salAjusteVes = 0;
-
-    for (const m of prodMovs) {
-      const qty = Number(m.cantidad || 0);
-      const tasa = Number(m.tasa_bcv || 68.50);
-      const unitUsd = Number(m.costo_unitario_usd || 0) > 0 ? Number(m.costo_unitario_usd) : (cppUsd > 0 ? cppUsd : refUsd);
-      const unitVes = Number(m.costo_unitario_ves || 0) > 0 ? Number(m.costo_unitario_ves) : Number((unitUsd * tasa).toFixed(2));
-
-      const esAntesDelPeriodo = isCorteInicial2025 ? false : (m.fecha < fechaInicio);
-
-      if (!esAntesDelPeriodo && !snapshotInicialTomado) {
-        if (isCorteInicial2025) {
-          // Para el corte del 31/12/2025, el inventario inicial es el cargado en INVENTARIO_INICIAL
-          cantInicial = 0;
-          montoInicialUsd = 0;
-          montoInicialVes = 0;
-        } else {
-          cantInicial = Number(stockActual.toFixed(2));
-          montoInicialUsd = Number(valTotalUsd.toFixed(2));
-          montoInicialVes = Number(valTotalVes.toFixed(2));
-        }
-        snapshotInicialTomado = true;
-      }
-
-      const sub = String(m.subtipo || '').toUpperCase();
-      const isEntrada = m.tipo === 'INVENTARIO_INICIAL' || m.tipo === 'ENTRADA_COMPRA' || (m.tipo === 'AJUSTE' && sub.includes('POSITIVO'));
-
-      if (isEntrada) {
-        // Recálculo de Costo Promedio Ponderado Móvil: Nuevo CPP = (Valor Anterior + Valor Entrada) / (Unidades Anteriores + Unidades Entrada)
-        const entradaUsd = qty * unitUsd;
-        const entradaVes = qty * unitVes;
-        const nuevoStock = stockActual + qty;
-        if (nuevoStock > 0) {
-          cppUsd = (valTotalUsd + entradaUsd) / nuevoStock;
-          cppVes = (valTotalVes + entradaVes) / nuevoStock;
-        }
-        stockActual = nuevoStock;
-        valTotalUsd = stockActual * cppUsd;
-        valTotalVes = stockActual * cppVes;
-
-        if (!esAntesDelPeriodo) {
-          if (isCorteInicial2025 && m.tipo === 'INVENTARIO_INICIAL') {
-            cantInicial += qty;
-            montoInicialUsd += entradaUsd;
-            montoInicialVes += entradaVes;
-          } else {
-            cantEntradas += qty;
-            montoEntradasUsd += entradaUsd;
-            montoEntradasVes += entradaVes;
-          }
-        }
-      } else {
-        // Salida valorada al Costo Promedio Ponderado vigente (Art. 177 RISLR)
-        const costoSalidaUsd = qty * cppUsd;
-        const costoSalidaVes = qty * cppVes;
-        stockActual = Math.max(0, stockActual - qty);
-        valTotalUsd = stockActual * cppUsd;
-        valTotalVes = stockActual * cppVes;
-
-        if (!esAntesDelPeriodo) {
-          cantSalidas += qty;
-          montoSalidasUsd += costoSalidaUsd;
-          montoSalidasVes += costoSalidaVes;
-
-          if (sub.includes('AUTOCONSUMO')) {
-            salAutoconsumoUnd += qty; salAutoconsumoVes += costoSalidaVes;
-          } else if (sub.includes('RETIRO')) {
-            salRetiroUnd += qty; salRetiroVes += costoSalidaVes;
-          } else if (sub.includes('MUESTRA')) {
-            salMuestraUnd += qty; salMuestraVes += costoSalidaVes;
-          } else if (sub.includes('MERMA') || sub.includes('DANO') || sub.includes('DAÑO')) {
-            salMermaUnd += qty; salMermaVes += costoSalidaVes;
-          } else if (m.tipo === 'AJUSTE' || sub.includes('AJUSTE')) {
-            salAjusteUnd += qty; salAjusteVes += costoSalidaVes;
-          } else {
-            salVentaUnd += qty; salVentaVes += costoSalidaVes; salVentaUsd += costoSalidaUsd;
-          }
-        }
-      }
-    }
-
-    if (!snapshotInicialTomado && !isCorteInicial2025) {
-      cantInicial = Number(stockActual.toFixed(2));
-      montoInicialUsd = Number(valTotalUsd.toFixed(2));
-      montoInicialVes = Number(valTotalVes.toFixed(2));
-    }
-
-    const cantFinal = Number(stockActual.toFixed(2));
-    const montoFinalUsd = Number(valTotalUsd.toFixed(2));
-    const montoFinalVes = Number(valTotalVes.toFixed(2));
-
-    // Toma física vs Teórico para Libro de Inventarios y Balances (Art. 32-35 Código de Comercio)
-    const conteoFisico = (p.conteo_fisico_cierre !== null && p.conteo_fisico_cierre !== undefined)
-      ? Number(p.conteo_fisico_cierre)
-      : cantFinal;
-    const diferenciaUnidades = Number((conteoFisico - cantFinal).toFixed(2));
-    const diferenciaVes = Number((diferenciaUnidades * cppVes).toFixed(2));
-    const diferenciaUsd = Number((diferenciaUnidades * cppUsd).toFixed(2));
-
-    return {
-      producto_id: pid,
-      codigo: p.codigo,
-      descripcion: p.descripcion,
-      unidad_medida: p.unidad_medida,
-      categoria: p.categoria,
-      almacen: p.almacen,
-      stock_minimo: p.stock_minimo,
-      costo_referencial_usd: refUsd,
-      costo_unitario_usd: Number(cppUsd.toFixed(2)),
-      costo_promedio_ves: Number(cppVes.toFixed(2)),
-      // 1. Inventario Inicial
-      cant_inicial: Number(cantInicial.toFixed(2)),
-      monto_inicial_usd: Number(montoInicialUsd.toFixed(2)),
-      monto_inicial_ves: Number(montoInicialVes.toFixed(2)),
-      // 2. Entradas
-      cant_entradas: Number(cantEntradas.toFixed(2)),
-      monto_entradas_usd: Number(montoEntradasUsd.toFixed(2)),
-      monto_entradas_ves: Number(montoEntradasVes.toFixed(2)),
-      // 3. Salidas Totales y Discriminadas (Art. 177 RISLR)
-      cant_salidas: Number(cantSalidas.toFixed(2)),
-      monto_salidas_usd: Number(montoSalidasUsd.toFixed(2)),
-      monto_salidas_ves: Number(montoSalidasVes.toFixed(2)),
-      sal_venta_und: Number(salVentaUnd.toFixed(2)),
-      sal_venta_ves: Number(salVentaVes.toFixed(2)),
-      sal_autoconsumo_und: Number(salAutoconsumoUnd.toFixed(2)),
-      sal_autoconsumo_ves: Number(salAutoconsumoVes.toFixed(2)),
-      sal_retiro_und: Number(salRetiroUnd.toFixed(2)),
-      sal_retiro_ves: Number(salRetiroVes.toFixed(2)),
-      sal_muestra_und: Number(salMuestraUnd.toFixed(2)),
-      sal_muestra_ves: Number(salMuestraVes.toFixed(2)),
-      sal_merma_und: Number(salMermaUnd.toFixed(2)),
-      sal_merma_ves: Number(salMermaVes.toFixed(2)),
-      sal_ajuste_und: Number(salAjusteUnd.toFixed(2)),
-      sal_ajuste_ves: Number(salAjusteVes.toFixed(2)),
-      // 4. Inventario Final
-      cant_final: cantFinal,
-      monto_final_usd: montoFinalUsd,
-      monto_final_ves: montoFinalVes,
-      // 5. Cierre Anual Toma Física vs Teórico (Código de Comercio Art. 32-35)
-      conteo_fisico: conteoFisico,
-      valor_fisico_ves: Number((conteoFisico * cppVes).toFixed(2)),
-      valor_fisico_usd: Number((conteoFisico * cppUsd).toFixed(2)),
-      diferencia_unidades: diferenciaUnidades,
-      diferencia_ves: diferenciaVes,
-      diferencia_usd: diferenciaUsd,
-      observacion_auditoria: p.observacion_auditoria || ''
-    };
-  });
-
-  const mapLabels = {
-    'ANUAL_2026': 'Ejercicio Fiscal 2026 (Acumulado)',
-    '2025-12': 'Inventario Inicial al 31/12/2025',
-    '2026-01': '01 - Enero 2026',
-    '2026-02': '02 - Febrero 2026',
-    '2026-03': '03 - Marzo 2026',
-    '2026-04': '04 - Abril 2026',
-    '2026-05': '05 - Mayo 2026',
-    '2026-06': '06 - Junio 2026',
-    '2026-07': '07 - Julio 2026',
-    '2026-08': '08 - Agosto 2026',
-    '2026-09': '09 - Septiembre 2026',
-    '2026-10': '10 - Octubre 2026'
-  };
-
-  const etiquetaPeriodo = (desde && hasta)
-    ? `Rango Auditado: ${desde} al ${hasta}`
-    : (mapLabels[periodo] || `Período Fiscal ${periodo}`);
-
-  return {
-    periodo,
-    etiquetaPeriodo,
-    fechaInicio,
-    fechaFin,
-    fechaCorte: fechaFin,
-    metodoValoracion: 'COSTO PROMEDIO PONDERADO MÓVIL (ART. 177 RISLR)',
-    items
-  };
-}
-
 app.get('/api/reportes/libro-inventario-seniat', async (req, res) => {
   try {
-    const data = await computeLibroInventarioArt177(req.query);
+    const data = await computeLibroInventarioArt177(db, req.query || {});
     res.json(data);
   } catch (error) {
     console.error('Error en /api/reportes/libro-inventario-seniat:', error);
@@ -1037,51 +668,47 @@ app.get('/api/reportes/libro-inventario-seniat', async (req, res) => {
   }
 });
 
-// 3.3 Exportar Libro Oficial Art. 177 RISLR y Cierre Código de Comercio a Excel / CSV Auditable
+// 3.3 Exportar Libro Oficial Art. 177 RISLR y Consolidado Ene-Dic a Excel / CSV Auditable
 app.get('/api/export/libro-art177', async (req, res) => {
   try {
     const { formato = 'xlsx' } = req.query;
-    const data = await computeLibroInventarioArt177(req.query);
-
-    const rows = data.items.map((it, idx) => ({
-      "N°": idx + 1,
-      "CÓDIGO": it.codigo,
-      "DESCRIPCIÓN DEL REPUESTO / MERCANCÍA": it.descripcion,
-      "UND": it.unidad_medida,
-      "ALMACÉN": it.almacen,
-      "CPP UNITARIO (BS)": it.costo_promedio_ves,
-      "CPP UNITARIO ($)": it.costo_unitario_usd,
-      "INV. INICIAL (UND)": it.cant_inicial,
-      "INV. INICIAL (BS)": it.monto_inicial_ves,
-      "INV. INICIAL ($)": it.monto_inicial_usd,
-      "ENTRADAS COMPRAS (UND)": it.cant_entradas,
-      "ENTRADAS COMPRAS (BS)": it.monto_entradas_ves,
-      "ENTRADAS COMPRAS ($)": it.monto_entradas_usd,
-      "SALIDA VENTA (UND)": it.sal_venta_und,
-      "SALIDA AUTOCONSUMO (UND)": it.sal_autoconsumo_und,
-      "SALIDA RETIRO SOCIOS (UND)": it.sal_retiro_und,
-      "SALIDA MUESTRA (UND)": it.sal_muestra_und,
-      "SALIDA MERMA / DAÑO (UND)": it.sal_merma_und,
-      "TOTAL SALIDAS (UND)": it.cant_salidas,
-      "COSTO SALIDAS (BS)": it.monto_salidas_ves,
-      "COSTO SALIDAS ($)": it.monto_salidas_usd,
-      "INV. FINAL TEÓRICO (UND)": it.cant_final,
-      "INV. FINAL TEÓRICO (BS)": it.monto_final_ves,
-      "INV. FINAL TEÓRICO ($)": it.monto_final_usd,
-      "TOMA FÍSICA CIERRE (UND)": it.conteo_fisico,
-      "DIFERENCIA AUDITORÍA (UND)": it.diferencia_unidades,
-      "AJUSTE CONTABLE CIERRE (BS)": it.diferencia_ves
-    }));
+    const data = await computeLibroInventarioArt177(db, req.query || {});
+    const rows = mapItemsArt177ExportRows(data.items);
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'ART_177_SENIAT');
+    XLSX.utils.book_append_sheet(wb, ws, 'ART_177_DETALLE');
+
+    const resumenRows = (data.resumen_mensual || []).map(m => ({
+      "PERÍODO": m.nombre,
+      "CORTE": m.fecha_corte,
+      "TASA BCV": m.tasa_bcv,
+      "SALDO INICIAL (UND)": m.saldo_inicial_und,
+      "SALDO INICIAL (BS)": m.saldo_inicial_ves,
+      "SALDO INICIAL ($)": m.saldo_inicial_usd,
+      "ENTRADAS (UND)": m.entradas_und,
+      "ENTRADAS (BS)": m.entradas_ves,
+      "ENTRADAS ($)": m.entradas_usd,
+      "SALIDAS (UND)": m.salidas_und,
+      "SALIDAS (BS)": m.salidas_ves,
+      "SALIDAS ($)": m.salidas_usd,
+      "SALDO FINAL (UND)": m.saldo_final_und,
+      "SALDO FINAL (BS)": m.saldo_final_ves,
+      "SALDO FINAL ($)": m.saldo_final_usd,
+      "DOCS": m.total_docs
+    }));
+    const wsResumen = XLSX.utils.json_to_sheet(resumenRows);
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'CONSOLIDADO_ENE_DIC');
 
     if (formato === 'csv') {
       const csv = XLSX.utils.sheet_to_csv(ws);
       res.setHeader('Content-Disposition', `attachment; filename="LIBRO_INVENTARIO_ART177_${data.fechaFin}.csv"`);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       return res.send('\uFEFF' + csv);
+    }
+
+    if (formato === 'json') {
+      return res.json({ data, rows });
     }
 
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true });

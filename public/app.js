@@ -1207,8 +1207,9 @@ async function loadProducts() {
     const exportPdfBtn = document.getElementById('btn-export-pdf');
     const tabExportPdfBtn = document.getElementById('btn-tab-export-pdf');
 
-    const excelUrl = `/api/export/excel${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`;
-    const pdfUrl = `/reporte-seniat.html${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`;
+    const periodoPdf = fechaCorte ? (fechaCorte === '2025-12-31' ? '2025-12' : fechaCorte.slice(0, 7)) : 'ANUAL_2026';
+    const excelUrl = `/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`;
+    const pdfUrl = `/reporte-seniat.html?periodo=${encodeURIComponent(periodoPdf)}`;
 
     if (exportExcelBtn) {
       exportExcelBtn.href = 'javascript:void(0)';
@@ -1332,8 +1333,8 @@ async function exportarInventarioExcel(e) {
   if (e && e.preventDefault) e.preventDefault();
   showToast('Generando Inventario Valorizado en Excel (Art. 177 RISLR)...', 'info');
 
+  const fechaCorte = document.getElementById('inv-periodo-corte')?.value || '';
   try {
-    const fechaCorte = document.getElementById('inv-fecha-corte')?.value || '';
     let url = `/api/productos`;
     if (fechaCorte) url += `?fecha_corte=${encodeURIComponent(fechaCorte)}`;
     const res = await fetch(url);
@@ -1344,12 +1345,13 @@ async function exportarInventarioExcel(e) {
     }
 
     if (typeof XLSX === 'undefined') {
-      window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${fechaCorte}` : ''}`, '_blank');
+      window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`, '_blank');
       return;
     }
 
-    const tasaActiva = pzeroTasaBcv || 889.58;
+    const fallbackTasa = Number(products[0]?.tasa_bcv_aplicada || state.tasaBcv || (typeof pzeroTasaBcv !== 'undefined' ? pzeroTasaBcv : 0) || 889.58);
     const rows = products.map(p => {
+      const tasaActiva = Number(p.tasa_bcv_aplicada || fallbackTasa);
       const stock = Number(p.stock_actual || 0);
       const costoUsd = Number(p.costo_referencial_usd || 0);
       const costoBs = Number((costoUsd * tasaActiva).toFixed(2));
@@ -1379,12 +1381,12 @@ async function exportarInventarioExcel(e) {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'INVENTARIO_DG67');
-    const fileName = `INVENTARIO_DG67_${fechaCorte || 'OCTUBRE_2026'}.xlsx`;
+    const fileName = `INVENTARIO_DG67_${fechaCorte || 'AL_DIA'}.xlsx`;
     XLSX.writeFile(wb, fileName);
     showToast(`✅ Inventario exportado exitosamente (${rows.length} repuestos).`, 'success');
   } catch (err) {
     console.error('Error exportando Inventario:', err);
-    window.open(`/api/export/excel`, '_blank');
+    window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`, '_blank');
   }
 }
 
@@ -10889,6 +10891,481 @@ window.guardarNuevoProductoTomaFisica = guardarNuevoProductoTomaFisica;
 window.calcularCostosNuevoProd = calcularCostosNuevoProd;
 window.calcularPreciosNuevoProd = calcularPreciosNuevoProd;
 window.calcularMargenNuevoProd = calcularMargenNuevoProd;
+
+// ==========================================================================
+// 26. CENTRO DE REPORTES MENSUALES Y CONSOLIDADO ANUAL DE INVENTARIO (ART. 177)
+// ==========================================================================
+let invReporteMensualData = null;
+let invReporteVistaActiva = 'CONSOLIDADO';
+
+function _escHtmlInv(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const debouncedRenderReporteMensual = debounce(() => renderReporteMensualInventario(), 200);
+
+function _sincronizarFiltrosAlmacenModalInv() {
+  const sel = document.getElementById('inv-rep-almacen');
+  if (!sel) return;
+  const current = sel.value || 'TODOS';
+  const almSet = new Set();
+  (state.warehouses || []).forEach(w => { if (w) almSet.add(String(w)); });
+  (state.products || []).forEach(p => { if (p.almacen) almSet.add(String(p.almacen)); });
+  const list = Array.from(almSet).sort();
+  sel.innerHTML = `<option value="TODOS">Todos los Almacenes</option>` +
+    list.map(a => `<option value="${_escHtmlInv(a)}">${_escHtmlInv(a)}</option>`).join('');
+  if (Array.from(sel.options).some(o => o.value === current)) sel.value = current;
+}
+
+function abrirModalReporteMensualInventario(periodoInicial) {
+  const modal = document.getElementById('modal-reporte-mensual-inventario');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  _sincronizarFiltrosAlmacenModalInv();
+
+  const selPeriodo = document.getElementById('inv-rep-periodo');
+  const corteMain = document.getElementById('inv-periodo-corte')?.value || '';
+  let targetPeriodo = periodoInicial || '';
+  if (!targetPeriodo) {
+    if (corteMain === '2025-12-31') targetPeriodo = '2025-12';
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(corteMain)) targetPeriodo = corteMain.slice(0, 7);
+    else targetPeriodo = 'ANUAL_2026';
+  }
+  if (selPeriodo) selPeriodo.value = targetPeriodo;
+
+  const rangoBox = document.getElementById('inv-rep-rango-box');
+  if (rangoBox) rangoBox.style.display = targetPeriodo === 'RANGO' ? 'flex' : 'none';
+
+  invReporteVistaActiva = targetPeriodo === 'ANUAL_2026' ? 'CONSOLIDADO' : 'DETALLE';
+  cargarReporteMensualInventario();
+}
+
+function onChangePeriodoModalInv() {
+  const per = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+  const rangoBox = document.getElementById('inv-rep-rango-box');
+  if (rangoBox) rangoBox.style.display = per === 'RANGO' ? 'flex' : 'none';
+  if (per === 'ANUAL_2026') {
+    invReporteVistaActiva = 'CONSOLIDADO';
+  } else {
+    invReporteVistaActiva = 'DETALLE';
+  }
+  cargarReporteMensualInventario();
+}
+
+function cambiarVistaModalInvReporte(vista) {
+  invReporteVistaActiva = vista === 'DETALLE' ? 'DETALLE' : 'CONSOLIDADO';
+  renderReporteMensualInventario();
+}
+
+function seleccionarMesDesdeConsolidadoInv(periodo) {
+  const selPeriodo = document.getElementById('inv-rep-periodo');
+  if (selPeriodo) selPeriodo.value = periodo;
+  const rangoBox = document.getElementById('inv-rep-rango-box');
+  if (rangoBox) rangoBox.style.display = 'none';
+  invReporteVistaActiva = 'DETALLE';
+  cargarReporteMensualInventario();
+}
+
+async function cargarReporteMensualInventario() {
+  const per = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+  const alm = document.getElementById('inv-rep-almacen')?.value || 'TODOS';
+  const desde = document.getElementById('inv-rep-desde')?.value || '2026-01-01';
+  const hasta = document.getElementById('inv-rep-hasta')?.value || '2026-12-31';
+
+  const params = new URLSearchParams({ periodo: per });
+  if (alm !== 'TODOS') params.set('almacen', alm);
+  if (per === 'RANGO') {
+    params.set('desde', desde);
+    params.set('hasta', hasta);
+  }
+
+  const metaEl = document.getElementById('inv-rep-meta');
+  const tbodyCons = document.getElementById('tbody-inv-rep-consolidado');
+  const tbodyDet = document.getElementById('tbody-inv-rep-detalle');
+  if (metaEl) metaEl.innerHTML = '<span>⏳ Calculando cortes mensuales e inventarios según Art. 177 RISLR...</span>';
+  if (tbodyCons) tbodyCons.innerHTML = '<tr><td colspan="8" class="text-center">Cargando consolidado mes a mes...</td></tr>';
+  if (tbodyDet) tbodyDet.innerHTML = '<tr><td colspan="9" class="text-center">Calculando detalle por artículo...</td></tr>';
+
+  try {
+    const res = await fetch(`/api/reportes/libro-inventario-seniat?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Error al cargar el reporte mensual de inventario');
+    invReporteMensualData = data;
+    renderReporteMensualInventario();
+  } catch (err) {
+    console.error('Error cargando reporte mensual:', err);
+    if (metaEl) metaEl.innerHTML = `<span style="color:#be123c; font-weight:700;">❌ ${_escHtmlInv(err.message)}</span>`;
+    if (tbodyCons) tbodyCons.innerHTML = `<tr><td colspan="8" class="text-center" style="color:#be123c;">${_escHtmlInv(err.message)}</td></tr>`;
+    if (tbodyDet) tbodyDet.innerHTML = `<tr><td colspan="9" class="text-center" style="color:#be123c;">${_escHtmlInv(err.message)}</td></tr>`;
+    showToast(err.message, 'error');
+  }
+}
+
+function renderReporteMensualInventario() {
+  const data = invReporteMensualData;
+  if (!data) return;
+
+  // 1. Toggle vistas y botones
+  const vCons = document.getElementById('inv-rep-vista-consolidado');
+  const vDet = document.getElementById('inv-rep-vista-detalle');
+  const btnCons = document.getElementById('btn-inv-rep-tab-consolidado');
+  const btnDet = document.getElementById('btn-inv-rep-tab-detalle');
+
+  const esDet = invReporteVistaActiva === 'DETALLE';
+  if (vCons) vCons.style.display = esDet ? 'none' : 'block';
+  if (vDet) vDet.style.display = esDet ? 'block' : 'none';
+  if (btnCons) {
+    btnCons.style.background = esDet ? '' : '#0f172a';
+    btnCons.style.color = esDet ? '' : '#ffffff';
+    btnCons.style.border = esDet ? '' : '1.5px solid #0284c7';
+    btnCons.className = esDet ? 'btn btn-secondary' : 'btn';
+  }
+  if (btnDet) {
+    btnDet.style.background = esDet ? '#0f172a' : '';
+    btnDet.style.color = esDet ? '#ffffff' : '';
+    btnDet.style.border = esDet ? '1.5px solid #0284c7' : '';
+    btnDet.className = esDet ? 'btn' : 'btn btn-secondary';
+  }
+
+  // 2. Meta bar
+  const metaEl = document.getElementById('inv-rep-meta');
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <div><strong>Período Consultado:</strong> ${_escHtmlInv(data.etiquetaPeriodo)} <span class="font-mono" style="color:#475569;">(${_escHtmlInv(data.fechaInicio)} al ${_escHtmlInv(data.fechaFin)})</span></div>
+      <div><strong>Tasa Oficial BCV de Corte:</strong> <span class="font-mono" style="color:#0284c7; font-weight:800;">Bs. ${fmtBs(data.tasaBcvCorte)} / USD</span></div>
+      <div><strong>Método:</strong> <span style="color:#0f172a; font-weight:700;">${_escHtmlInv(data.metodoValoracion || 'COSTO PROMEDIO PONDERADO MÓVIL')}</span></div>
+    `;
+  }
+
+  // 3. 4 KPIs Bimonetarios (paleta sobria institucional)
+  const t = data.totales || {};
+  const kpisEl = document.getElementById('inv-rep-kpis');
+  if (kpisEl) {
+    const cardStyle = 'background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;';
+    kpisEl.innerHTML = `
+      <div style="${cardStyle} border-left:4px solid #0f172a;">
+        <div style="font-size:0.7rem; font-weight:800; color:#475569; text-transform:uppercase;">Inventario Inicial</div>
+        <div style="font-size:1.05rem; font-weight:800; color:#0f172a; margin-top:4px;" class="font-mono">Bs. ${fmtBs(t.monto_inicial_ves)}</div>
+        <div style="display:flex; justify-content:space-between; font-size:0.76rem; color:#64748b; margin-top:2px;" class="font-mono">
+          <span>$${fmtUsd(t.monto_inicial_usd)} USD</span>
+          <strong style="color:#0f172a;">${fmtBs(t.cant_inicial)} unds</strong>
+        </div>
+      </div>
+      <div style="${cardStyle} border-left:4px solid #059669;">
+        <div style="font-size:0.7rem; font-weight:800; color:#059669; text-transform:uppercase;">Entradas del Período</div>
+        <div style="font-size:1.05rem; font-weight:800; color:#059669; margin-top:4px;" class="font-mono">Bs. ${fmtBs(t.monto_entradas_ves)}</div>
+        <div style="display:flex; justify-content:space-between; font-size:0.76rem; color:#64748b; margin-top:2px;" class="font-mono">
+          <span>$${fmtUsd(t.monto_entradas_usd)} USD</span>
+          <strong style="color:#059669;">+${fmtBs(t.cant_entradas)} unds (Comp: ${t.ent_compras_und || 0})</strong>
+        </div>
+      </div>
+      <div style="${cardStyle} border-left:4px solid #be123c;">
+        <div style="font-size:0.7rem; font-weight:800; color:#be123c; text-transform:uppercase;">Salidas del Período</div>
+        <div style="font-size:1.05rem; font-weight:800; color:#be123c; margin-top:4px;" class="font-mono">Bs. ${fmtBs(t.monto_salidas_ves)}</div>
+        <div style="display:flex; justify-content:space-between; font-size:0.76rem; color:#64748b; margin-top:2px;" class="font-mono">
+          <span>$${fmtUsd(t.monto_salidas_usd)} USD</span>
+          <strong style="color:#be123c;">-${fmtBs(t.cant_salidas)} unds (Vta: ${t.sal_venta_und || 0})</strong>
+        </div>
+      </div>
+      <div style="${cardStyle} border-left:4px solid #0284c7;">
+        <div style="font-size:0.7rem; font-weight:800; color:#0284c7; text-transform:uppercase;">Inventario Final (Corte)</div>
+        <div style="font-size:1.05rem; font-weight:800; color:#0284c7; margin-top:4px;" class="font-mono">Bs. ${fmtBs(t.monto_final_ves)}</div>
+        <div style="display:flex; justify-content:space-between; font-size:0.76rem; color:#64748b; margin-top:2px;" class="font-mono">
+          <span>$${fmtUsd(t.monto_final_usd)} USD</span>
+          <strong style="color:#0f172a;">${fmtBs(t.cant_final)} unds</strong>
+        </div>
+      </div>
+    `;
+  }
+
+  // 4. Tabla Consolidada Mes a Mes (2025-12 + 2026-01..2026-12)
+  const resumen = Array.isArray(data.resumen_mensual) ? data.resumen_mensual : [];
+  const tbodyCons = document.getElementById('tbody-inv-rep-consolidado');
+  const tfootCons = document.getElementById('tfoot-inv-rep-consolidado');
+  const perSel = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+
+  if (tbodyCons) {
+    if (resumen.length === 0) {
+      tbodyCons.innerHTML = '<tr><td colspan="8" class="text-center">Sin períodos disponibles.</td></tr>';
+    } else {
+      tbodyCons.innerHTML = resumen.map(m => {
+        const activeRow = perSel === m.periodo ? 'background:#eff6ff;' : '';
+        return `
+          <tr style="${activeRow}">
+            <td style="white-space:nowrap;">
+              <span class="font-mono" style="font-weight:800; color:#0f172a;">${_escHtmlInv(m.periodo)}</span>
+              <div style="font-size:0.72rem; color:#475569; font-weight:600;">${_escHtmlInv(m.nombre)}</div>
+            </td>
+            <td class="text-right font-mono" style="white-space:nowrap;">Bs. ${fmtBs(m.tasa_bcv)}</td>
+            <td class="text-right font-mono">
+              <strong>${fmtBs(m.saldo_inicial_und)} und</strong>
+              <div style="font-size:0.72rem; color:#0f172a;">Bs. ${fmtBs(m.saldo_inicial_ves)}</div>
+              <div style="font-size:0.68rem; color:#64748b;">$${fmtUsd(m.saldo_inicial_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#059669;">+${fmtBs(m.entradas_und)} und</strong>
+              <div style="font-size:0.68rem; color:#475569;">Comp: ${m.ent_compras_und} | Aj: ${m.ent_ajustes_und}</div>
+              <div style="font-size:0.72rem; color:#059669;">Bs. ${fmtBs(m.entradas_ves)}</div>
+              <div style="font-size:0.68rem; color:#64748b;">$${fmtUsd(m.entradas_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#be123c;">-${fmtBs(m.salidas_und)} und</strong>
+              <div style="font-size:0.68rem; color:#475569;">Vta: ${m.sal_ventas_und} | Ot: ${m.sal_otros_und}</div>
+              <div style="font-size:0.72rem; color:#be123c;">Bs. ${fmtBs(m.salidas_ves)}</div>
+              <div style="font-size:0.68rem; color:#64748b;">$${fmtUsd(m.salidas_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#0284c7;">${fmtBs(m.saldo_final_und)} und</strong>
+              <div style="font-size:0.72rem; color:#0f172a; font-weight:700;">Bs. ${fmtBs(m.saldo_final_ves)}</div>
+              <div style="font-size:0.68rem; color:#64748b;">$${fmtUsd(m.saldo_final_usd)}</div>
+            </td>
+            <td class="text-center font-mono" style="white-space:nowrap; font-size:0.72rem;">
+              <span style="color:#059669;">E:${m.docs_entradas}</span> / <span style="color:#be123c;">S:${m.docs_salidas}</span>
+              <div style="color:#64748b;">Tot: ${m.total_docs}</div>
+            </td>
+            <td class="text-center" style="white-space:nowrap;">
+              <button type="button" class="btn btn-secondary" style="padding:4px 8px; font-size:0.72rem;" onclick="seleccionarMesDesdeConsolidadoInv('${_escHtmlInv(m.periodo)}')">🔍 Ver Mes</button>
+              <a href="/reporte-seniat.html?periodo=${encodeURIComponent(m.periodo)}" target="_blank" class="btn btn-outline-pdf" style="padding:4px 8px; font-size:0.72rem;">PDF</a>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  if (tfootCons && resumen.length > 0) {
+    const meses2026 = resumen.filter(m => String(m.periodo).startsWith('2026-'));
+    const primero2026 = meses2026[0] || resumen[0];
+    const ultimo2026 = meses2026[meses2026.length - 1] || resumen[resumen.length - 1];
+    const sumEntUnd = meses2026.reduce((s, m) => s + Number(m.entradas_und || 0), 0);
+    const sumEntVes = meses2026.reduce((s, m) => s + Number(m.entradas_ves || 0), 0);
+    const sumEntUsd = meses2026.reduce((s, m) => s + Number(m.entradas_usd || 0), 0);
+    const sumSalUnd = meses2026.reduce((s, m) => s + Number(m.salidas_und || 0), 0);
+    const sumSalVes = meses2026.reduce((s, m) => s + Number(m.salidas_ves || 0), 0);
+    const sumSalUsd = meses2026.reduce((s, m) => s + Number(m.salidas_usd || 0), 0);
+    const sumDocs = meses2026.reduce((s, m) => s + Number(m.total_docs || 0), 0);
+    tfootCons.innerHTML = `
+      <tr style="background:#f1f5f9; font-weight:800; border-top:2px solid #0f172a;">
+        <td colspan="2">TOTAL EJERCICIO 2026 (ENE – DIC)</td>
+        <td class="text-right font-mono">${fmtBs(primero2026.saldo_inicial_und)} und<br><span style="font-size:0.72rem;">Bs. ${fmtBs(primero2026.saldo_inicial_ves)}</span><br><span style="font-size:0.68rem; color:#64748b;">$${fmtUsd(primero2026.saldo_inicial_usd)}</span></td>
+        <td class="text-right font-mono" style="color:#059669;">+${fmtBs(sumEntUnd)} und<br><span style="font-size:0.72rem;">Bs. ${fmtBs(sumEntVes)}</span><br><span style="font-size:0.68rem; color:#64748b;">$${fmtUsd(sumEntUsd)}</span></td>
+        <td class="text-right font-mono" style="color:#be123c;">-${fmtBs(sumSalUnd)} und<br><span style="font-size:0.72rem;">Bs. ${fmtBs(sumSalVes)}</span><br><span style="font-size:0.68rem; color:#64748b;">$${fmtUsd(sumSalUsd)}</span></td>
+        <td class="text-right font-mono" style="color:#0284c7;">${fmtBs(ultimo2026.saldo_final_und)} und<br><span style="font-size:0.72rem; color:#0f172a;">Bs. ${fmtBs(ultimo2026.saldo_final_ves)}</span><br><span style="font-size:0.68rem; color:#64748b;">$${fmtUsd(ultimo2026.saldo_final_usd)}</span></td>
+        <td class="text-center font-mono">${sumDocs}</td>
+        <td class="text-center"><button type="button" class="btn btn-emerald" style="padding:4px 8px; font-size:0.72rem;" onclick="exportarReporteMensualInventarioExcel()">📥 .xlsx</button></td>
+      </tr>
+    `;
+  }
+
+  // 5. Tabla Detalle por Artículo filtrada
+  const allItems = Array.isArray(data.items) ? data.items : [];
+  const filtroMov = document.getElementById('inv-rep-filtro-mov')?.value || 'TODOS';
+  const q = (document.getElementById('inv-rep-search')?.value || '').trim().toLowerCase();
+
+  const filtered = allItems.filter(it => {
+    if (filtroMov === 'CON_MOVIMIENTO' && Number(it.cant_entradas || 0) === 0 && Number(it.cant_salidas || 0) === 0) return false;
+    if (filtroMov === 'CON_EXISTENCIA' && Number(it.cant_inicial || 0) === 0 && Number(it.cant_final || 0) === 0) return false;
+    if (filtroMov === 'STOCK_NEGATIVO' && Number(it.cant_final || 0) >= 0 && Number(it.cant_inicial || 0) >= 0) return false;
+    if (q) {
+      const hay = `${it.codigo || ''} ${it.descripcion || ''} ${it.categoria || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const countInfoEl = document.getElementById('inv-rep-count-info');
+  if (countInfoEl) {
+    countInfoEl.textContent = esDet
+      ? `Mostrando ${filtered.length} de ${allItems.length} artículos`
+      : `Serie completa: ${resumen.length} períodos (Inicial Dic-2025 + Ene–Dic 2026)`;
+  }
+
+  const tbodyDet = document.getElementById('tbody-inv-rep-detalle');
+  const tfootDet = document.getElementById('tfoot-inv-rep-detalle');
+  if (tbodyDet) {
+    if (filtered.length === 0) {
+      tbodyDet.innerHTML = '<tr><td colspan="9" class="text-center">No hay artículos que coincidan con el filtro seleccionado en este período.</td></tr>';
+    } else {
+      tbodyDet.innerHTML = filtered.map(it => {
+        const negStyle = Number(it.cant_final) < 0 ? 'color:#be123c; font-weight:800;' : 'color:#0f172a; font-weight:800;';
+        return `
+          <tr>
+            <td class="font-mono" style="white-space:nowrap; font-weight:700;">${_escHtmlInv(it.codigo)}</td>
+            <td>
+              <div style="font-weight:700; color:#0f172a;">${_escHtmlInv(it.descripcion)}</div>
+              <div style="font-size:0.68rem; color:#64748b;">${_escHtmlInv(it.categoria || 'GENERAL')} • ${_escHtmlInv(it.unidad_medida || 'UND')}</div>
+            </td>
+            <td style="white-space:nowrap;">${_escHtmlInv(it.almacen || 'PRINCIPAL')}</td>
+            <td class="text-right font-mono">
+              <strong>${fmtBs(it.cant_inicial)}</strong>
+              <div style="font-size:0.7rem;">Bs. ${fmtBs(it.monto_inicial_ves)}</div>
+              <div style="font-size:0.66rem; color:#64748b;">$${fmtUsd(it.monto_inicial_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#059669;">+${fmtBs(it.cant_entradas)}</strong>
+              <div style="font-size:0.7rem; color:#059669;">Bs. ${fmtBs(it.monto_entradas_ves)}</div>
+              <div style="font-size:0.66rem; color:#64748b;">$${fmtUsd(it.monto_entradas_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#be123c;">-${fmtBs(it.cant_salidas)}</strong>
+              <div style="font-size:0.7rem; color:#be123c;">Bs. ${fmtBs(it.monto_salidas_ves)}</div>
+              <div style="font-size:0.66rem; color:#64748b;">$${fmtUsd(it.monto_salidas_usd)}</div>
+            </td>
+            <td class="text-right font-mono" style="${negStyle}">${fmtBs(it.cant_final)}</td>
+            <td class="text-right font-mono">
+              <div>Bs. ${fmtBs(it.costo_promedio_ves)}</div>
+              <div style="font-size:0.66rem; color:#64748b;">$${fmtUsd(it.costo_unitario_usd)}</div>
+            </td>
+            <td class="text-right font-mono">
+              <strong style="color:#0284c7;">Bs. ${fmtBs(it.monto_final_ves)}</strong>
+              <div style="font-size:0.68rem; color:#64748b;">$${fmtUsd(it.monto_final_usd)}</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  if (tfootDet) {
+    const subIniU = filtered.reduce((s, r) => s + Number(r.cant_inicial || 0), 0);
+    const subIniV = filtered.reduce((s, r) => s + Number(r.monto_inicial_ves || 0), 0);
+    const subIniD = filtered.reduce((s, r) => s + Number(r.monto_inicial_usd || 0), 0);
+    const subEntU = filtered.reduce((s, r) => s + Number(r.cant_entradas || 0), 0);
+    const subEntV = filtered.reduce((s, r) => s + Number(r.monto_entradas_ves || 0), 0);
+    const subEntD = filtered.reduce((s, r) => s + Number(r.monto_entradas_usd || 0), 0);
+    const subSalU = filtered.reduce((s, r) => s + Number(r.cant_salidas || 0), 0);
+    const subSalV = filtered.reduce((s, r) => s + Number(r.monto_salidas_ves || 0), 0);
+    const subSalD = filtered.reduce((s, r) => s + Number(r.monto_salidas_usd || 0), 0);
+    const subFinU = filtered.reduce((s, r) => s + Number(r.cant_final || 0), 0);
+    const subFinV = filtered.reduce((s, r) => s + Number(r.monto_final_ves || 0), 0);
+    const subFinD = filtered.reduce((s, r) => s + Number(r.monto_final_usd || 0), 0);
+
+    tfootDet.innerHTML = `
+      <tr style="background:#f1f5f9; font-weight:800; border-top:2px solid #0f172a;">
+        <td colspan="3">SUBTOTAL FILTRADO (${filtered.length} artículos)</td>
+        <td class="text-right font-mono">${fmtBs(subIniU)}<br><span style="font-size:0.7rem;">Bs. ${fmtBs(subIniV)}</span><br><span style="font-size:0.66rem; color:#64748b;">$${fmtUsd(subIniD)}</span></td>
+        <td class="text-right font-mono" style="color:#059669;">+${fmtBs(subEntU)}<br><span style="font-size:0.7rem;">Bs. ${fmtBs(subEntV)}</span><br><span style="font-size:0.66rem; color:#64748b;">$${fmtUsd(subEntD)}</span></td>
+        <td class="text-right font-mono" style="color:#be123c;">-${fmtBs(subSalU)}<br><span style="font-size:0.7rem;">Bs. ${fmtBs(subSalV)}</span><br><span style="font-size:0.66rem; color:#64748b;">$${fmtUsd(subSalD)}</span></td>
+        <td class="text-right font-mono">${fmtBs(subFinU)}</td>
+        <td class="text-right font-mono">—</td>
+        <td class="text-right font-mono" style="color:#0284c7;">Bs. ${fmtBs(subFinV)}<br><span style="font-size:0.68rem; color:#64748b;">$${fmtUsd(subFinD)}</span></td>
+      </tr>
+    `;
+  }
+}
+
+async function exportarReporteMensualInventarioExcel() {
+  if (!invReporteMensualData) {
+    await cargarReporteMensualInventario();
+  }
+  const data = invReporteMensualData;
+  if (!data) return;
+
+  const per = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+  const alm = document.getElementById('inv-rep-almacen')?.value || 'TODOS';
+  if (typeof XLSX === 'undefined') {
+    const url = `/api/export/libro-art177?periodo=${encodeURIComponent(per)}&almacen=${encodeURIComponent(alm)}&formato=csv`;
+    window.open(url, '_blank');
+    return;
+  }
+
+  showToast('Generando Libro Excel Art. 177 + Consolidado Ene–Dic 2026...', 'info');
+  const items = Array.isArray(data.items) ? data.items : [];
+  const detalleRows = items.map((it, idx) => ({
+    'N°': idx + 1,
+    'CÓDIGO': it.codigo || '',
+    'DESCRIPCIÓN': it.descripcion || '',
+    'UND': it.unidad_medida || 'UND',
+    'CATEGORÍA': it.categoria || 'GENERAL',
+    'ALMACÉN': it.almacen || 'PRINCIPAL',
+    'INV. INICIAL (UND)': Number(it.cant_inicial || 0),
+    'INV. INICIAL (BS)': Number(it.monto_inicial_ves || 0),
+    'INV. INICIAL ($ USD)': Number(it.monto_inicial_usd || 0),
+    'ENTRADAS (UND)': Number(it.cant_entradas || 0),
+    'COMPRAS (UND)': Number(it.ent_compras_und || 0),
+    'AJUSTES ENT. (UND)': Number(it.ent_ajustes_und || 0),
+    'ENTRADAS (BS)': Number(it.monto_entradas_ves || 0),
+    'ENTRADAS ($ USD)': Number(it.monto_entradas_usd || 0),
+    'SALIDAS (UND)': Number(it.cant_salidas || 0),
+    'VENTAS (UND)': Number(it.sal_venta_und || 0),
+    'AUTOCONSUMO (UND)': Number(it.sal_autoconsumo_und || 0),
+    'RETIROS (UND)': Number(it.sal_retiro_und || 0),
+    'MUESTRAS (UND)': Number(it.sal_muestra_und || 0),
+    'MERMAS (UND)': Number(it.sal_merma_und || 0),
+    'AJUSTES SAL. (UND)': Number(it.sal_ajuste_und || 0),
+    'SALIDAS (BS)': Number(it.monto_salidas_ves || 0),
+    'SALIDAS ($ USD)': Number(it.monto_salidas_usd || 0),
+    'INV. FINAL CORTE (UND)': Number(it.cant_final || 0),
+    'COSTO PROM. (BS)': Number(it.costo_promedio_ves || 0),
+    'COSTO PROM. ($ USD)': Number(it.costo_unitario_usd || 0),
+    'INV. FINAL CORTE (BS)': Number(it.monto_final_ves || 0),
+    'INV. FINAL CORTE ($ USD)': Number(it.monto_final_usd || 0),
+    'CONTEO FÍSICO (UND)': Number(it.conteo_fisico ?? it.cant_final ?? 0),
+    'DIFERENCIA (UND)': Number(it.diferencia_unidades || 0)
+  }));
+
+  const consolidadoRows = (data.resumen_mensual || []).map(m => ({
+    'PERÍODO': m.periodo,
+    'MES': m.nombre,
+    'FECHA INICIO': m.fecha_inicio,
+    'FECHA CORTE': m.fecha_corte,
+    'TASA BCV CIERRE': Number(m.tasa_bcv || 0),
+    'SALDO INICIAL (UND)': Number(m.saldo_inicial_und || 0),
+    'SALDO INICIAL (BS)': Number(m.saldo_inicial_ves || 0),
+    'SALDO INICIAL ($ USD)': Number(m.saldo_inicial_usd || 0),
+    'ENTRADAS (UND)': Number(m.entradas_und || 0),
+    'COMPRAS (UND)': Number(m.ent_compras_und || 0),
+    'AJUSTES ENT. (UND)': Number(m.ent_ajustes_und || 0),
+    'ENTRADAS (BS)': Number(m.entradas_ves || 0),
+    'ENTRADAS ($ USD)': Number(m.entradas_usd || 0),
+    'SALIDAS (UND)': Number(m.salidas_und || 0),
+    'VENTAS (UND)': Number(m.sal_ventas_und || 0),
+    'OTRAS SAL. (UND)': Number(m.sal_otros_und || 0),
+    'SALIDAS (BS)': Number(m.salidas_ves || 0),
+    'SALIDAS ($ USD)': Number(m.salidas_usd || 0),
+    'INV. FINAL CORTE (UND)': Number(m.saldo_final_und || 0),
+    'INV. FINAL CORTE (BS)': Number(m.saldo_final_ves || 0),
+    'INV. FINAL CORTE ($ USD)': Number(m.saldo_final_usd || 0),
+    'DOCUMENTOS': Number(m.total_docs || 0)
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalleRows), 'DETALLE_ART_177');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidadoRows), 'CONSOLIDADO_ENE_DIC');
+  const fileName = `DG67_LIBRO_INVENTARIO_${per}_${alm}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+  showToast(`✅ Excel descargado: ${fileName}`, 'success');
+}
+
+function abrirPdfArt177DesdeModal() {
+  const per = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+  const alm = document.getElementById('inv-rep-almacen')?.value || 'TODOS';
+  const desde = document.getElementById('inv-rep-desde')?.value || '';
+  const hasta = document.getElementById('inv-rep-hasta')?.value || '';
+  const vista = invReporteVistaActiva === 'CONSOLIDADO' ? 'CONSOLIDADO_MENSUAL' : 'ART_177';
+
+  const params = new URLSearchParams({ periodo: per, vista });
+  if (alm !== 'TODOS') params.set('almacen', alm);
+  if (per === 'RANGO' && desde && hasta) {
+    params.set('desde', desde);
+    params.set('hasta', hasta);
+  }
+  window.open(`/reporte-seniat.html?${params.toString()}`, '_blank');
+}
+
+window.abrirModalReporteMensualInventario = abrirModalReporteMensualInventario;
+window.onChangePeriodoModalInv = onChangePeriodoModalInv;
+window.cambiarVistaModalInvReporte = cambiarVistaModalInvReporte;
+window.seleccionarMesDesdeConsolidadoInv = seleccionarMesDesdeConsolidadoInv;
+window.cargarReporteMensualInventario = cargarReporteMensualInventario;
+window.renderReporteMensualInventario = renderReporteMensualInventario;
+window.debouncedRenderReporteMensual = debouncedRenderReporteMensual;
+window.exportarReporteMensualInventarioExcel = exportarReporteMensualInventarioExcel;
+window.abrirPdfArt177DesdeModal = abrirPdfArt177DesdeModal;
 
 
 
