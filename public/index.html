@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261125_v1">
+  <link rel="stylesheet" href="style.css?v=20261125_v2">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -258,7 +258,9 @@
 
       <!-- 1. Encabezado del Sistema SUMA (Sin Caja Blanca) -->
       <div class="sidebar-brand">
-        <img src="assets/brand/suma-isotipo.png" alt="SUMA" class="sidebar-logo">
+        <div class="sidebar-logo-halo">
+          <img src="assets/brand/suma-isotipo.png" alt="SUMA" class="sidebar-logo">
+        </div>
         <div class="sidebar-brand-text">
           <div class="sidebar-suma-title">
             <span class="sidebar-suma-word">SUMA</span><span class="sidebar-suma-plus">+</span>
@@ -427,14 +429,11 @@
         </button>
       </nav>
 
-      <!-- 4. Pie de la Barra Lateral: Estado en la Nube & Perfil de Usuario -->
+      <!-- 4. Pie de la Barra Lateral: Estado del Sistema & Perfil de Usuario -->
       <div class="sidebar-footer">
-        <div class="cloud-badge-sidebar" id="cloud-badge" title="Turso Cloud libSQL Encriptado">
+        <div class="cloud-badge-sidebar" id="cloud-badge" title="Estado del Sistema en Tiempo Real">
           <span class="status-pulse"></span>
-          <div class="cloud-status-info">
-            <span class="cloud-title">Turso Cloud Activo</span>
-            <span class="cloud-sub">Base de datos sincronizada</span>
-          </div>
+          <span>Sistema En Línea</span>
         </div>
 
         <!-- Perfil del Usuario Autenticado y Salida Segura -->
@@ -447,7 +446,7 @@
             </div>
           </div>
           <button class="btn-logout" id="btn-logout" title="Cerrar Sesión Segura" onclick="logoutSession()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>

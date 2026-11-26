@@ -108,38 +108,51 @@ body {
 
 /* 1. BARRA LATERAL IZQUIERDA OSCURA (#0f172a — ESTÁNDAR SUMA ERP) */
 .app-sidebar {
-  width: 248px;
-  min-width: 248px;
-  max-width: 248px;
+  width: 276px;
+  min-width: 276px;
+  max-width: 276px;
   flex-shrink: 0;
   height: 100vh;
   position: sticky;
   top: 0;
   background: linear-gradient(180deg, #091122 0%, #0f172a 100%);
-  border-right: 1px solid rgba(56, 189, 248, 0.16);
+  border-right: 1px solid rgba(56, 189, 248, 0.18);
   display: flex;
   flex-direction: column;
   z-index: 100;
   box-shadow: 4px 0 24px rgba(15, 23, 42, 0.18);
   user-select: none;
+  overflow: hidden;
 }
 
-/* 1.1 Brand SUMA+ (Sin Caja Blanca) */
+/* 1.1 Brand SUMA+ (Sin Caja Blanca — Halo Luminoso Transparente) */
 .sidebar-brand {
-  padding: 14px 14px 12px;
+  padding: 10px 14px 9px;
   display: flex;
   align-items: center;
   gap: 11px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(9, 17, 34, 0.5);
+  background: radial-gradient(circle at 40px 36px, rgba(56, 189, 248, 0.15) 0%, rgba(9, 17, 34, 0.6) 65%);
+  flex-shrink: 0;
+}
+
+.sidebar-logo-halo {
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 48% 48%, rgba(224, 242, 254, 0.36) 0%, rgba(125, 211, 252, 0.22) 45%, rgba(14, 165, 233, 0.07) 68%, transparent 76%);
 }
 
 .sidebar-logo {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   object-fit: contain;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.45));
+  filter: brightness(1.18) contrast(1.08) saturate(1.1) drop-shadow(0 0 8px rgba(186, 230, 253, 0.68)) drop-shadow(0 2px 5px rgba(2, 6, 23, 0.55));
 }
 
 .sidebar-brand-text {
@@ -197,38 +210,41 @@ body {
 }
 
 .sidebar-agency-title {
-  font-size: 0.56rem;
+  font-size: 0.58rem;
   font-weight: 800;
-  color: #38bdf8;
-  letter-spacing: 0.12em;
-  line-height: 1.2;
+  color: #7dd3fc;
+  letter-spacing: 0.11em;
+  line-height: 1.15;
   margin-top: 2px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .sidebar-specialty-badge {
   display: inline-block;
   width: fit-content;
-  margin-top: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.54rem;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 0.56rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: #e0f2fe;
-  background: rgba(2, 132, 199, 0.3);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(2, 132, 199, 0.32);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  white-space: nowrap;
 }
 
 /* 1.2 Ficha Fiscal Compacta del Contribuyente */
 .sidebar-client-box {
-  margin: 10px 10px 6px;
-  padding: 9px 11px;
+  margin: 7px 10px 4px;
+  padding: 6px 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(56, 189, 248, 0.22);
-  border-radius: 10px;
+  border-radius: 9px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .sidebar-client-box:hover {
@@ -271,7 +287,7 @@ body {
 }
 
 .sidebar-client-name {
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 800;
   color: #ffffff;
   line-height: 1.2;
@@ -285,17 +301,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .sidebar-client-rif {
-  font-size: 0.67rem;
+  font-size: 0.68rem;
   color: #94a3b8;
   font-weight: 700;
 }
 
 .client-tag-pill {
-  font-size: 0.57rem;
+  font-size: 0.58rem;
   font-weight: 700;
   color: #bae6fd;
   background: rgba(2, 132, 199, 0.3);
@@ -303,52 +319,63 @@ body {
   padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
-/* 1.3 Navegación Vertical Optimizada */
+/* 1.3 Navegación Vertical Optimizada (Sin Barra de Desplazamiento) */
 .sidebar-nav {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 4px 8px 10px;
+  overflow-x: hidden;
+  padding: 2px 10px 4px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  gap: 1px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .sidebar-nav::-webkit-scrollbar {
-  width: 3px;
-}
-
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
-  border-radius: 3px;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .nav-section-title {
-  font-size: 0.56rem;
+  font-size: 0.60rem;
   font-weight: 800;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
-  padding: 10px 8px 3px;
+  letter-spacing: 0.085em;
+  padding: 6px 10px 2px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
   user-select: none;
+  white-space: nowrap;
+}
+
+.nav-section-title:first-child {
+  margin-top: 0;
+  padding-top: 3px;
+  border-top: none;
 }
 
 .sidebar-nav .nav-tab {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6.5px 9px;
+  gap: 9px;
+  padding: 4.5px 10px;
   border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
-  color: #cbd5e1;
+  color: #e2e8f0;
   font-family: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  line-height: 1.2;
   text-align: left;
   cursor: pointer;
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
@@ -358,8 +385,8 @@ body {
 }
 
 .sidebar-nav .nav-tab svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   stroke: #94a3b8;
   transition: stroke 0.15s ease;
@@ -367,9 +394,9 @@ body {
 
 .sidebar-nav .nav-tab span {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
 }
 
 .sidebar-nav .nav-tab:hover {
@@ -418,23 +445,28 @@ body {
 
 /* 1.4 Footer del Menú Lateral */
 .sidebar-footer {
-  padding: 8px 10px 10px;
+  padding: 6px 10px 7px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 13, 27, 0.88);
+  background: rgba(7, 13, 27, 0.92);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .cloud-badge-sidebar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 7px;
+  padding: 4px 10px;
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(52, 211, 153, 0.28);
   border-radius: 7px;
-  font-size: 0.70rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: #6ee7b7;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .cloud-status-info {
@@ -514,6 +546,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .topbar-breadcrumb {
@@ -521,6 +555,10 @@ body {
   align-items: center;
   gap: 7px;
   font-size: 0.76rem;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .crumb-suma {
@@ -528,32 +566,42 @@ body {
   color: #0284c7;
   background: #e0f2fe;
   border: 1px solid #bae6fd;
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 6px;
-  font-size: 0.71rem;
+  font-size: 0.72rem;
   letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .crumb-company {
   font-weight: 800;
   color: var(--ucg-navy);
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .crumb-sep {
   color: #cbd5e1;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .crumb-active {
   color: #475569;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 /* Badge de Usuario Activo en la Barra Superior */
@@ -618,6 +666,8 @@ body {
   border-radius: 6px;
   border: 1px solid #e2e8f0;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .topbar-period-pill strong {
@@ -2806,28 +2856,31 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  gap: 7px;
+  padding: 6px 8px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  margin-top: 8px;
+  border-radius: 9px;
+  margin-top: 0;
 }
 
 .user-session-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #19A7CE;
-  color: #0B2447;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #38bdf8;
+  color: #091122;
   font-weight: 800;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2837,32 +2890,37 @@ input:focus {
 .user-meta {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 
 .user-name {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #FFFFFF;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .user-role {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 700;
-  color: #19A7CE;
+  color: #38bdf8;
   letter-spacing: 0.04em;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .btn-logout {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.14);
   border: 1px solid rgba(239, 68, 68, 0.35);
   color: #fca5a5;
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.72rem;
+  padding: 5px 8px;
+  font-size: 0.70rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -2870,12 +2928,64 @@ input:focus {
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-logout:hover {
   background: #ef4444;
   color: #FFFFFF;
   border-color: #ef4444;
+}
+
+/* Compactación adaptativa vertical para pantallas laptop sin barra de desplazamiento */
+@media (max-height: 760px) and (min-width: 1151px) {
+  .sidebar-brand {
+    padding: 7px 14px;
+  }
+
+  .sidebar-logo-halo {
+    width: 46px;
+    height: 46px;
+  }
+
+  .sidebar-logo {
+    width: 43px;
+    height: 43px;
+  }
+
+  .sidebar-suma-word,
+  .sidebar-suma-plus {
+    font-size: 1.26rem;
+  }
+
+  .sidebar-client-box {
+    margin: 5px 10px 3px;
+    padding: 5px 10px;
+  }
+
+  .nav-section-title {
+    padding: 4px 10px 1px;
+    margin-top: 2px;
+  }
+
+  .sidebar-nav .nav-tab {
+    padding: 3.5px 10px;
+    font-size: 0.815rem;
+  }
+
+  .sidebar-footer {
+    padding: 5px 10px 6px;
+    gap: 4px;
+  }
+
+  .cloud-badge-sidebar {
+    padding: 3px 9px;
+    font-size: 0.69rem;
+  }
+
+  .user-session-bar {
+    padding: 4px 7px;
+  }
 }
 
 /* ==========================================================================
