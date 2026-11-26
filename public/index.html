@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SUMA • Inventario & Fiscal">
@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261125_v2">
+  <link rel="stylesheet" href="style.css?v=20261126_v1">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -1144,7 +1144,7 @@
                 </div>
                 <!-- Two Elegant Sub-Cards: Soporte Fiscal vs Recepción Física Almacén -->
                 <div
-                  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 8px;">
+                  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 16px; margin-bottom: 8px;">
                   <!-- Tarjeta 1: Factura Fiscal del Proveedor -->
                   <div
                     style="background: #ffffff; border: 1.5px solid #cbd5e1; border-top: 4px solid #19A7CE; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
@@ -2041,7 +2041,7 @@
           <!-- 2. BARRA DE FILTROS Y BÚSQUEDA EN TIEMPO REAL -->
           <div class="pzero-filter-bar">
             <!-- Buscador Dinámico con Debounce Inteligente -->
-            <div style="position:relative; flex:1; min-width:280px;">
+            <div style="position:relative; flex:1; min-width:min(100%, 240px);">
               <input type="text" id="pzero-search-input" class="form-control" placeholder="🔍 Buscar por código, descripción, almacén o categoría..." style="padding-left:14px; font-size:0.82rem;" oninput="debouncedFiltrarAuditoriaEnVivo()">
             </div>
 
@@ -2068,11 +2068,11 @@
             </div>
 
             <!-- Filtros select de Categoría y Almacén -->
-            <div style="display:flex; gap:8px;">
-              <select id="pzero-filter-cat" class="form-control" style="font-size:0.78rem; max-width:180px;" onchange="filtrarAuditoriaEnVivo()">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <select id="pzero-filter-cat" class="form-control responsive-select" style="font-size:0.78rem; max-width:180px;" onchange="filtrarAuditoriaEnVivo()">
                 <option value="TODAS">Todas las Categorías</option>
               </select>
-              <select id="pzero-filter-alm" class="form-control" style="font-size:0.78rem; max-width:160px;" onchange="filtrarAuditoriaEnVivo()">
+              <select id="pzero-filter-alm" class="form-control responsive-select" style="font-size:0.78rem; max-width:160px;" onchange="filtrarAuditoriaEnVivo()">
                 <option value="TODOS">Todos los Almacenes</option>
               </select>
             </div>
@@ -2080,7 +2080,7 @@
 
           <!-- 3. DATAGRID INTERACTIVO DE PRODUCTOS -->
           <div class="pzero-table-container">
-            <div style="max-height:560px; overflow-y:auto;">
+            <div class="table-responsive" style="max-height:560px; overflow:auto; margin-bottom:0; border:none;">
               <table class="pzero-table" id="tabla-auditoria-en-vivo">
                 <thead>
                   <tr>
@@ -3122,10 +3122,10 @@
             </div>
 
             <!-- Grid de Doble Vía: Panel UCG (Reportes Z) vs Panel DG67 (Pendientes) -->
-            <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; margin-top: 14px;">
+            <div class="resp-split-main" style="margin-top: 14px;">
               <!-- Panel UCG: Reportes Z Diarios -->
               <div class="panel-card" style="padding: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
                   <div>
                     <h3 style="margin: 0; color: var(--ucg-navy); font-size: 0.95rem; font-weight: 800;">🏛️ Control Diario de Reportes Z</h3>
                     <p style="margin: 2px 0 0; font-size: 0.74rem; color: var(--text-muted);">Reportes de máquina fiscal Z0A0000176 con rango correlativo y totales.</p>
@@ -3562,7 +3562,7 @@
               </div>
 
               <div class="table-responsive"
-                style="border: 1.5px solid #cbd5e1; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+                style="border: 1.5px solid #cbd5e1; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
                 <table class="data-table" style="margin: 0; font-size: 0.83rem;">
                   <thead>
                     <tr style="background: #0B2447; color: #FFFFFF;">
@@ -3693,7 +3693,7 @@
           onclick="closeModal('modal-nueva-compra')">&times;</button>
       </div>
 
-      <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; max-height: calc(92vh - 85px);">
+      <div class="modal-body" style="padding: 20px 24px;">
         <form id="form-nueva-compra" onsubmit="guardarNuevaCompra(event)">
           <input type="hidden" id="m-comp-id" value="">
           <input type="hidden" id="m-comp-movimiento-id" value="">
@@ -3784,8 +3784,8 @@
               </div>
 
               <!-- Tabla de entradas pendientes -->
-              <div
-                style="max-height: 220px; overflow-y: auto; background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);">
+              <div class="table-responsive"
+                style="max-height: 220px; overflow: auto; margin-bottom: 0; background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);">
                 <table class="data-table" style="font-size: 0.78rem; margin: 0; width: 100%;">
                   <thead
                     style="position: sticky; top: 0; background: #f8fafc; z-index: 2; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">
@@ -4060,7 +4060,7 @@
           </div>
 
           <div class="modal-footer"
-            style="padding: 14px 24px; border-top: 1px solid var(--border-light); background: #f8fafc; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; margin: 0 -24px -20px -24px;">
+            style="padding: 12px 16px; border: 1px solid var(--border-light); background: #f8fafc; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-radius: 8px; margin-top: 16px;">
             <div style="font-size: 0.76rem; color: #64748b;">
               🔒 Conforme al Decreto 1.808 y Providencia SNAT/2026/00093
             </div>
@@ -4967,28 +4967,30 @@
   <!-- MODAL: ALERTA DE SEGURIDAD POR INACTIVIDAD                            -->
   <!-- ====================================================================== -->
   <div class="modal-overlay" id="modal-advertencia-inactividad" style="display: none; z-index: 1099;">
-    <div class="modal-box" style="max-width: 480px; width: 92%; border-top: 5px solid #dc2626; box-shadow: 0 10px 45px rgba(220,38,38,0.35); text-align: center; padding: 24px 22px;">
-      <div style="width: 64px; height: 64px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-        <span style="font-size: 2rem;">⏱️</span>
-      </div>
-      <h3 style="color: #991b1b; font-size: 1.25rem; font-weight: 800; margin: 0 0 8px;">Sesión a punto de expirar</h3>
-      <div style="font-size: 0.72rem; color: #dc2626; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">
-        POLÍTICA DE SEGURIDAD • SUMA • INVENTARIO &amp; FISCAL
-      </div>
-      <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin-bottom: 16px;">
-        Por resguardo de la información contable y fiscal, su sesión se cerrará automáticamente por inactividad en:
-      </p>
-      <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
-        <span id="inactividad-countdown" style="font-size: 2.2rem; font-weight: 900; color: #dc2626; font-family: monospace;">60</span>
-        <span style="display: block; font-size: 0.75rem; color: #991b1b; font-weight: 700;">SEGUNDOS RESTANTES</span>
-      </div>
-      <div style="display: flex; gap: 10px; justify-content: center;">
-        <button type="button" class="btn btn-secondary" onclick="cerrarSesionPorInactividad(true)" style="font-weight: 600; padding: 9px 18px;">
-          Cerrar Sesión Ahora
-        </button>
-        <button type="button" class="btn btn-emerald" onclick="continuarSesionInactividad()" style="font-weight: 800; padding: 9px 22px; background: #059669; color: #fff; box-shadow: 0 4px 12px rgba(5,150,105,0.25);">
-          Continuar Trabajando
-        </button>
+    <div class="modal-box" style="max-width: 480px; width: 92%; border-top: 5px solid #dc2626; box-shadow: 0 10px 45px rgba(220,38,38,0.35);">
+      <div class="modal-body" style="text-align: center; padding: 24px 22px;">
+        <div style="width: 64px; height: 64px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+          <span style="font-size: 2rem;">⏱️</span>
+        </div>
+        <h3 style="color: #991b1b; font-size: 1.25rem; font-weight: 800; margin: 0 0 8px;">Sesión a punto de expirar</h3>
+        <div style="font-size: 0.72rem; color: #dc2626; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">
+          POLÍTICA DE SEGURIDAD • SUMA • INVENTARIO &amp; FISCAL
+        </div>
+        <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin-bottom: 16px;">
+          Por resguardo de la información contable y fiscal, su sesión se cerrará automáticamente por inactividad en:
+        </p>
+        <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+          <span id="inactividad-countdown" style="font-size: 2.2rem; font-weight: 900; color: #dc2626; font-family: monospace;">60</span>
+          <span style="display: block; font-size: 0.75rem; color: #991b1b; font-weight: 700;">SEGUNDOS RESTANTES</span>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" onclick="cerrarSesionPorInactividad(true)" style="font-weight: 600; padding: 9px 18px;">
+            Cerrar Sesión Ahora
+          </button>
+          <button type="button" class="btn btn-emerald" onclick="continuarSesionInactividad()" style="font-weight: 800; padding: 9px 22px; background: #059669; color: #fff; box-shadow: 0 4px 12px rgba(5,150,105,0.25);">
+            Continuar Trabajando
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -5925,7 +5927,7 @@
           </div>
 
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <input type="file" id="input-files-carga-masiva-pdf" multiple accept=".pdf" style="display: none;" onchange="procesarArchivosPDFMasivos(this.files)">
+            <input type="file" id="input-files-carga-masiva-pdf" multiple accept="application/pdf,.pdf" style="display: none;" onchange="procesarArchivosPDFMasivos(this.files)">
             <button type="button" class="btn btn-primary" onclick="document.getElementById('input-files-carga-masiva-pdf').click()" style="display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: 0.82rem; padding: 7px 14px;">
               <span>📁 Seleccionar Facturas PDF</span>
             </button>
@@ -5966,7 +5968,7 @@
         </div>
 
         <!-- Tarjetas KPIs de la Bandeja de Revisión -->
-        <div class="staging-kpi-grid" style="margin: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; flex-shrink: 0;">
+        <div class="staging-kpi-grid" style="margin: 0; gap: 10px; flex-shrink: 0;">
           <div class="staging-kpi-card" style="padding: 8px 12px;">
             <div class="kpi-label">Comprobantes en Bandeja</div>
             <div class="kpi-value" id="kpi-staging-total" style="font-size: 1.1rem;">0</div>
@@ -6068,10 +6070,10 @@
       </div>
 
       <!-- Cuerpo Modal Dividido (Visor PDF + Ficha Fiscal y Asiento) -->
-      <div class="modal-body" style="padding: 14px 18px; flex: 1; display: flex; gap: 16px; overflow: hidden; background: #f8fafc;">
+      <div class="modal-body visor-split-body">
         
         <!-- Panel Izquierdo: Visor de Documento Físico (55%) con Renderizado Canvas de Alta Fidelidad -->
-        <div style="flex: 1.25; min-width: 320px; height: 100%; display: flex; flex-direction: column; background: #0f172a; border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
+        <div class="visor-pane-left">
           <div style="background: #091322; padding: 6px 12px; color: #94a3b8; font-size: 0.72rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; flex-wrap: wrap; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="color: #f8fafc;">👁️ COMPROBANTE FÍSICO (PDF)</span>
@@ -6103,7 +6105,7 @@
         </div>
 
         <!-- Panel Derecho: Ficha Contable y Botón de Asiento (45%) -->
-        <div style="flex: 1; min-width: 340px; height: 100%; display: flex; flex-direction: column; background: #ffffff; border-radius: 8px; border: 1.5px solid #cbd5e1; padding: 14px 16px; overflow-y: auto; justify-content: space-between;">
+        <div class="visor-pane-right">
           
           <div>
             <!-- Alerta Destacada si es Factura Duplicada -->
@@ -6243,8 +6245,8 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="extractor-compras.js?v=20261125_v1"></script>
-  <script src="app.js?v=20261125_v1"></script>
+  <script src="extractor-compras.js?v=20261126_v1"></script>
+  <script src="app.js?v=20261126_v1"></script>
 </body>
 
 </html>

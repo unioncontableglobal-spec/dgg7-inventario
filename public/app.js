@@ -17,6 +17,71 @@ const state = {
 };
 
 // --------------------------------------------------------------------------
+// UTILIDADES SEGURAS MULTI-NAVEGADOR (HTML Escape, Fechas Locales, Descargas)
+// --------------------------------------------------------------------------
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+window.escapeHtml = escapeHtml;
+
+function parseFechaLocalSegura(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  const s = String(raw).trim();
+  const soloFecha = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (soloFecha) {
+    return new Date(Number(soloFecha[1]), Number(soloFecha[2]) - 1, Number(soloFecha[3]), 12, 0, 0);
+  }
+  const normalized = s.includes(' ') && !s.includes('T') ? s.replace(' ', 'T') : s;
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function getHoyLocalISO() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function descargarDesdeUrlDirecta(url) {
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => a.remove(), 1000);
+}
+
+function exportarWorkbookSeguro(wb, fileName) {
+  try {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 10000);
+  } catch (e) {
+    XLSX.writeFile(wb, fileName);
+  }
+}
+
+// --------------------------------------------------------------------------
 // FORMATEO MONETARIO GLOBAL BIMONETARIO (Bs. / USD)
 // --------------------------------------------------------------------------
 function fmtBs(val) {
@@ -94,7 +159,7 @@ let inactividadListenersBound = false;
 function iniciarMonitoreoInactividad() {
   if (!inactividadListenersBound) {
     ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, registrarActividadUsuario, { passive: true });
+      window.addEventListener(evt, registrarActividadUsuario, { passive: true, capture: evt === 'scroll' });
     });
     inactividadListenersBound = true;
   }
@@ -148,6 +213,10 @@ function cerrarSesionPorInactividad(manual = false) {
   inactividadModalAbierto = false;
   const modalAdv = document.getElementById('modal-advertencia-inactividad');
   if (modalAdv) modalAdv.style.display = 'none';
+  if (inactividadIntervalId) {
+    clearInterval(inactividadIntervalId);
+    inactividadIntervalId = null;
+  }
 
   try {
     sessionStorage.removeItem(AUTH_STORAGE_KEY);
@@ -156,10 +225,15 @@ function cerrarSesionPorInactividad(manual = false) {
     localStorage.removeItem('dg67_auth_session');
     localStorage.removeItem('dg67_auth_token');
   } catch (e) { }
+  try {
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  } catch (e) { }
 
   appInitialized = false;
   state.currentUser = null;
   state.activeTab = 'tab-dashboard';
+  state.products = [];
+  state.dashboard = null;
 
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
@@ -243,10 +317,16 @@ function showLogin() {
   if (loginScreen) loginScreen.style.display = 'flex';
   if (appLayout) appLayout.style.display = 'none';
 
-  // Cerrar cualquier modal residual que pudiera estar abierto
+  // Cerrar cualquier modal, drawer o menú lateral residual
+  document.body.classList.remove('print-modal-impresion', 'print-modal-acta', 'modal-scroll-lock');
   document.querySelectorAll('.modal-overlay').forEach(m => {
     m.style.display = 'none';
+    m.classList.remove('is-open');
   });
+  document.getElementById('pzero-drawer')?.classList.remove('open');
+  document.getElementById('pzero-drawer-backdrop')?.classList.remove('active');
+  document.getElementById('app-sidebar')?.classList.remove('sidebar-open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('active');
 
   const userInput = document.getElementById('login-username');
   const pwdInput = document.getElementById('login-password');
@@ -358,6 +438,15 @@ function showApp(user) {
     if (bannerAuditor) {
       bannerAuditor.style.display = isAuditorTomaFisica ? 'flex' : 'none';
     }
+
+    const canAccessConfig = !isAuditorTomaFisica && !isOperadorTienda;
+    const btnTopExcel = document.getElementById('btn-export-excel');
+    const btnTopPdf = document.getElementById('btn-export-pdf');
+    if (btnTopExcel) btnTopExcel.style.display = isAuditorTomaFisica ? 'none' : '';
+    if (btnTopPdf) btnTopPdf.style.display = isAuditorTomaFisica ? 'none' : '';
+    document.querySelectorAll('[onclick*="tab-configuracion"]').forEach(el => {
+      el.style.display = canAccessConfig ? '' : 'none';
+    });
   }
 }
 
@@ -462,6 +551,8 @@ function logoutSession() {
   appInitialized = false;
   state.currentUser = null;
   state.activeTab = 'tab-dashboard';
+  state.products = [];
+  state.dashboard = null;
   inactividadModalAbierto = false;
   if (inactividadIntervalId) {
     clearInterval(inactividadIntervalId);
@@ -517,10 +608,6 @@ function togglePasswordVisibility() {
   }
 }
 
-function getHoyLocalISO() {
-  return new Date().toLocaleDateString('en-CA');
-}
-
 function fillQuickLogin(user) {
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
@@ -558,21 +645,26 @@ async function initApp() {
   if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
   if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
 
-  // Carga inicial modular incluyendo catálogo de productos para Entradas y Salidas
-  await Promise.all([
+  // Carga inicial modular (evita cargar dashboard/catálogo innecesario en rol TOMA_FISICA)
+  const isTomaFisicaRole = (state.currentUser?.rol === 'TOMA_FISICA');
+  const initialLoads = [
     checkHealth(),
     loadTasasBcvPeriodo(),
     loadDeclaracionesCache(),
-    loadCatalogs(),
-    loadProducts(),
-    loadDashboard()
-  ]);
+    loadCatalogs()
+  ];
+  if (!isTomaFisicaRole) {
+    initialLoads.push(loadProducts(), loadDashboard());
+  }
+  await Promise.all(initialLoads);
 
-  // Enrutamiento determinista por Rol
-  if (state.currentUser?.rol === 'TOMA_FISICA') {
-    switchTab('tab-punto-cero');
+  // Enrutamiento determinista por Rol (soporta hash de navegación inicial en refresco)
+  const hashTab = (window.location.hash || '').replace(/^#/, '');
+  if (isTomaFisicaRole) {
+    switchTab('tab-punto-cero', { replaceHistory: true });
   } else {
-    switchTab('tab-dashboard');
+    const targetInitialTab = (hashTab && document.getElementById(hashTab)?.classList.contains('tab-pane')) ? hashTab : 'tab-dashboard';
+    switchTab(targetInitialTab, { replaceHistory: true });
     verificarAperturaModalTasaBcvDia();
   }
 
@@ -744,10 +836,24 @@ function setupNavigation() {
         backdrop.classList.remove('active');
       });
     }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 1150) {
+        sidebar.classList.remove('sidebar-open');
+        backdrop.classList.remove('active');
+      }
+    });
   }
+
+  window.addEventListener('popstate', (e) => {
+    if (!state.currentUser) return;
+    const hashTab = (window.location.hash || '').replace(/^#/, '');
+    const targetTab = e.state?.tabId || (hashTab && document.getElementById(hashTab)?.classList.contains('tab-pane') ? hashTab : 'tab-dashboard');
+    switchTab(targetTab, { skipHistory: true });
+  });
 }
 
-function switchTab(tabId) {
+function switchTab(tabId, opts = {}) {
   const rolAct = String(state.currentUser?.rol || '').toUpperCase();
   if (rolAct === 'TOMA_FISICA' && tabId !== 'tab-punto-cero') {
     showToast('Acceso restringido exclusivamente a Toma Física.', 'warning');
@@ -760,6 +866,17 @@ function switchTab(tabId) {
   }
 
   state.activeTab = tabId;
+
+  if (!opts.skipHistory && window.history?.pushState) {
+    try {
+      const nextHash = `#${tabId}`;
+      if (opts.replaceHistory) {
+        window.history.replaceState({ tabId }, '', nextHash);
+      } else if (window.location.hash !== nextHash) {
+        window.history.pushState({ tabId }, '', nextHash);
+      }
+    } catch (e) {}
+  }
 
   // Close mobile sidebar and backdrop if open
   document.getElementById('app-sidebar')?.classList.remove('sidebar-open');
@@ -774,6 +891,11 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(p => {
     p.classList.toggle('active', p.id === tabId);
   });
+
+  // Reset scroll across browsers on view switch
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  const mainWrapperEl = document.querySelector('.main-content');
+  if (mainWrapperEl) mainWrapperEl.scrollTop = 0;
 
   // Update dynamic topbar breadcrumb title
   const tabTitles = {
@@ -937,12 +1059,9 @@ async function loadCatalogs() {
 }
 
 function filtrarStockAlerta() {
-  switchTab('tab-inventario');
   const sel = document.getElementById('inv-filter-estado');
-  if (sel) {
-    sel.value = 'SOLICITAR MATERIAL';
-    loadProducts();
-  }
+  if (sel) sel.value = 'SOLICITAR MATERIAL';
+  switchTab('tab-inventario');
 }
 
 function renderDashboardMonthly(data) {
@@ -1333,7 +1452,7 @@ async function exportarInventarioExcel(e) {
     }
 
     if (typeof XLSX === 'undefined') {
-      window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`, '_blank');
+      descargarDesdeUrlDirecta(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`);
       return;
     }
 
@@ -1370,11 +1489,11 @@ async function exportarInventarioExcel(e) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'INVENTARIO_DG67');
     const fileName = `INVENTARIO_DG67_${fechaCorte || 'AL_DIA'}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    exportarWorkbookSeguro(wb, fileName);
     showToast(`✅ Inventario exportado exitosamente (${rows.length} repuestos).`, 'success');
   } catch (err) {
     console.error('Error exportando Inventario:', err);
-    window.open(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`, '_blank');
+    descargarDesdeUrlDirecta(`/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`);
   }
 }
 
@@ -2145,8 +2264,9 @@ function resetForm(formId) {
   if (!form) return;
   form.reset();
   const today = getHoyLocalISO();
-  const dateInput = form.querySelector('input[type="date"]');
-  if (dateInput) dateInput.value = today;
+  form.querySelectorAll('input[type="date"]').forEach(di => {
+    di.value = today;
+  });
 
   const currentRateStr = (getTasaBcvPorFechaOPeriodo() || 889.58).toFixed(4);
   const respUsuario = state.currentUser?.usuario || 'TIENDA_DG67';
@@ -2438,9 +2558,7 @@ function imprimirKardexProducto() {
     </div>
   `;
 
-  document.getElementById('modal-print-title').textContent = `Ficha Kardex Oficial Bimonetaria Art. 177 RISLR - Repuesto ${p.codigo}`;
-  document.getElementById('modal-print-body').innerHTML = printHtml;
-  document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+  abrirModalImpresionFiscal(`Ficha Kardex Oficial Bimonetaria Art. 177 RISLR - Repuesto ${p.codigo}`, printHtml);
 }
 
 // 10. Historical Movements Table (Zero Orphan Movements - Full Traceability)
@@ -2560,19 +2678,20 @@ async function viewMovementDetail(id) {
     const leyendaBcv = h.leyenda_tasa_bcv || `Tasa Oficial BCV Aplicable: Bs. ${Number(h.tasa_bcv || 68.50).toLocaleString('es-VE', { minimumFractionDigits: 2 })} por ${h.moneda_operacion || 'USD'} (Fecha Tasa: ${h.fecha_tasa_bcv || h.fecha})`;
 
     modalBody.innerHTML = `
-      <div style="margin-bottom: 12px; padding: 10px 14px; background: #0B2447; color: #FFFFFF; border-left: 4px solid #19A7CE; border-radius: 6px; font-size: 0.84rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="margin-bottom: 12px; padding: 10px 14px; background: #0B2447; color: #FFFFFF; border-left: 4px solid #19A7CE; border-radius: 6px; font-size: 0.84rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div><strong>💱 DOBLE EXPRESIÓN MONETARIA SENIAT:</strong> ${leyendaBcv}</div>
         <span class="badge" style="background:#19A7CE; color:#0B2447; font-weight:800;">Método: ${h.metodo_valoracion || 'CPP'}</span>
       </div>
-      <div style="margin-bottom: 14px; padding: 10px 14px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.82rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+      <div class="grid-3-auto" style="margin-bottom: 14px; padding: 10px 14px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.82rem;">
         <div><strong>Tipificación Art. 177:</strong> ${(h.subtipo || h.tipo || '').replace(/_/g, ' ')}</div>
         <div><strong>Documento Fuente:</strong> <span class="font-mono font-bold" style="color:var(--ucg-navy);">${h.numero_documento}</span></div>
         <div><strong>N° Control Fiscal:</strong> <span class="font-mono">${h.nro_control || '-'}</span></div>
         <div><strong>Proveedor / Tercero:</strong> ${h.proveedor_nombre} (${h.proveedor_rif})</div>
         <div><strong>Usuario Responsable:</strong> 👤 ${h.usuario_responsable || 'ADMIN_SISTEMA'}</div>
         <div><strong>Tasa BCV Operación:</strong> Bs. ${Number(h.tasa_bcv || 68.50).toFixed(2)} / ${h.moneda_operacion || 'USD'}</div>
-        <div style="grid-column: span 3;"><strong>Observaciones / Soporte Legal:</strong> ${h.observaciones || 'Registro auditado conforme al Art. 177 RISLR y PA SNAT/2026/00093'}</div>
+        <div class="grid-span-all"><strong>Observaciones / Soporte Legal:</strong> ${h.observaciones || 'Registro auditado conforme al Art. 177 RISLR y PA SNAT/2026/00093'}</div>
       </div>
+      <div class="table-responsive">
       <table class="data-table">
         <thead>
           <tr>
@@ -2597,6 +2716,7 @@ async function viewMovementDetail(id) {
           </tr>
         </tfoot>
       </table>
+      </div>
       <div style="margin-top: 10px; font-size: 0.78rem; color: #334155; text-align: right; font-weight: 700;">
         📌 ${leyendaBcv}
       </div>
@@ -2606,15 +2726,57 @@ async function viewMovementDetail(id) {
   }
 }
 
+let modalLastFocusedEl = null;
+
+function abrirModalImpresionFiscal(titulo, printHtml) {
+  const titleEl = document.getElementById('modal-print-title');
+  const bodyEl = document.getElementById('modal-print-body');
+  if (titleEl && titulo) titleEl.textContent = titulo;
+  if (bodyEl) bodyEl.innerHTML = printHtml || '';
+  openModal('modal-impresion-fiscal');
+}
+window.abrirModalImpresionFiscal = abrirModalImpresionFiscal;
+
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
-  if (modal) modal.style.display = 'flex';
+  if (!modal) return;
+  modalLastFocusedEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.style.display = 'flex';
+  modal.classList.add('is-open');
+  document.body.classList.add('modal-scroll-lock');
+  if (modalId === 'modal-impresion-fiscal') {
+    document.body.classList.add('print-modal-impresion');
+    document.body.classList.remove('print-modal-acta');
+  } else if (modalId === 'modal-acta-oficial') {
+    document.body.classList.add('print-modal-acta');
+    document.body.classList.remove('print-modal-impresion');
+  }
 }
 window.openModal = openModal;
 
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
-  if (modal) modal.style.display = 'none';
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('is-open');
+  }
+
+  if (modalId === 'modal-impresion-fiscal') {
+    document.body.classList.remove('print-modal-impresion');
+  } else if (modalId === 'modal-acta-oficial') {
+    document.body.classList.remove('print-modal-acta');
+  }
+
+  const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay'))
+    .some(m => window.getComputedStyle(m).display !== 'none');
+  if (!anyModalOpen) {
+    document.body.classList.remove('modal-scroll-lock');
+  }
+
+  if (modalLastFocusedEl && typeof modalLastFocusedEl.focus === 'function' && document.body.contains(modalLastFocusedEl)) {
+    try { modalLastFocusedEl.focus({ preventScroll: true }); } catch (e) {}
+    modalLastFocusedEl = null;
+  }
 
   if (modalId === 'modal-tasa-bcv-dia') {
     state.modalBcvAbierto = false;
@@ -2824,9 +2986,7 @@ async function imprimirCierreMensualInventario() {
     </div>
   `;
 
-  document.getElementById('modal-print-title').textContent = `Resumen Oficial de Cierre Mensual de Inventarios (Art. 177 ISLR)`;
-  document.getElementById('modal-print-body').innerHTML = printHtml;
-  document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+  abrirModalImpresionFiscal(`Resumen Oficial de Cierre Mensual de Inventarios (Art. 177 ISLR)`, printHtml);
 }
 
 function filtrarPorFechaCorte(fechaCorte) {
@@ -2835,7 +2995,6 @@ function filtrarPorFechaCorte(fechaCorte) {
     select.value = fechaCorte;
   }
   switchTab('tab-inventario');
-  loadProducts();
 }
 
 // 12. Setup Event Listeners
@@ -2882,6 +3041,63 @@ function setupEventListeners() {
   document.getElementById('m-comp-rif')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
+
+  // Cierre universal de modales/drawers con tecla Escape y clic fuera del cuadro
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const visor = document.getElementById('modal-visor-pdf-factura');
+    if (visor && window.getComputedStyle(visor).display !== 'none') {
+      if (typeof cerrarVisorPDF === 'function') cerrarVisorPDF();
+      else closeModal('modal-visor-pdf-factura');
+      return;
+    }
+    const openOverlays = Array.from(document.querySelectorAll('.modal-overlay'))
+      .filter(m => m.id !== 'modal-advertencia-inactividad' && window.getComputedStyle(m).display !== 'none');
+    if (openOverlays.length > 0) {
+      const topOverlay = openOverlays[openOverlays.length - 1];
+      closeModal(topOverlay.id);
+      return;
+    }
+    const pzeroDrawer = document.getElementById('pzero-drawer');
+    if (pzeroDrawer?.classList.contains('open')) {
+      if (typeof cerrarDrawerAuditoria === 'function') cerrarDrawerAuditoria();
+      return;
+    }
+    const sidebar = document.getElementById('app-sidebar');
+    if (sidebar?.classList.contains('sidebar-open')) {
+      sidebar.classList.remove('sidebar-open');
+      document.getElementById('sidebar-backdrop')?.classList.remove('active');
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const overlay = e.target;
+    if (
+      overlay &&
+      overlay.classList &&
+      overlay.classList.contains('modal-overlay') &&
+      overlay.id &&
+      overlay.id !== 'modal-advertencia-inactividad'
+    ) {
+      if (overlay.id === 'modal-visor-pdf-factura' && typeof cerrarVisorPDF === 'function') {
+        cerrarVisorPDF();
+      } else {
+        closeModal(overlay.id);
+      }
+    }
+  });
+
+  // Garantiza compatibilidad de impresión en navegadores antiguos sin :has()
+  window.addEventListener('beforeprint', () => {
+    const imp = document.getElementById('modal-impresion-fiscal');
+    const acta = document.getElementById('modal-acta-oficial');
+    if (imp && window.getComputedStyle(imp).display !== 'none') {
+      document.body.classList.add('print-modal-impresion');
+    }
+    if (acta && window.getComputedStyle(acta).display !== 'none') {
+      document.body.classList.add('print-modal-acta');
+    }
+  });
 }
 
 // Helper: Toast Notifications
@@ -3526,6 +3742,7 @@ function syncMonthPills(barId, activePeriodo) {
   if (!bar) return;
   bar.querySelectorAll('.month-pill-btn').forEach(btn => {
     const isAct = btn.dataset.periodo === activePeriodo;
+    btn.classList.toggle('active', isAct);
     btn.style.background = isAct ? 'var(--ucg-navy)' : '#ffffff';
     btn.style.color = isAct ? '#ffffff' : 'var(--ucg-navy)';
     btn.style.boxShadow = isAct ? '0 2px 6px rgba(10,92,245,0.25)' : 'none';
@@ -4695,7 +4912,7 @@ async function exportarLibroComprasExcel() {
     }
 
     if (typeof XLSX === 'undefined') {
-      window.open(`/api/export/libro-compras?periodo=${periodo}`, '_blank');
+      descargarDesdeUrlDirecta(`/api/export/libro-compras?periodo=${encodeURIComponent(periodo)}`);
       return;
     }
 
@@ -4724,11 +4941,11 @@ async function exportarLibroComprasExcel() {
     const sheetName = periodo ? `COMPRAS_${periodo}` : 'LIBRO_COMPRAS';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     const fileName = `LIBRO_COMPRAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    exportarWorkbookSeguro(wb, fileName);
     showToast(`✅ Libro de Compras descargado exitosamente (${rows.length} comprobantes).`, 'success');
   } catch (err) {
     console.error('Error exportando Libro de Compras:', err);
-    window.open(`/api/export/libro-compras?periodo=${periodo}`, '_blank');
+    descargarDesdeUrlDirecta(`/api/export/libro-compras?periodo=${encodeURIComponent(periodo)}`);
   }
 }
 
@@ -4951,9 +5168,7 @@ function imprimirLibroCompras() {
     </div>
   `;
 
-  document.getElementById('modal-print-title').textContent = `Libro Oficial de Compras SENIAT (Art. 75 Reglamento IVA) - ${periodo}`;
-  document.getElementById('modal-print-body').innerHTML = printHtml;
-  document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+  abrirModalImpresionFiscal(`Libro Oficial de Compras SENIAT (Art. 75 Reglamento IVA) - ${periodo}`, printHtml);
 }
 
 
@@ -5061,7 +5276,7 @@ function renderLibroVentas(ventas) {
           <div>Bs. ${baseBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${baseUsd.toFixed(2)})</div>
         </td>
-        <td class="text-center font-mono">${((c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16) * 100).toFixed(0)}%</td>
+        <td class="text-center font-mono">${((v.alicuota !== undefined && v.alicuota !== null ? Number(v.alicuota) : 0.16) * 100).toFixed(0)}%</td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${ivaBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${ivaUsd.toFixed(2)})</div>
@@ -6044,7 +6259,7 @@ async function exportarLibroVentasExcel() {
     }
 
     if (typeof XLSX === 'undefined') {
-      window.open(`/api/export/libro-ventas?periodo=${periodo}`, '_blank');
+      descargarDesdeUrlDirecta(`/api/export/libro-ventas?periodo=${encodeURIComponent(periodo)}`);
       return;
     }
 
@@ -6072,11 +6287,11 @@ async function exportarLibroVentasExcel() {
     const sheetName = periodo ? `VENTAS_${periodo}` : 'LIBRO_VENTAS';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     const fileName = `LIBRO_VENTAS_DG67_${periodo || 'HISTORICO'}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    exportarWorkbookSeguro(wb, fileName);
     showToast(`✅ Libro de Ventas descargado exitosamente (${rows.length} comprobantes).`, 'success');
   } catch (err) {
     console.error('Error exportando Libro de Ventas:', err);
-    window.open(`/api/export/libro-ventas?periodo=${periodo}`, '_blank');
+    descargarDesdeUrlDirecta(`/api/export/libro-ventas?periodo=${encodeURIComponent(periodo)}`);
   }
 }
 
@@ -6280,9 +6495,7 @@ function imprimirLibroVentas() {
     </div>
   `;
 
-  document.getElementById('modal-print-title').textContent = `Libro Oficial de Ventas SENIAT (Art. 77 Reglamento IVA) - ${periodo}`;
-  document.getElementById('modal-print-body').innerHTML = printHtml;
-  document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+  abrirModalImpresionFiscal(`Libro Oficial de Ventas SENIAT (Art. 77 Reglamento IVA) - ${periodo}`, printHtml);
 }
 
 
@@ -6445,14 +6658,10 @@ function irALibroDesdeForma30(tipoLibro, periodoParam) {
     const sel = document.getElementById('compras-periodo-select');
     if (sel) sel.value = periodo;
     switchTab('tab-libro-compras');
-    loadLibroCompras();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   } else if (tipoLibro === 'ventas') {
     const sel = document.getElementById('ventas-periodo-select');
     if (sel) sel.value = periodo;
     switchTab('tab-libro-ventas');
-    loadLibroVentas();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
@@ -6782,9 +6991,7 @@ function imprimirDeclaracionForma30() {
     </div>
   `;
 
-  document.getElementById('modal-print-title').textContent = `Planilla Oficial Forma 30 SENIAT - Período ${periodo}`;
-  document.getElementById('modal-print-body').innerHTML = printHtml;
-  document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+  abrirModalImpresionFiscal(`Planilla Oficial Forma 30 SENIAT - Período ${periodo}`, printHtml);
 }
 
 
@@ -6848,7 +7055,7 @@ function renderProveedoresDirectorio(proveedores) {
             ✏️ Editar
           </button>
           ${Number(p.total_facturas_asociadas || 0) === 0 ? `
-            <button class="btn btn-sm btn-secondary" onclick="eliminarProveedorDirecto(${p.id}, '${escapeHtml(p.razon_social)}')" style="padding: 4px 8px; font-size: 11px; color:#be123c; margin-left:4px;" title="Eliminar registro sin facturas ni movimientos">
+            <button class="btn btn-sm btn-secondary" onclick="eliminarProveedorDirecto(${p.id})" style="padding: 4px 8px; font-size: 11px; color:#be123c; margin-left:4px;" title="Eliminar registro sin facturas ni movimientos">
               🗑️
             </button>
           ` : ''}
@@ -6877,7 +7084,8 @@ function filterProveedoresPanel() {
 }
 
 async function eliminarProveedorDirecto(id, razonSocial) {
-  if (!confirm(`¿Deseas eliminar definitivamente el registro del proveedor "${razonSocial}"?\n\nEsta acción solo está permitida para registros que no tengan facturas ni movimientos contables asociados.`)) {
+  const nombre = razonSocial || fiscalStateNew.proveedores?.find(x => Number(x.id) === Number(id))?.razon_social || `ID ${id}`;
+  if (!confirm(`¿Deseas eliminar definitivamente el registro del proveedor "${nombre}"?\n\nEsta acción solo está permitida para registros que no tengan facturas ni movimientos contables asociados.`)) {
     return;
   }
   try {
@@ -8307,9 +8515,10 @@ function descargarArchivoXMLSeniat() {
   const link = document.createElement('a');
   link.href = `/api/islr/export-xml?periodo=${encodeURIComponent(periodo)}`;
   link.download = `XML_relacionRetencionesISLR_${String(periodo).replace('-', '')}.xml`;
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  setTimeout(() => link.remove(), 1000);
 }
 window.descargarArchivoXMLSeniat = descargarArchivoXMLSeniat;
 
@@ -8317,7 +8526,19 @@ async function copiarCodigoXMLSeniat() {
   const code = document.getElementById('xml-seniat-code-preview')?.textContent || '';
   if (!code) return;
   try {
-    await navigator.clipboard.writeText(code);
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(code);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (!ok) throw new Error('execCommand copy failed');
+    }
     showToast('Código XML SENIAT copiado al portapapeles.', 'success');
   } catch {
     showToast('No se pudo copiar automáticamente; selecciona el bloque XML manualmente.', 'error');
@@ -8350,7 +8571,7 @@ async function exportarExcelISLR() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'RETENCIONES_ISLR');
-    XLSX.writeFile(wb, `RELACION_RETENCIONES_ISLR_${periodo || 'HISTORICO'}.xlsx`);
+    exportarWorkbookSeguro(wb, `RELACION_RETENCIONES_ISLR_${periodo || 'HISTORICO'}.xlsx`);
     showToast(`Excel generado (${rows.length} registros).`, 'success');
   } catch (err) {
     showToast(err.message, 'error');
@@ -8617,9 +8838,7 @@ async function verComprobanteISLRPDF(id) {
       </div>
     `;
 
-    document.getElementById('modal-print-title').textContent = `Comprobante Oficial de Retención ISLR N° ${r.nro_comprobante} (PA SNAT/2026/00093)`;
-    document.getElementById('modal-print-body').innerHTML = printHtml;
-    document.getElementById('modal-impresion-fiscal').style.display = 'flex';
+    abrirModalImpresionFiscal(`Comprobante Oficial de Retención ISLR N° ${r.nro_comprobante} (PA SNAT/2026/00093)`, printHtml);
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -8932,12 +9151,16 @@ async function guardarTasaBcvDiaria(e) {
 // ======================================================================
 
 function verificarAperturaModalTasaBcvDia() {
+  try {
+    if (sessionStorage.getItem('dg67_bcv_modal_shown') === '1') return;
+    sessionStorage.setItem('dg67_bcv_modal_shown', '1');
+  } catch (e) {}
   abrirModalTasaBcvDia();
 }
 
 function abrirModalTasaBcvDia() {
   state.modalBcvAbierto = true;
-  const hoy = new Date().toLocaleDateString('en-CA');
+  const hoy = getHoyLocalISO();
   const fInput = document.getElementById('popup-tasa-fecha');
   const tInput = document.getElementById('popup-tasa-valor');
   if (fInput) fInput.value = hoy;
@@ -10585,9 +10808,7 @@ async function abrirModalActaOficial() {
   try { localStorage.setItem('dg67_acta_revisada_202610', 'true'); } catch (e) {}
   if (typeof actualizarChecklistFasesTomaFisica === 'function') actualizarChecklistFasesTomaFisica();
 
-  const modal = document.getElementById('modal-acta-oficial');
-  if (!modal) return;
-  modal.style.display = 'flex';
+  openModal('modal-acta-oficial');
 
   const tbody = document.getElementById('acta-tbody-items');
   if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Generando Acta Oficial y calculando diferencias de inventario...</td></tr>`;
@@ -10629,7 +10850,7 @@ async function abrirModalActaOficial() {
           <div style="font-size: 1.05rem; font-weight: 900; letter-spacing: 0.04em;">🔒 EXPEDIENTE OFICIAL SELLADO Y CONCILIADO</div>
           <div style="font-size: 0.75rem; font-weight: 700; margin-top: 2px;">TOMA FÍSICA CERTIFICADA • ART. 177 RISLR • SENIAT</div>
           <div style="font-size: 0.70rem; color: #78350f; margin-top: 3px;">
-            Fecha de Cierre: <strong>${state.tomaFisicaInfo?.fecha_cierre ? new Date(state.tomaFisicaInfo.fecha_cierre).toLocaleString('es-VE') : new Date().toLocaleString('es-VE')}</strong> • 
+            Fecha de Cierre: <strong>${(parseFechaLocalSegura(state.tomaFisicaInfo?.fecha_cierre) || new Date()).toLocaleString('es-VE')}</strong> • 
             Responsable Cierre: <strong>${state.tomaFisicaInfo?.usuario_cierre || 'ADMIN_DG67'}</strong>
           </div>
         `;
@@ -10739,31 +10960,30 @@ function imprimirActaOficial() {
       <meta charset="UTF-8">
       <title>Acta Oficial de Constatación Física y Ajuste de Inventario - DG67</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; font-size: 11px; color: #1e293b; }
+        @page { size: letter portrait; margin: 10mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; font-size: 11px; color: #1e293b; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
         th, td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
         th { background: #0B2447; color: #ffffff; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         @media print {
-          body { margin: 0; padding: 10px; }
+          body { margin: 0; padding: 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none !important; }
         }
       </style>
     </head>
     <body>
       ${printArea.innerHTML}
+      <script>
+        window.addEventListener('load', function() {
+          setTimeout(function() { window.focus(); window.print(); }, 180);
+        });
+      <\/script>
     </body>
     </html>
   `);
   printWindow.document.close();
-  printWindow.onload = () => {
-    printWindow.focus();
-    printWindow.print();
-  };
-  printWindow.onafterprint = () => {
-    printWindow.close();
-  };
 }
 
 window.abrirModalActaOficial = abrirModalActaOficial;
@@ -11400,7 +11620,7 @@ async function exportarReporteMensualInventarioExcel() {
   const alm = document.getElementById('inv-rep-almacen')?.value || 'TODOS';
   if (typeof XLSX === 'undefined') {
     const url = `/api/export/libro-art177?periodo=${encodeURIComponent(per)}&almacen=${encodeURIComponent(alm)}&formato=csv`;
-    window.open(url, '_blank');
+    descargarDesdeUrlDirecta(url);
     return;
   }
 
@@ -11468,7 +11688,7 @@ async function exportarReporteMensualInventarioExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalleRows), 'DETALLE_ART_177');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidadoRows), 'CONSOLIDADO_ENE_DIC');
   const fileName = `DG67_LIBRO_INVENTARIO_${per}_${alm}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  exportarWorkbookSeguro(wb, fileName);
   showToast(`✅ Excel descargado: ${fileName}`, 'success');
 }
 

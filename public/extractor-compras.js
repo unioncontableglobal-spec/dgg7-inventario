@@ -817,12 +817,13 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
   let baseUsd = 0, totUsd = 0;
 
   // Intento A: Bloque explícito en Bolívares (Bs. / Bs / VES)
-  // 1. Total en Bs (descartando encabezados de ítems como 'Valor Total 001')
+  // 1. Total en Bs (descartando encabezados de ítems como 'Valor Total 001' sin usar lookbehind para compatibilidad Safari <16.4)
+  const cleanTextSinValorTotal = cleanText.replace(/\bValor\s+Total\b/gi, ' ');
   const mTotBs = cleanText.match(/Total\s+A\s+Pagar.{0,40}?(?:USD\s*[0-9.,]+\s*)?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
               || cleanText.match(/TOTAL\s+Bs\s*[:=]?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
               || cleanText.match(/Saldo\s*[:=]?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
-              || cleanText.match(/(?<!Valor\s)\bTotal\s*[:=]?\s*(?:USD\s*[0-9.,]+\s*)?Total\s*[:=]?\s*Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
-              || cleanText.match(/(?<!Valor\s)\bTotal\s*(?:Factura|General|Facturado|Bs)?[^0-9a-zA-Z]{0,30}?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanTextSinValorTotal.match(/\bTotal\s*[:=]?\s*(?:USD\s*[0-9.,]+\s*)?Total\s*[:=]?\s*Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
+              || cleanTextSinValorTotal.match(/\bTotal\s*(?:Factura|General|Facturado|Bs)?[^0-9a-zA-Z]{0,30}?Bs\.?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i)
               || cleanText.match(/(?:TOTAL\s+Bs|TOTAL\s+VES|TOTAL)[\s:]+([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i);
   if (mTotBs) totBs = parseMonto(mTotBs[1]);
 
@@ -1478,6 +1479,14 @@ async function cargarYRenderizarPDFEnVisor(pdfSource, initialPage = 1) {
     return;
   }
 
+  let activeBlobUrlVisor = null;
+  function revocarBlobUrlVisor() {
+    if (activeBlobUrlVisor) {
+      try { URL.revokeObjectURL(activeBlobUrlVisor); } catch (e) {}
+      activeBlobUrlVisor = null;
+    }
+  }
+
   // Si PDF.js no está disponible en window, fallback a iframe
   if (typeof pdfjsLib === 'undefined') {
     console.warn('PDF.js no disponible en window, usando iframe de respaldo.');
@@ -1487,7 +1496,9 @@ async function cargarYRenderizarPDFEnVisor(pdfSource, initialPage = 1) {
       if (typeof pdfSource === 'string') {
         iframe.src = pdfSource + `#page=${initialPage}`;
       } else if (pdfSource instanceof Blob) {
-        iframe.src = URL.createObjectURL(pdfSource) + `#page=${initialPage}`;
+        revocarBlobUrlVisor();
+        activeBlobUrlVisor = URL.createObjectURL(pdfSource);
+        iframe.src = activeBlobUrlVisor + `#page=${initialPage}`;
       }
     }
     return;
@@ -1524,7 +1535,9 @@ async function cargarYRenderizarPDFEnVisor(pdfSource, initialPage = 1) {
       if (typeof pdfSource === 'string') {
         iframe.src = pdfSource + `#page=${initialPage}`;
       } else if (pdfSource instanceof Blob) {
-        iframe.src = URL.createObjectURL(pdfSource) + `#page=${initialPage}`;
+        revocarBlobUrlVisor();
+        activeBlobUrlVisor = URL.createObjectURL(pdfSource);
+        iframe.src = activeBlobUrlVisor + `#page=${initialPage}`;
       }
     }
   } finally {
@@ -1622,10 +1635,11 @@ function abrirPDFEnNuevaPestana() {
   if (!source) return;
 
   if (typeof source === 'string') {
-    window.open(source, '_blank');
+    window.open(source, '_blank', 'noopener');
   } else if (source instanceof Blob || source instanceof File) {
     const url = URL.createObjectURL(source);
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
   }
 }
 
@@ -2001,12 +2015,23 @@ function cerrarVisorPDF() {
   const modalVisor = document.getElementById('modal-visor-pdf-factura');
   const iframe = document.getElementById('iframe-visor-pdf-factura');
   const canvas = document.getElementById('canvas-visor-pdf');
-  if (modalVisor) modalVisor.style.display = 'none';
+  if (modalVisor) {
+    modalVisor.style.display = 'none';
+    modalVisor.classList.remove('is-open');
+  }
+  const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay'))
+    .some(m => window.getComputedStyle(m).display !== 'none');
+  if (!anyModalOpen) {
+    document.body.classList.remove('modal-scroll-lock');
+  }
   if (canvas) {
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
   if (iframe) {
+    if (iframe.src && iframe.src.startsWith('blob:')) {
+      try { URL.revokeObjectURL(iframe.src.split('#')[0]); } catch (e) {}
+    }
     iframe.src = '';
     iframe.srcdoc = '';
     iframe.style.display = 'none';
