@@ -332,7 +332,7 @@ function showLogin() {
   const pwdInput = document.getElementById('login-password');
   if (userInput) {
     userInput.value = '';
-    userInput.focus();
+    try { userInput.focus({ preventScroll: true }); } catch (e) {}
   }
   if (pwdInput) {
     pwdInput.value = '';
