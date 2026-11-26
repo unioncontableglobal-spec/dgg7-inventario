@@ -90,10 +90,14 @@ function registrarActividadUsuario() {
   }
 }
 
+let inactividadListenersBound = false;
 function iniciarMonitoreoInactividad() {
-  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
-    window.addEventListener(evt, registrarActividadUsuario, { passive: true });
-  });
+  if (!inactividadListenersBound) {
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, registrarActividadUsuario, { passive: true });
+    });
+    inactividadListenersBound = true;
+  }
 
   if (inactividadIntervalId) clearInterval(inactividadIntervalId);
   inactividadIntervalId = setInterval(evaluarInactividadSesion, 1000);
@@ -317,42 +321,43 @@ function showApp(user) {
   if (user) {
     actualizarIdentidadUsuarioVisual(user);
 
-    // Restricción Estricta de Rol: TOMA_FISICA (Solo acceso a Toma Física y Ajuste)
-    const isAuditorTomaFisica = (user.rol === 'TOMA_FISICA');
+    // Restricción de Navegación por Rol:
+    // - TOMA_FISICA: Solo Toma Física y Ajuste de Inventario
+    // - OPERADOR (Vendedores/Tienda): Inicio, Inventario, Entradas, Salidas, Kardex, Movimientos y Toma Física (Solo consulta)
+    const rolActual = String(user.rol || '').toUpperCase();
+    const isAuditorTomaFisica = (rolActual === 'TOMA_FISICA');
+    const isOperadorTienda = (rolActual === 'OPERADOR' || rolActual === 'VENDEDOR');
+    const tabsOperadorPermitidas = new Set([
+      'tab-dashboard', 'tab-inventario', 'tab-entrada', 'tab-salida',
+      'tab-kardex', 'tab-movimientos', 'tab-punto-cero'
+    ]);
+
     document.querySelectorAll('#main-nav .nav-tab').forEach(tab => {
+      const tId = tab.dataset.tab;
       if (isAuditorTomaFisica) {
-        if (tab.dataset.tab === 'tab-punto-cero') {
-          tab.style.display = 'flex';
-        } else {
-          tab.style.display = 'none';
-        }
+        tab.style.display = (tId === 'tab-punto-cero') ? 'flex' : 'none';
+      } else if (isOperadorTienda) {
+        tab.style.display = tabsOperadorPermitidas.has(tId) ? 'flex' : 'none';
       } else {
         tab.style.display = 'flex';
       }
     });
 
     document.querySelectorAll('#main-nav .nav-section-title').forEach(sec => {
-      sec.style.display = isAuditorTomaFisica ? 'none' : 'block';
+      if (isAuditorTomaFisica) {
+        sec.style.display = 'none';
+      } else if (isOperadorTienda) {
+        const txt = (sec.textContent || '').toUpperCase();
+        sec.style.display = (txt.includes('FISCAL') || txt.includes('SISTEMA')) ? 'none' : 'block';
+      } else {
+        sec.style.display = 'block';
+      }
     });
 
     const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
     if (bannerAuditor) {
       bannerAuditor.style.display = isAuditorTomaFisica ? 'flex' : 'none';
     }
-
-    // ENRUTAMIENTO ESTRICTO SEGÚN ROL AUTENTICADO:
-    // - Auditor de Toma Física: va directo a su módulo de conteo en tienda
-    // - Admin / Asesor / Operador: va SIEMPRE al Dashboard Ejecutivo Principal
-    if (isAuditorTomaFisica) {
-      setTimeout(() => switchTab('tab-punto-cero'), 50);
-    } else {
-      setTimeout(() => switchTab('tab-dashboard'), 50);
-    }
-
-    // Modal flotante para verificar o confirmar la Tasa Oficial BCV del día
-    setTimeout(() => {
-      abrirModalTasaBcvDia();
-    }, 250);
   }
 }
 
@@ -512,17 +517,20 @@ function togglePasswordVisibility() {
   }
 }
 
-function fillQuickLogin(user, pwd) {
-  // Resetear estados previos antes de inicio rápido
-  appInitialized = false;
-  state.currentUser = null;
+function getHoyLocalISO() {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+function fillQuickLogin(user) {
   const userEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
   const alertEl = document.getElementById('login-error-alert');
   if (userEl) userEl.value = user;
-  if (pwdEl) pwdEl.value = pwd;
+  if (pwdEl) {
+    pwdEl.value = '';
+    pwdEl.focus();
+  }
   if (alertEl) alertEl.style.display = 'none';
-  handleLoginSubmit();
 }
 
 let appInitialized = false;
@@ -532,23 +540,31 @@ async function initApp() {
   setupNavigation();
   setupEventListeners();
 
-  // Set default dates to today
-  const today = new Date().toISOString().split('T')[0];
+  // Fechas en hora local de Venezuela (UTC-4)
+  const today = getHoyLocalISO();
   ['ent-fecha', 'ent-fecha-factura', 'sal-fecha', 'ent-fecha-tasa', 'sal-fecha-tasa'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = today;
   });
 
+  // Responsable inicial con el usuario autenticado
+  const respUsuario = state.currentUser?.usuario || 'TIENDA_DG67';
+  const entUsu = document.getElementById('ent-usuario');
+  const salUsu = document.getElementById('sal-usuario');
+  if (entUsu) entUsu.value = respUsuario;
+  if (salUsu) salUsu.value = respUsuario;
+
   // Predefinir modo de carga en Bolívares con referencia en Dólares por normativa
   if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
   if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
 
-  // Carga inicial ultraligera y modular (Evita congelamiento de navegador y saturación de memoria)
+  // Carga inicial modular incluyendo catálogo de productos para Entradas y Salidas
   await Promise.all([
     checkHealth(),
     loadTasasBcvPeriodo(),
     loadDeclaracionesCache(),
     loadCatalogs(),
+    loadProducts(),
     loadDashboard()
   ]);
 
@@ -557,12 +573,14 @@ async function initApp() {
     switchTab('tab-punto-cero');
   } else {
     switchTab('tab-dashboard');
+    verificarAperturaModalTasaBcvDia();
   }
 
-  // Verificar y mostrar modal flotante de Tasa BCV del día al cargar el sistema
-  verificarAperturaModalTasaBcvDia();
-
-  // Add initial rows in forms
+  // Inicializar filas limpias en Entradas y Salidas
+  const tbEnt = document.getElementById('tbody-items-entrada');
+  const tbSal = document.getElementById('tbody-items-salida');
+  if (tbEnt) tbEnt.innerHTML = '';
+  if (tbSal) tbSal.innerHTML = '';
   addEntryRow();
   addExitRow();
 }
@@ -605,7 +623,7 @@ async function loadTasasBcvPeriodo() {
       try {
         localStorage.setItem('dg67_tasa_bcv_activa', JSON.stringify({
           tasa_bcv: rateNum,
-          fecha: tasaActiva.fecha || new Date().toISOString().split('T')[0],
+          fecha: tasaActiva.fecha || getHoyLocalISO(),
           timestamp: Date.now()
         }));
       } catch (e) {}
@@ -618,7 +636,7 @@ async function loadTasasBcvPeriodo() {
       if (displayRate) displayRate.textContent = `Bs. ${rateNum.toFixed(4)}`;
       if (displayFecha) displayFecha.textContent = `Vigencia Oficial: ${tasaActiva.fecha || tasaActiva.fecha_cierre || 'Al día'}`;
       if (inputRate) inputRate.value = rateNum.toFixed(4);
-      if (inputFecha) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || new Date().toISOString().split('T')[0];
+      if (inputFecha) inputFecha.value = tasaActiva.fecha || tasaActiva.fecha_cierre || getHoyLocalISO();
 
       // Sincronizar modal flotante de Tasa BCV del día
       const popupTasaInput = document.getElementById('popup-tasa-valor');
@@ -691,7 +709,10 @@ function onCambioFechaMovimiento(prefijo) {
 }
 
 // 1. Navigation & Tabs
+let navListenersBound = false;
 function setupNavigation() {
+  if (navListenersBound) return;
+  navListenersBound = true;
   const tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -727,17 +748,21 @@ function setupNavigation() {
 }
 
 function switchTab(tabId) {
-  // Enforzar restricción estricta para rol TOMA_FISICA
-  if (state.currentUser?.rol === 'TOMA_FISICA' && tabId !== 'tab-punto-cero') {
-    showToast('⚠️ Acceso restringido: Su usuario está autorizado exclusivamente para la Toma Física y Ajuste de Inventario.', 'warning');
+  const rolAct = String(state.currentUser?.rol || '').toUpperCase();
+  if (rolAct === 'TOMA_FISICA' && tabId !== 'tab-punto-cero') {
+    showToast('Acceso restringido exclusivamente a Toma Física.', 'warning');
     tabId = 'tab-punto-cero';
+  }
+  const tabsOp = new Set(['tab-dashboard', 'tab-inventario', 'tab-entrada', 'tab-salida', 'tab-kardex', 'tab-movimientos', 'tab-punto-cero']);
+  if ((rolAct === 'OPERADOR' || rolAct === 'VENDEDOR') && !tabsOp.has(tabId)) {
+    showToast('Este módulo fiscal está reservado para Administración / Contabilidad.', 'warning');
+    tabId = 'tab-dashboard';
   }
 
   state.activeTab = tabId;
 
   // Close mobile sidebar and backdrop if open
   document.getElementById('app-sidebar')?.classList.remove('sidebar-open');
-  document.getElementById('sidebar-backdrop')?.classList.remove('active');
   document.getElementById('sidebar-backdrop')?.classList.remove('active');
 
   // Update buttons
@@ -776,8 +801,22 @@ function switchTab(tabId) {
   // Lazy refresh based on tab
   if (tabId === 'tab-dashboard') loadDashboard();
   if (tabId === 'tab-inventario') loadProducts();
-  if (tabId === 'tab-entrada') cargarPanelCruceEntradas();
-  if (tabId === 'tab-salida') cargarPanelCruceSalidas();
+  if (tabId === 'tab-entrada') {
+    if (!state.products || state.products.length === 0) {
+      loadProducts().then(() => {
+        if (document.querySelectorAll('#tbody-items-entrada tr').length === 0) addEntryRow();
+      });
+    }
+    cargarPanelCruceEntradas();
+  }
+  if (tabId === 'tab-salida') {
+    if (!state.products || state.products.length === 0) {
+      loadProducts().then(() => {
+        if (document.querySelectorAll('#tbody-items-salida tr').length === 0) addExitRow();
+      });
+    }
+    cargarPanelCruceSalidas();
+  }
   if (tabId === 'tab-mensual') loadMonthlyReport();
   if (tabId === 'tab-movimientos') loadMovements();
   if (tabId === 'tab-fiscal') loadFiscalReconciliation();
@@ -845,11 +884,11 @@ async function checkHealth() {
     const data = await res.json();
     const badge = document.getElementById('cloud-badge');
     if (data.status === 'online') {
-      badge.innerHTML = `<span class="status-pulse"></span> Turso Cloud Activo`;
+      badge.innerHTML = `<span class="status-pulse"></span> Sistema En Línea`;
     }
   } catch (err) {
     const badge = document.getElementById('cloud-badge');
-    badge.innerHTML = `<span style="color: #fb7185;">● Error Cloud</span>`;
+    badge.innerHTML = `<span style="color: #fb7185;">● Sin Conexión</span>`;
   }
 }
 
@@ -894,16 +933,6 @@ async function loadCatalogs() {
     }
   } catch (err) {
     console.error('Error loading catalogs:', err);
-  }
-}
-
-let dashboardModoMoneda = 'BS';
-
-function toggleDashboardMoneda(modo) {
-  dashboardModoMoneda = modo;
-  if (state.dashboard) {
-    renderDashboardMonthly(state.dashboard);
-    renderDashboardTopProducts(state.dashboard);
   }
 }
 
@@ -1031,42 +1060,6 @@ function renderDashboardTopProducts(data) {
   }).join('');
 }
 
-function renderDashboardCritical(data) {
-  const tbody = document.getElementById('tbody-criticos-reorden');
-  if (!tbody) return;
-
-  const prods = data.productosCriticos || [];
-  if (prods.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 16px; color: #059669; font-weight: 700;">✅ Todo el inventario se encuentra por encima del stock mínimo.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = prods.map(p => {
-    return `
-      <tr>
-        <td style="padding: 8px 10px;">
-          <div class="font-bold" style="color: #0B2447; font-size: 0.82rem;">${p.codigo}</div>
-          <div style="font-size: 0.72rem; color: #475569; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.descripcion}">${p.descripcion}</div>
-        </td>
-        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: ${p.stock_actual <= 0 ? '#dc2626' : '#d97706'};">
-          ${p.stock_actual}
-        </td>
-        <td class="text-right font-mono" style="padding: 8px 10px; color: #64748b;">
-          ${p.stock_minimo}
-        </td>
-        <td class="text-right font-mono font-bold" style="padding: 8px 10px; color: #dc2626;">
-          -${p.deficit}
-        </td>
-        <td class="text-center" style="padding: 8px 6px;">
-          <button class="btn btn-sm btn-emerald" onclick="switchTab('tab-entrada')" style="padding: 3px 8px; font-size: 11px;" title="Registrar Entrada">
-            + Reponer
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
 // 4. Dashboard KPIs & Distribution
 async function loadDashboard() {
   try {
@@ -1130,28 +1123,23 @@ async function loadDashboard() {
     if (elTotPromM) elTotPromM.textContent = `Bs. ${fmtBs(promVentasBs)}`;
     if (elTotPromU) elTotPromU.textContent = `Ref: $${fmtUsd(promVentasUsd)} USD / mes (Base: ${cantMeses} meses)`;
 
-    // Compatibilidad en caso de referencias residuales
-    const elTotBalM = document.getElementById('dash-tot-balance-monto');
-    const elTotBalU = document.getElementById('dash-tot-balance-und');
-    if (elTotBalM) elTotBalM.textContent = '';
-    if (elTotBalU) elTotBalU.textContent = '';
-
-    // Render Subsections
+    // Compatibilidad
     renderDashboardMonthly(data);
     renderDashboardTopProducts(data);
-    if (typeof renderDashboardCritical === 'function') renderDashboardCritical(data);
 
-    // Render Category Distribution
+    // Render Category Distribution (Bs. + $ USD simultáneo)
     const categoryBars = document.getElementById('category-bars');
     if (categoryBars && data.topCategorias) {
       const maxUnidades = Math.max(...data.topCategorias.map(c => c.unidades_stock), 1);
       categoryBars.innerHTML = data.topCategorias.map(cat => {
         const pct = Math.round((cat.unidades_stock / maxUnidades) * 100);
+        const valUsd = Number(cat.valor_usd || 0);
+        const valBs = Number((valUsd * tasaAct).toFixed(2));
         return `
           <div class="category-item">
             <div class="category-label-flex">
               <span class="category-name">${cat.categoria} (${cat.productos_count} repuestos)</span>
-              <span class="category-count">${cat.unidades_stock} und • $${cat.valor_usd.toLocaleString()}</span>
+              <span class="category-count font-mono">${cat.unidades_stock} und • Bs. ${fmtBs(valBs)} <span style="color:#64748b;">($${fmtUsd(valUsd)} USD)</span></span>
             </div>
             <div class="bar-bg">
               <div class="bar-fill" style="width: ${pct}%"></div>
@@ -1306,11 +1294,11 @@ async function loadProducts() {
           <td><span class="meta-tag">${p.categoria}</span></td>
           <td><span class="meta-tag">${p.almacen}</span></td>
           <td class="text-right font-mono">${p.stock_minimo}</td>
-          <td class="text-right font-mono" style="${stockColor}">${p.stock_actual}</td>
-          <td class="text-right font-mono" style="color:#0369a1;">$${costoUsd.toFixed(2)}</td>
+          <td class="text-right font-mono font-bold" style="${stockColor}">${p.stock_actual}</td>
           <td class="text-right font-mono font-bold" style="color:#0B2447;">Bs. ${costoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-          <td class="text-right font-mono" style="color:#0369a1;">$${valUsd.toFixed(2)}</td>
+          <td class="text-right font-mono" style="color:#0369a1;">$${costoUsd.toFixed(2)}</td>
           <td class="text-right font-mono font-bold" style="color:#059669;">Bs. ${valBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+          <td class="text-right font-mono" style="color:#0369a1;">$${valUsd.toFixed(2)}</td>
           <td class="text-center">${statusBadge}</td>
           <td class="text-center">
             <button class="btn btn-sm btn-secondary" onclick="viewKardex('${p.codigo}')" title="Ver Historial Kardex">
@@ -1414,10 +1402,10 @@ function addEntryRow() {
       <input type="number" class="ent-qty-input text-right font-mono" min="0.1" step="any" value="1" oninput="calculateEntryTotals()" required>
     </td>
     <td>
-      <input type="number" class="ent-cost-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onEntryCostInput('${rowId}', 'DIVISA')" required>
+      <input type="number" class="ent-cost-bs-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onEntryCostInput('${rowId}', 'BS')" required>
     </td>
     <td>
-      <input type="number" class="ent-cost-bs-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onEntryCostInput('${rowId}', 'BS')" required>
+      <input type="number" class="ent-cost-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onEntryCostInput('${rowId}', 'DIVISA')" required>
     </td>
     <td class="text-right font-mono ent-base-cell" style="font-size:0.78rem;">Bs. 0,00<br><span style="color:#64748b;">$0.00</span></td>
     <td class="text-right font-mono ent-iva-cell" style="font-size:0.76rem; color:#0369a1;">Bs. 0,00<br><span style="color:#64748b;">$0.00</span></td>
@@ -1729,19 +1717,17 @@ function seleccionarFacturaCompraParaDetallar(compraId) {
 
   // 4. Mostrar banner de vinculación activa
   const banner = document.getElementById('banner-entrada-vinculada-lc');
-  const txt = document.getElementById('txt-entrada-vinculada-lc');
   const title = document.getElementById('banner-entrada-vinculada-title');
   const sub = document.getElementById('banner-entrada-vinculada-sub');
   if (banner) banner.style.display = 'block';
   const totBs = Number(compra.total_bs || 0);
   const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 1)));
-  if (title) title.innerHTML = `🔗 Vinculando Entrada con Factura Fiscal #${compra.nro_factura} de ${compra.razon_social}`;
-  if (sub) sub.innerHTML = `Monto Factura: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • RIF: ${compra.rif}. Detalla los repuestos recibidos físicamente a continuación:`;
-  if (txt) txt.innerHTML = `Vinculando Entrada con <strong>Factura Fiscal #${compra.nro_factura}</strong> de <strong>${compra.razon_social}</strong> (${compra.rif}) por <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong>. Agrega los repuestos recibidos abajo:`;
+  if (title) title.innerHTML = `🔗 Vinculando Entrada con Factura #${compra.nro_factura} de ${compra.razon_social}`;
+  if (sub) sub.innerHTML = `Monto Factura: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • RIF: ${compra.rif}. Agregue los repuestos recibidos abajo:`;
 
   // 5. Scroll suave al formulario
   document.getElementById('form-entrada')?.scrollIntoView({ behavior: 'smooth' });
-  showToast(`Factura #${compra.nro_factura} vinculada. Ahora agrega los repuestos recibidos físicamente.`);
+  showToast(`Factura #${compra.nro_factura} vinculada. Agregue los artículos recibidos.`, 'info');
 }
 
 function desvincularEntradaLibroCompra() {
@@ -1749,7 +1735,7 @@ function desvincularEntradaLibroCompra() {
   if (hiddenLc) hiddenLc.value = '';
   const banner = document.getElementById('banner-entrada-vinculada-lc');
   if (banner) banner.style.display = 'none';
-  showToast('Vinculación con Libro de Compras cancelada.');
+  showToast('Vinculación cancelada.', 'info');
 }
 
 function calculateEntryTotals(skipInputSync = false) {
@@ -1844,10 +1830,10 @@ function addExitRow() {
       <input type="number" class="sal-qty-input text-right font-mono" min="0.1" step="any" value="1" oninput="validateExitRow('${rowId}')" required>
     </td>
     <td>
-      <input type="number" class="sal-price-usd-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onExitPriceInput('${rowId}', 'DIVISA')" required>
+      <input type="number" class="sal-price-bs-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onExitPriceInput('${rowId}', 'BS')" required>
     </td>
     <td>
-      <input type="number" class="sal-price-bs-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onExitPriceInput('${rowId}', 'BS')" required>
+      <input type="number" class="sal-price-usd-input text-right font-mono" min="0" step="0.01" value="0.00" oninput="onExitPriceInput('${rowId}', 'DIVISA')" required>
     </td>
     <td class="text-right font-mono sal-base-cell" style="font-size:0.78rem;">Bs. 0,00<br><span style="color:#64748b;">$0.00</span></td>
     <td class="text-right font-mono font-bold sal-total-cell" style="font-size:0.8rem; color:#0B2447;">Bs. 0,00<br><span style="color:#be123c;">$0.00</span></td>
@@ -1963,8 +1949,12 @@ function calculateExitTotals(skipInputSync = false) {
 
     const baseUsd = Number((qty * unitUsd).toFixed(2));
     const baseBs = Number((qty * unitBs).toFixed(2));
-    const totalUsd = Number((baseUsd * 1.16).toFixed(2));
-    const totalBs = Number((baseBs * 1.16).toFixed(2));
+    const subtipoSal = document.getElementById('sal-subtipo')?.value || 'VENTA';
+    const pctIvaSal = subtipoSal === 'VENTA' ? 0.16 : 0;
+    const ivaUsd = Number((baseUsd * pctIvaSal).toFixed(2));
+    const ivaBs = Number((baseBs * pctIvaSal).toFixed(2));
+    const totalUsd = Number((baseUsd + ivaUsd).toFixed(2));
+    const totalBs = Number((baseBs + ivaBs).toFixed(2));
 
     const baseCell = r.querySelector('.sal-base-cell');
     const totCell = r.querySelector('.sal-total-cell');
@@ -1998,25 +1988,29 @@ async function handleMovementSubmit(event, tipo) {
   const fechaFactura = isEntrada ? (document.getElementById('ent-fecha-factura')?.value || fecha) : fecha;
   const doc = document.getElementById(isEntrada ? 'ent-factura' : 'sal-factura').value.trim();
   const nroControl = document.getElementById(isEntrada ? 'ent-control' : 'sal-control')?.value.trim() || '';
-  const usuarioResp = document.getElementById(isEntrada ? 'ent-usuario' : 'sal-usuario')?.value.trim() || 'ASISTENTE_TIENDA';
+  const usuarioResp = document.getElementById(isEntrada ? 'ent-usuario' : 'sal-usuario')?.value.trim() || state.currentUser?.usuario || 'TIENDA_DG67';
   const subtipo = document.getElementById(isEntrada ? 'ent-subtipo' : 'sal-subtipo')?.value || (isEntrada ? 'COMPRA_NACIONAL' : 'VENTA');
   const tasaFactura = parseFloat(document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fechaFactura);
   const tasaAlmacen = getTasaBcvPorFechaOPeriodo(fecha);
   const tasaBcv = isEntrada ? tasaFactura : (parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fecha));
   const fechaTasaBcv = document.getElementById(isEntrada ? 'ent-fecha-tasa' : 'sal-fecha-tasa')?.value || fechaFactura;
-  const metodoVal = isEntrada ? (state.metodoValoracionKardex || 'CPP') : (document.getElementById('sal-metodo-val')?.value || 'CPP');
+  const metodoVal = state.metodoValoracionKardex || 'CPP';
   const obs = document.getElementById(isEntrada ? 'ent-obs' : 'sal-obs').value.trim();
   const provId = isEntrada ? document.getElementById('ent-proveedor').value : null;
 
   if (!doc || !nroControl || !usuarioResp) {
-    showToast('Todo movimiento debe tener Documento Fuente, N° Control Fiscal y Usuario Responsable (Art. 177 RISLR).', 'error');
+    showToast('Complete el N° de Documento, N° Control y Responsable antes de guardar.', 'error');
     return;
   }
+
+  const esMovGravado = !subtipo.includes('AJUSTE') && !subtipo.includes('MERMA') && !subtipo.includes('AUTOCONSUMO') && !subtipo.includes('MUESTRA');
+  const pctIva = esMovGravado ? 0.16 : 0;
 
   // Gather items & validate stock in real time for Salidas
   const items = [];
   const rows = document.querySelectorAll(isEntrada ? '#tbody-items-entrada tr' : '#tbody-items-salida tr');
   const stockAcumulado = {};
+  let hayPrecioCero = false;
 
   for (const r of rows) {
     const selEl = r.querySelector(isEntrada ? '.ent-prod-select' : '.sal-prod-select');
@@ -2031,17 +2025,19 @@ async function handleMovementSubmit(event, tipo) {
       const descProd = opt?.dataset?.desc || prodId;
       stockAcumulado[prodId] = (stockAcumulado[prodId] || 0) + qty;
       if (stockAcumulado[prodId] > stockDisp || stockDisp <= 0) {
-        showToast(`⛔ BLOQUEO DE KARDEX (PA SNAT/2026/00093): Prohibido emitir salida/factura de "${descProd}". Existencia física disponible (${stockDisp} und) es menor a la cantidad solicitada (${stockAcumulado[prodId]} und).`, 'error');
+        showToast(`Stock insuficiente para "${descProd}": disponible ${stockDisp} unds, solicitado ${stockAcumulado[prodId]} unds.`, 'error');
         return;
       }
     }
 
     const unitUsd = parseFloat(r.querySelector(isEntrada ? '.ent-cost-input' : '.sal-price-usd-input')?.value || 0);
     const unitBs = parseFloat(r.querySelector(isEntrada ? '.ent-cost-bs-input' : '.sal-price-bs-input')?.value || Number((unitUsd * tasaBcv).toFixed(2)));
+    if (unitUsd <= 0 && unitBs <= 0) hayPrecioCero = true;
+
     const baseUsd = Number((qty * unitUsd).toFixed(2));
     const baseBs = Number((qty * unitBs).toFixed(2));
-    const ivaUsd = Number((baseUsd * 0.16).toFixed(2));
-    const ivaBs = Number((baseBs * 0.16).toFixed(2));
+    const ivaUsd = Number((baseUsd * pctIva).toFixed(2));
+    const ivaBs = Number((baseBs * pctIva).toFixed(2));
 
     items.push({
       producto_id: parseInt(prodId, 10),
@@ -2063,8 +2059,14 @@ async function handleMovementSubmit(event, tipo) {
   }
 
   if (items.length === 0) {
-    showToast('Debe agregar al menos un ítem válido.', 'error');
+    showToast('Debe agregar al menos un artículo válido con cantidad mayor a 0.', 'error');
     return;
+  }
+
+  if (esMovGravado && hayPrecioCero) {
+    if (!confirm('Uno o más artículos tienen costo/precio en 0,00. ¿Desea registrar el movimiento de todas formas?')) {
+      return;
+    }
   }
 
   const tipoFinal = (subtipo.includes('AJUSTE')) ? 'AJUSTE' : tipo;
@@ -2093,7 +2095,7 @@ async function handleMovementSubmit(event, tipo) {
 
   const submitBtn = document.getElementById(isEntrada ? 'btn-submit-entrada' : 'btn-submit-salida');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando en Turso...';
+  submitBtn.textContent = 'Guardando...';
 
   try {
     const res = await fetch('/api/movimientos', {
@@ -2107,35 +2109,34 @@ async function handleMovementSubmit(event, tipo) {
 
     if (data.conciliacion) {
       if (data.conciliacion.estatus === 'CONCILIADO') {
-        showToast('✅ Movimiento registrado y CONCILIADO exitosamente', 'success');
+        showToast('Movimiento registrado y conciliado exitosamente.', 'success');
       } else if (data.conciliacion.faltantes_cant > 0) {
-        showToast(`Factura registrada. Faltan ${data.conciliacion.faltantes_cant} facturas por detallar para cerrar el Reporte Z (${data.conciliacion.faltantes_lista.join(', ')})`, 'info');
+        showToast(`Factura registrada. Faltan ${data.conciliacion.faltantes_cant} facturas para cerrar el Reporte Z (${data.conciliacion.faltantes_lista.join(', ')}).`, 'info');
       } else {
-        showToast(data.message || 'Movimiento registrado con éxito', 'success');
+        showToast(data.message || 'Movimiento registrado con éxito.', 'success');
       }
     } else {
-      showToast(data.message || 'Movimiento registrado con trazabilidad SENIAT!', 'success');
+      showToast(data.message || 'Movimiento registrado con éxito.', 'success');
     }
 
-    // Reset Form
+    // Reset Form para permitir carga continua en tienda
     resetForm(isEntrada ? 'form-entrada' : 'form-salida');
-    if (!isEntrada) desvincularSalidaLibroVentas();
+    if (!isEntrada && typeof desvincularSalidaLibroVentas === 'function') desvincularSalidaLibroVentas();
     if (isEntrada) addEntryRow();
     else addExitRow();
 
-    // Refresh Live Data
+    // Refresh Live Data en segundo plano
     await Promise.all([
       loadDashboard(),
       loadProducts(),
-      loadCruceDobleVia(cruceActivoPeriodo),
+      typeof loadCruceDobleVia === 'function' ? loadCruceDobleVia(cruceActivoPeriodo) : Promise.resolve(),
       isEntrada ? cargarPanelCruceEntradas() : cargarPanelCruceSalidas()
     ]);
-    switchTab('tab-inventario');
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = isEntrada ? 'Guardar Entrada con Trazabilidad SENIAT' : 'Guardar Salida con Trazabilidad SENIAT';
+    submitBtn.textContent = isEntrada ? 'Registrar Entrada en Almacén' : 'Registrar Venta / Salida';
   }
 }
 
@@ -2143,11 +2144,12 @@ function resetForm(formId) {
   const form = document.getElementById(formId);
   if (!form) return;
   form.reset();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getHoyLocalISO();
   const dateInput = form.querySelector('input[type="date"]');
   if (dateInput) dateInput.value = today;
 
   const currentRateStr = (getTasaBcvPorFechaOPeriodo() || 889.58).toFixed(4);
+  const respUsuario = state.currentUser?.usuario || 'TIENDA_DG67';
 
   if (formId === 'form-entrada') {
     const hiddenLc = document.getElementById('ent-libro-compra-id');
@@ -2166,7 +2168,7 @@ function resetForm(formId) {
     const submitBtn = document.getElementById('btn-submit-entrada');
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
+      submitBtn.textContent = 'Registrar Entrada en Almacén';
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
     }
@@ -2176,16 +2178,16 @@ function resetForm(formId) {
     if (document.getElementById('ent-fecha-tasa')) document.getElementById('ent-fecha-tasa').value = today;
     if (document.getElementById('ent-tasa')) document.getElementById('ent-tasa').value = currentRateStr;
     if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
-    if (document.getElementById('ent-usuario')) document.getElementById('ent-usuario').value = 'ASISTENTE_ALMACEN_TIENDA';
+    if (document.getElementById('ent-usuario')) document.getElementById('ent-usuario').value = respUsuario;
     calculateEntryTotals();
   } else if (formId === 'form-salida') {
     document.getElementById('tbody-items-salida').innerHTML = '';
-    if (document.getElementById('sal-control')) document.getElementById('sal-control').value = 'ZOA0000176';
+    if (document.getElementById('sal-control')) document.getElementById('sal-control').value = 'Z0A0000176';
     if (document.getElementById('sal-fecha')) document.getElementById('sal-fecha').value = today;
     if (document.getElementById('sal-fecha-tasa')) document.getElementById('sal-fecha-tasa').value = today;
     if (document.getElementById('sal-tasa')) document.getElementById('sal-tasa').value = currentRateStr;
     if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
-    if (document.getElementById('sal-usuario')) document.getElementById('sal-usuario').value = 'CAJA_DESPACHO_TIENDA';
+    if (document.getElementById('sal-usuario')) document.getElementById('sal-usuario').value = respUsuario;
     calculateExitTotals();
   }
 }
@@ -2213,13 +2215,30 @@ function formatSubtipoBadge(tipo, subtipo) {
 }
 
 async function executeKardexSearch(codeOverride) {
-  const code = codeOverride || document.getElementById('kardex-search-input').value.trim();
-  if (!code) return;
+  let rawQuery = (codeOverride || document.getElementById('kardex-search-input')?.value || '').trim();
+  if (!rawQuery) return;
 
-  const metodo = document.getElementById('kardex-metodo-select')?.value || state.metodoKardex || 'CPP';
+  // Búsqueda inteligente: si no coincide exacto por código, buscar por coincidencia en código o descripción
+  if (Array.isArray(state.products) && state.products.length > 0) {
+    const exactMatch = state.products.find(p => String(p.codigo || '').toUpperCase() === rawQuery.toUpperCase());
+    if (!exactMatch) {
+      const qLow = rawQuery.toLowerCase();
+      const byDesc = state.products.find(p =>
+        String(p.codigo || '').toLowerCase().includes(qLow) ||
+        String(p.descripcion || '').toLowerCase().includes(qLow)
+      );
+      if (byDesc) {
+        rawQuery = byDesc.codigo;
+        const inputEl = document.getElementById('kardex-search-input');
+        if (inputEl) inputEl.value = byDesc.codigo;
+      }
+    }
+  }
+
+  const metodo = document.getElementById('kardex-metodo-select')?.value || state.metodoValoracionKardex || 'CPP';
 
   try {
-    const res = await fetch(`/api/kardex/${encodeURIComponent(code)}?metodo=${encodeURIComponent(metodo)}`);
+    const res = await fetch(`/api/kardex/${encodeURIComponent(rawQuery)}?metodo=${encodeURIComponent(metodo)}`);
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.error || 'Producto no encontrado');
@@ -2277,9 +2296,9 @@ async function executeKardexSearch(codeOverride) {
           <td class="text-right font-mono font-bold" style="color: ${h.entrada > 0 ? '#059669' : ''}">${h.entrada > 0 ? '+' + h.entrada : '-'}</td>
           <td class="text-right font-mono font-bold" style="color: ${h.salida > 0 ? '#e11d48' : ''}">${h.salida > 0 ? '-' + h.salida : '-'}</td>
           <td class="text-right font-mono font-bold" style="color: var(--ucg-navy);">${h.saldo}</td>
-          <td class="text-right font-mono" style="color:#0369a1; font-weight:700;">$${costoDiv.toFixed(2)}</td>
-          <td class="text-right font-mono" style="font-size:0.76rem; color:#475569;">Bs. ${tasaOp.toFixed(2)}</td>
           <td class="text-right font-mono font-bold">Bs. ${costoUnitBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+          <td class="text-right font-mono" style="font-size:0.76rem; color:#475569;">Bs. ${tasaOp.toFixed(2)}</td>
+          <td class="text-right font-mono" style="color:#0369a1; font-weight:700;">$${costoDiv.toFixed(2)}</td>
           <td class="text-right font-mono font-bold" style="color: var(--ucg-navy);">
             <div>Bs. ${valSaldoVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
             <div style="font-size:0.72rem; color:#059669;">($${valSaldoUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })})</div>
@@ -2496,13 +2515,16 @@ async function viewMovementDetail(id) {
 
     let sumBaseBs = 0, sumBaseDiv = 0, sumIvaBs = 0, sumIvaDiv = 0, sumTotBs = 0, sumTotDiv = 0;
 
-    const rowsHtml = data.items.map(it => {
+    const itemsList = Array.isArray(data.items) ? data.items : (Array.isArray(data.detalles) ? data.detalles : []);
+    const esGravadoDoc = h.tipo === 'ENTRADA_COMPRA' || h.tipo === 'SALIDA_VENTA';
+
+    const rowsHtml = itemsList.map(it => {
       const pUnitBs = Number(it.precio_unitario_bs || it.costo_unitario_bs || it.costo_ves_efectivo || 0);
       const pUnitDiv = Number(it.precio_unitario_divisa || it.costo_unitario_divisa || it.costo_unitario_usd || 0);
-      const baseBs = Number(it.base_imponible_bs || it.subtotal_ves || 0);
-      const baseDiv = Number(it.base_imponible_divisa || it.subtotal_usd || 0);
-      const ivaBs = Number(it.monto_iva_bs || (baseBs * 0.16));
-      const ivaDiv = Number(it.monto_iva_divisa || (baseDiv * 0.16));
+      const baseBs = Number(it.base_imponible_bs || it.subtotal_ves || (Number(it.cantidad || 0) * pUnitBs) || 0);
+      const baseDiv = Number(it.base_imponible_divisa || it.subtotal_usd || (Number(it.cantidad || 0) * pUnitDiv) || 0);
+      const ivaBs = it.monto_iva_bs !== undefined && it.monto_iva_bs !== null ? Number(it.monto_iva_bs) : (esGravadoDoc ? Number((baseBs * 0.16).toFixed(2)) : 0);
+      const ivaDiv = it.monto_iva_divisa !== undefined && it.monto_iva_divisa !== null ? Number(it.monto_iva_divisa) : (esGravadoDoc ? Number((baseDiv * 0.16).toFixed(2)) : 0);
       const totBs = Number(it.total_linea_bs || (baseBs + ivaBs));
       const totDiv = Number(it.total_linea_divisa || (baseDiv + ivaDiv));
 
@@ -2661,8 +2683,8 @@ async function loadMonthlyReport() {
           <td class="text-right font-mono font-bold">${m.saldoInicial}</td>
           <td class="text-right font-mono font-bold" style="color: #059669;">${comprasText}</td>
           <td class="text-right font-mono" style="color: #0B2447; font-weight: 700;">Bs. ${tasaCierre.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-          <td class="text-right font-mono font-bold" style="color: #0369a1;">${comprasUsdText}</td>
           <td class="text-right font-mono font-bold" style="color: #059669;">${comprasBsText}</td>
+          <td class="text-right font-mono font-bold" style="color: #0369a1;">${comprasUsdText}</td>
           <td class="text-right font-mono font-bold" style="color: #e11d48;">${ventasText}</td>
           <td class="text-right font-mono font-bold" style="color: #000080; font-size: 0.95rem;">${m.saldoFinal}</td>
           <td class="text-center font-mono">${m.totalDocs}</td>
@@ -2691,14 +2713,18 @@ async function imprimirCierreMensualInventario() {
   }
 
   let totComprasUnd = 0;
+  let totComprasBs = 0;
   let totComprasUsd = 0;
   let totVentasUnd = 0;
   let totDocs = 0;
 
   const rowsHtml = currentMonthlyReportData.map((m, idx) => {
     const isInitial = m.periodo === '2025-12';
+    const valComprasBs = Number(m.comprasBs || m.inicialBs || 0);
+    const valComprasUsd = Number(m.comprasUsd || m.inicialUsd || 0);
     if (!isInitial) {
       totComprasUnd += Number(m.compras || 0);
+      totComprasBs += Number(m.comprasBs || 0);
       totComprasUsd += Number(m.comprasUsd || 0);
       totVentasUnd += Number(m.ventas || 0);
     }
@@ -2711,7 +2737,10 @@ async function imprimirCierreMensualInventario() {
         <td style="text-align:center; font-family:monospace;">${m.fechaCorte}</td>
         <td style="text-align:right; font-family:monospace; font-weight:700;">${Number(m.saldoInicial || 0).toLocaleString('es-VE')}</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#065f46;">${isInitial ? Number(m.entradasInicial).toLocaleString('es-VE') + ' (Inicial)' : '+' + Number(m.compras || 0).toLocaleString('es-VE')}</td>
-        <td style="text-align:right; font-family:monospace;">${isInitial ? '-' : '$' + Number(m.comprasUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+        <td style="text-align:right; font-family:monospace;">
+          <div style="font-weight:700;">Bs. ${fmtBs(valComprasBs)}</div>
+          <div style="font-size:8px; color:#475569;">$${fmtUsd(valComprasUsd)} USD</div>
+        </td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#9f1239;">-${Number(m.ventas || 0).toLocaleString('es-VE')}</td>
         <td style="text-align:right; font-family:monospace; font-weight:900; color:#000080;">${Number(m.saldoFinal || 0).toLocaleString('es-VE')}</td>
         <td style="text-align:center; font-family:monospace;">${m.totalDocs}</td>
@@ -2754,7 +2783,7 @@ async function imprimirCierreMensualInventario() {
             <th>FECHA DE CORTE</th>
             <th>SALDO INICIAL (UND)</th>
             <th>ENTRADAS / COMPRAS (UND)</th>
-            <th>VALOR COMPRAS ($ USD)</th>
+            <th>VALOR COMPRAS (BS. / $ USD)</th>
             <th>SALIDAS / VENTAS (UND)</th>
             <th>EXISTENCIA FINAL (UND)</th>
             <th>N° DOCS</th>
@@ -2767,7 +2796,10 @@ async function imprimirCierreMensualInventario() {
           <tr style="background:#e2e8f0; font-weight:900;">
             <td colspan="4" style="text-align:right;">MOVIMIENTO ACUMULADO DEL EJERCICIO 2026:</td>
             <td style="text-align:right; font-family:monospace; color:#065f46;">+${totComprasUnd.toLocaleString('es-VE')} und</td>
-            <td style="text-align:right; font-family:monospace;">$${totComprasUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+            <td style="text-align:right; font-family:monospace;">
+              <div>Bs. ${fmtBs(totComprasBs)}</div>
+              <div style="font-size:8px; color:#475569;">$${fmtUsd(totComprasUsd)} USD</div>
+            </td>
             <td style="text-align:right; font-family:monospace; color:#9f1239;">-${totVentasUnd.toLocaleString('es-VE')} und</td>
             <td style="text-align:right; font-family:monospace; color:#000080;">${currentMonthlyReportData.length > 0 ? Number(currentMonthlyReportData[currentMonthlyReportData.length - 1].saldoFinal).toLocaleString('es-VE') : 0} und</td>
             <td style="text-align:center; font-family:monospace;">${totDocs}</td>
@@ -2807,7 +2839,10 @@ function filtrarPorFechaCorte(fechaCorte) {
 }
 
 // 12. Setup Event Listeners
+let eventListenersBound = false;
 function setupEventListeners() {
+  if (eventListenersBound) return;
+  eventListenersBound = true;
   // Inventory Filters
   document.getElementById('inv-search')?.addEventListener('input', debounce(loadProducts, 250));
   document.getElementById('inv-periodo-corte')?.addEventListener('change', loadProducts);
@@ -2847,27 +2882,6 @@ function setupEventListeners() {
   document.getElementById('m-comp-rif')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('input', verificarFacturaCompraDuplicadaUI);
   document.getElementById('m-comp-control')?.addEventListener('blur', verificarFacturaCompraDuplicadaUI);
-
-  // Dropzone Matriz Auditada (Punto Cero)
-  const dropzoneMatriz = document.getElementById('dropzone-matriz');
-  if (dropzoneMatriz) {
-    dropzoneMatriz.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropzoneMatriz.style.background = '#f0fdf4';
-      dropzoneMatriz.style.borderColor = '#16a34a';
-    });
-    dropzoneMatriz.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dropzoneMatriz.style.background = '#f8fafc';
-      dropzoneMatriz.style.borderColor = '#94a3b8';
-    });
-    dropzoneMatriz.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzoneMatriz.style.background = '#f8fafc';
-      dropzoneMatriz.style.borderColor = '#94a3b8';
-      manejarSeleccionArchivoMatriz(e);
-    });
-  }
 }
 
 // Helper: Toast Notifications
@@ -2875,10 +2889,11 @@ function showToast(message, type = 'success') {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
+  const icons = { success: '✅', warning: '⚠️', info: 'ℹ️', error: '❌' };
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.innerHTML = `
-    <span>${type === 'success' ? '✅' : '❌'}</span>
+    <span>${icons[type] || 'ℹ️'}</span>
     <div>${message}</div>
   `;
 
@@ -3162,7 +3177,7 @@ async function loadComprasFiscal() {
   const tbody = document.getElementById('tbody-compras-fiscal');
   if (!tbody) return;
 
-  const periodo = document.getElementById('compras-filter-periodo')?.value || 'TODOS';
+  const periodo = document.getElementById('compras-periodo-select')?.value || 'TODOS';
   const estatus = document.getElementById('compras-filter-estatus')?.value || 'TODOS';
 
   try {
@@ -3319,7 +3334,7 @@ function renderCruceVentas(ventas, periodo) {
             <td class="font-bold">${z.fecha}</td>
             <td>
               <span class="font-mono font-bold" style="color:var(--ucg-navy);">${z.numero_reporte_z || 'Z-' + z.id}</span>
-              <div style="font-size:0.68rem; color:#64748b;">${z.serial_impresora || 'ZOA0000176'}</div>
+              <div style="font-size:0.68rem; color:#64748b;">${z.serial_impresora || 'Z0A0000176'}</div>
             </td>
             <td>
               <span class="font-mono font-bold">${z.factura_desde || '-'} ➔ ${z.factura_hasta || '-'}</span>
@@ -3494,10 +3509,9 @@ let cacheDeclaracionesIva = [];
 
 function isPeriodoFiscalDeclarado(periodo) {
   if (!periodo || periodo === 'TODOS') return false;
-  if (periodo <= '2026-09') return true;
   const match = cacheDeclaracionesIva.find(d => d.periodo === periodo);
   if (match) return match.estatus === 'DECLARADO';
-  return false;
+  return periodo <= '2026-09';
 }
 
 const fiscalStateNew = {
@@ -3701,7 +3715,7 @@ function renderLibroCompras(compras) {
           <div>Bs. ${baseBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${baseUsd.toFixed(2)})</div>
         </td>
-        <td class="text-center font-mono">16%</td>
+        <td class="text-center font-mono">${((c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16) * 100).toFixed(0)}%</td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${ivaBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${ivaUsd.toFixed(2)})</div>
@@ -3790,7 +3804,7 @@ function openModalNuevaCompra(modo = 'MERCANCIA') {
   const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
   document.getElementById('m-comp-periodo').value = targetPeriodo;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getHoyLocalISO();
   const targetFecha = (targetPeriodo === '2026-10') ? '2026-10-15' : (targetPeriodo ? `${targetPeriodo}-15` : today);
 
   document.getElementById('m-comp-fecha').value = targetFecha;
@@ -3865,11 +3879,20 @@ function onCambioFechaRecepcionCompra() {
 
 function onCambioModoMonedaCompra() {
   const modo = document.getElementById('m-comp-modo-moneda')?.value || 'BS';
+  const baseBsEl = document.getElementById('m-comp-base');
+  const baseDivEl = document.getElementById('m-comp-base-divisa');
+  const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || getTasaBcvPorFechaOPeriodo();
   if (modo === 'DIVISA') {
-    document.getElementById('m-comp-base-divisa')?.focus();
+    if (baseDivEl && (!baseDivEl.value || Number(baseDivEl.value) === 0) && Number(baseBsEl?.value || 0) > 0 && tasa > 0) {
+      baseDivEl.value = (Number(baseBsEl.value) / tasa).toFixed(2);
+    }
+    baseDivEl?.focus();
     calcularIvaCompra('USD');
   } else {
-    document.getElementById('m-comp-base')?.focus();
+    if (baseBsEl && (!baseBsEl.value || Number(baseBsEl.value) === 0) && Number(baseDivEl?.value || 0) > 0 && tasa > 0) {
+      baseBsEl.value = (Number(baseDivEl.value) * tasa).toFixed(2);
+    }
+    baseBsEl?.focus();
     calcularIvaCompra('BS');
   }
 }
@@ -4280,7 +4303,8 @@ function calcularIvaCompra(editedField = 'BS') {
   const fFac = document.getElementById('m-comp-fecha')?.value || '';
   const tasa = parseFloat(document.getElementById('m-comp-tasa-bcv')?.value) || getTasaBcvPorFechaOPeriodo(fFac);
   const fechaTasa = document.getElementById('m-comp-fecha-tasa')?.value || fFac;
-  const ali = parseFloat(document.getElementById('m-comp-alicuota')?.value) || 0.16;
+  const rawAli = document.getElementById('m-comp-alicuota')?.value;
+  const ali = (rawAli !== undefined && rawAli !== null && rawAli !== '' && !isNaN(Number(rawAli))) ? Number(rawAli) : 0.16;
   const retPct = parseFloat(document.getElementById('m-comp-ret-pct')?.value) || 0.00;
 
   const baseBsInput = document.getElementById('m-comp-base');
@@ -4489,6 +4513,9 @@ async function guardarNuevaCompra(e) {
   const totalBs = parseFloat(document.getElementById('m-comp-total').value) || 0;
   const retBs = parseFloat(document.getElementById('m-comp-ret').value) || 0;
 
+  const rawAliCompra = document.getElementById('m-comp-alicuota')?.value;
+  const aliCompra = (rawAliCompra !== undefined && rawAliCompra !== null && rawAliCompra !== '' && !isNaN(Number(rawAliCompra))) ? Number(rawAliCompra) : 0.16;
+
   const data = {
     periodo: document.getElementById('m-comp-periodo').value,
     fecha: fFac,
@@ -4500,10 +4527,10 @@ async function guardarNuevaCompra(e) {
     tipo_transaccion: '01-reg',
     tasa_bcv: tasa,
     fecha_tasa_bcv: document.getElementById('m-comp-fecha-tasa')?.value || fFac,
-    moneda_operacion: 'USD',
+    moneda_operacion: document.getElementById('m-comp-modo-moneda')?.value === 'DIVISA' ? 'USD' : 'BS',
     base_imponible_bs: baseBs,
     base_imponible_divisa: baseDiv,
-    alicuota: parseFloat(document.getElementById('m-comp-alicuota').value) || 0.16,
+    alicuota: aliCompra,
     iva_bs: ivaBs,
     monto_iva_divisa: tasa > 0 ? Number((ivaBs / tasa).toFixed(2)) : 0,
     total_bs: totalBs,
@@ -4682,10 +4709,10 @@ async function exportarLibroComprasExcel() {
       "TIPO TRANS.": c.tipo_transaccion || '01-REG',
       "TOTAL FACTURA (BS)": Number(c.total_bs || 0),
       "TOTAL REF ($ USD)": Number(c.total_divisa || (c.tasa_bcv > 0 ? c.total_bs / c.tasa_bcv : 0)),
-      "EXENTO (BS)": Number(c.exento_bs || 0),
+      "EXENTO (BS)": Number(c.exento_bs || (Number(c.alicuota) === 0 ? c.base_imponible_bs : 0) || 0),
       "BASE IMPONIBLE (BS)": Number(c.base_imponible_bs || 0),
       "BASE REF ($ USD)": Number(c.base_imponible_divisa || 0),
-      "ALÍCUOTA": `${((c.alicuota || 0.16) * 100).toFixed(0)}%`,
+      "ALÍCUOTA": `${(((c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16)) * 100).toFixed(0)}%`,
       "IVA CRÉDITO (BS)": Number(c.iva_bs || 0),
       "RET. ISLR (BS)": Number(c.islr_retenido_bs || 0),
       "TASA BCV": Number(c.tasa_bcv || 889.58),
@@ -4735,6 +4762,7 @@ function imprimirLibroCompras() {
     const iva = Number(c.iva_bs || 0);
     const total = Number(c.total_bs || (base + iva));
     const ret = Number(c.iva_retenido_bs || 0);
+    const aliNum = c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16;
 
     totBase += base;
     totIva += iva;
@@ -4755,9 +4783,9 @@ function imprimirLibroCompras() {
         <td style="text-align:center; font-family:monospace; white-space:nowrap;">${c.tipo_transaccion || '01-reg'}</td>
         <td style="text-align:center; white-space:nowrap;">-</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(total)}</td>
-        <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
-        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
-        <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">${aliNum === 0 ? fmtBs(base) : '0,00'}</td>
+        <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${aliNum === 0 ? '0,00' : fmtBs(base)}</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">${(aliNum * 100).toFixed(0)}%</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">${fmtBs(iva)}</td>
       </tr>
     `;
@@ -5033,7 +5061,7 @@ function renderLibroVentas(ventas) {
           <div>Bs. ${baseBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${baseUsd.toFixed(2)})</div>
         </td>
-        <td class="text-center font-mono">16%</td>
+        <td class="text-center font-mono">${((c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16) * 100).toFixed(0)}%</td>
         <td class="text-right font-mono font-bold">
           <div>Bs. ${ivaBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
           <div style="font-size:0.70rem; color:#64748b; font-weight:500;">($${ivaUsd.toFixed(2)})</div>
@@ -5243,9 +5271,11 @@ function openModalNuevaVenta() {
   }
 
   const periodoActivo = document.getElementById('ventas-periodo-select')?.value;
-  const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : '2026-10';
+  const hoyLocal = getHoyLocalISO();
+  const mesActual = hoyLocal.slice(0, 7);
+  const targetPeriodo = (periodoActivo && periodoActivo !== 'TODOS') ? periodoActivo : mesActual;
   document.getElementById('m-vent-periodo').value = targetPeriodo;
-  const targetFecha = targetPeriodo === '2026-10' ? '2026-10-01' : `${targetPeriodo}-01`;
+  const targetFecha = targetPeriodo === mesActual ? hoyLocal : `${targetPeriodo}-01`;
   document.getElementById('m-vent-fecha').value = targetFecha;
   if (document.getElementById('m-vent-fecha-tasa')) document.getElementById('m-vent-fecha-tasa').value = targetFecha;
 
@@ -5800,7 +5830,7 @@ async function cargarPanelCruceSalidas() {
 
   const tbodyPend = document.getElementById('tbody-cruce-salidas-pendientes');
   const tbodyConc = document.getElementById('tbody-cruce-salidas-conciliados');
-  const tbodyHuerf = document.getElementById('tbody-cruce-salidas-huerfanas');
+  const tbodyHuerf = document.getElementById('tbody-cruce-salidas-tienda-huerfanas') || document.getElementById('tbody-cruce-salidas-huerfanas');
 
   if (tbodyPend) {
     tbodyPend.innerHTML = `<tr><td colspan="7" class="text-center" style="padding: 16px; color: #64748b;">Consultando estado de cruce de salidas fiscales...</td></tr>`;
@@ -5932,7 +5962,7 @@ async function cargarPanelCruceSalidas() {
 function cambiarTabCruceSalidas(tab) {
   const tabs = ['pendientes', 'conciliados', 'huerfanas'];
   tabs.forEach(t => {
-    const btn = document.getElementById(`tab-btn-cruce-${t}`);
+    const btn = document.getElementById(`tab-btn-cruce-sal-${t}`) || document.getElementById(`tab-btn-cruce-${t}`);
     const vista = document.getElementById(`cruce-salidas-vista-${t}`);
     if (btn && vista) {
       if (t === tab) {
@@ -6081,7 +6111,7 @@ function imprimirLibroVentas() {
       <tr>
         <td style="text-align:center; font-weight:700; white-space:nowrap;">${idx + 1}</td>
         <td style="text-align:center; font-family:monospace; white-space:nowrap;">${v.fecha || '-'}</td>
-        <td style="text-align:center; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">ZOA0000176</td>
+        <td style="text-align:center; font-family:monospace; font-weight:700; color:#000080; white-space:nowrap;">${v.serial_impresora || 'Z0A0000176'}</td>
         <td style="text-align:center; font-family:monospace; white-space:nowrap;">${String(v.numero_reporte_z || (idx + 1)).padStart(4, '0')}</td>
         <td style="text-align:center; white-space:nowrap;">CONSUMIDOR FINAL (RESUMEN DIARIO Z)</td>
         <td style="text-align:center; font-family:monospace; font-weight:700; white-space:nowrap;">${v.factura_desde || '-'}</td>
@@ -6092,7 +6122,7 @@ function imprimirLibroVentas() {
         <td style="text-align:right; font-family:monospace; white-space:nowrap;">${fmtBs(ex)}</td>
         <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; white-space:nowrap;">${fmtBs(base)}</td>
-        <td style="text-align:center; font-weight:700; white-space:nowrap;">16%</td>
+        <td style="text-align:center; font-weight:700; white-space:nowrap;">${((v.alicuota !== undefined && v.alicuota !== null ? Number(v.alicuota) : 0.16) * 100).toFixed(0)}%</td>
         <td style="text-align:right; font-family:monospace; font-weight:700; color:#0A5CF5; white-space:nowrap;">${fmtBs(iva)}</td>
         <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
       </tr>
@@ -6121,7 +6151,7 @@ function imprimirLibroVentas() {
             LIBRO ESPECIAL DE VENTAS DEL IMPUESTO AL VALOR AGREGADO (IVA)
           </h2>
           <div style="font-size: 9px; font-weight: 700; color: #1e293b;">
-            Artículos 77 y 78 del Reglamento General de la Ley del IVA • Registro Fiscal de Máquina Fiscal <strong>ZOA0000176</strong>
+            Artículos 77 y 78 del Reglamento General de la Ley del IVA • Registro Fiscal de Máquina Fiscal <strong>Z0A0000176</strong>
           </div>
           <div style="margin-top: 5px; display: inline-block; padding: 3px 12px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 4px; font-size: 9.5px; font-weight: 900; color: #000080;">
             PERÍODO IMPOSITIVO: ${getNombrePeriodoFormal(periodo)}
@@ -6129,7 +6159,7 @@ function imprimirLibroVentas() {
         </div>
 
         <div class="seniat-header-right">
-          <div style="font-weight: 800; color: #000080;">MÁQUINA FISCAL: ZOA0000176</div>
+          <div style="font-weight: 800; color: #000080;">MÁQUINA FISCAL: Z0A0000176</div>
           <div>Días Reportados: ${ventas.length}</div>
           <div>Comprobantes Emitidos: ${totCant}</div>
           <div>Fecha Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
@@ -6169,7 +6199,7 @@ function imprimirLibroVentas() {
         </tbody>
         <tfoot>
           <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #000080;">
-            <td colspan="7" style="text-align:right; font-size: 9px; color:#000080; white-space:nowrap;">TOTALES MÁQUINA FISCAL ZOA0000176 (${periodo}):</td>
+            <td colspan="7" style="text-align:right; font-size: 9px; color:#000080; white-space:nowrap;">TOTALES MÁQUINA FISCAL Z0A0000176 (${periodo}):</td>
             <td style="text-align:center; white-space:nowrap;">${totCant}</td>
             <td style="text-align:center; font-family:monospace; font-size:8.5px; white-space:nowrap; color:${totAnul > 0 ? '#b91c1c' : '#64748b'};">${totAnul > 0 ? `${totAnul} anul.` : '0'}</td>
             <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totTotal)}</td>
@@ -6236,7 +6266,7 @@ function imprimirLibroVentas() {
       <div class="print-footer-signatures seniat-3-signatures">
         <div>
           <div class="sig-line">ELABORADO POR ADMINISTRACIÓN</div>
-          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">Control Interno & Máquina Fiscal ZOA0000176</div>
+          <div style="font-size: 8.5px; color:#475569; margin-top:2px;">Control Interno & Máquina Fiscal Z0A0000176</div>
         </div>
         <div>
           <div class="sig-line">REVISADO POR CONTADOR PÚBLICO</div>
@@ -6280,6 +6310,7 @@ async function loadDeclaracionDetalle() {
 
     const vBase = Number(d.ventas_base_bs !== undefined && d.ventas_base_bs > 0 ? d.ventas_base_bs : (v.total_base || 0));
     const vDeb = Number(d.debito_fiscal_bs !== undefined && d.debito_fiscal_bs > 0 ? d.debito_fiscal_bs : (v.total_iva || 0));
+    const vExento = Number(v.total_exento || 0);
     const vDias = Number(d.total_ventas_dias !== undefined && d.total_ventas_dias > 0 ? d.total_ventas_dias : (v.count_lotes || 0));
 
     const cBase = Number(d.compras_base_bs !== undefined && d.compras_base_bs > 0 ? d.compras_base_bs : (c.total_base || 0));
@@ -6291,25 +6322,33 @@ async function loadDeclaracionDetalle() {
     const cRet = Number(d.iva_retenido_bs !== undefined ? d.iva_retenido_bs : 0);
 
     const totCredDeducible = cCred + excAnt;
+    const tasaRefF30 = Number(typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(periodo) : 889.58) || 889.58;
+    const fmtBsDual = (bsVal) => {
+      const n = Number(bsVal || 0);
+      const usd = tasaRefF30 > 0 ? (n / tasaRefF30) : 0;
+      return `Bs. ${fmtBs(n)} <small style="font-size:0.74em; color:#0284c7; font-weight:600;">($${fmtUsd(usd)})</small>`;
+    };
+
+    fiscalStateNew.vExentoActual = vExento;
 
     // Débitos
-    document.getElementById('f30-ventas-base').textContent = `Bs. ${vBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-ventas-debito').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-ventas-exento').textContent = `0,00 Bs.`;
+    document.getElementById('f30-ventas-base').innerHTML = fmtBsDual(vBase);
+    document.getElementById('f30-ventas-debito').innerHTML = fmtBsDual(vDeb);
+    document.getElementById('f30-ventas-exento').innerHTML = fmtBsDual(vExento);
     document.getElementById('f30-ventas-dias').textContent = `${vDias} días facturados`;
-    document.getElementById('f30-total-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-total-debitos').innerHTML = fmtBsDual(vDeb);
 
     // Créditos
-    document.getElementById('f30-compras-base').textContent = `Bs. ${cBase.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-compras-credito').textContent = `Bs. ${cCred.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-excedente-anterior').textContent = `Bs. ${excAnt.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-compras-base').innerHTML = fmtBsDual(cBase);
+    document.getElementById('f30-compras-credito').innerHTML = fmtBsDual(cCred);
+    document.getElementById('f30-excedente-anterior').innerHTML = fmtBsDual(excAnt);
     document.getElementById('f30-compras-facs').textContent = `${cFacs} facturas`;
-    document.getElementById('f30-total-creditos').textContent = `Bs. ${totCredDeducible.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-total-creditos').innerHTML = fmtBsDual(totCredDeducible);
 
     // Resultado
-    document.getElementById('f30-res-debitos').textContent = `Bs. ${vDeb.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-res-creditos').textContent = `- Bs. ${totCredDeducible.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-    document.getElementById('f30-res-retenciones').textContent = `- Bs. ${cRet.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+    document.getElementById('f30-res-debitos').innerHTML = fmtBsDual(vDeb);
+    document.getElementById('f30-res-creditos').innerHTML = `- ${fmtBsDual(totCredDeducible)}`;
+    document.getElementById('f30-res-retenciones').innerHTML = `- ${fmtBsDual(cRet)}`;
 
     const badge = document.getElementById('decl-status-badge');
     const resBox = document.getElementById('f30-box-resultado');
@@ -6323,6 +6362,7 @@ async function loadDeclaracionDetalle() {
         ...historyData[histIdx],
         ventas_base_bs: vBase,
         debito_fiscal_bs: vDeb,
+        exento_ventas_bs: vExento,
         compras_base_bs: cBase,
         credito_fiscal_bs: cCred,
         excedente_anterior_bs: excAnt,
@@ -6337,8 +6377,7 @@ async function loadDeclaracionDetalle() {
     cacheDeclaracionesIva = historyData;
     fiscalStateNew.declaraciones = historyData;
 
-    const declActual = (Array.isArray(historyData) && historyData.find(item => item.periodo === periodo)) || d;
-    const isDeclarado = (declActual && declActual.estatus === 'DECLARADO') || (periodo <= '2026-09');
+    const isDeclarado = isPeriodoFiscalDeclarado(periodo);
 
     if (isDeclarado) {
       badge.textContent = 'DECLARADO ANTE SENIAT (CERRADO)';
@@ -6437,11 +6476,13 @@ function renderDeclaracionesHistorico(declaraciones) {
     '2026-07': '07 - Julio 2026',
     '2026-08': '08 - Agosto 2026',
     '2026-09': '09 - Septiembre 2026',
-    '2026-10': '10 - Octubre 2026 (Manual)'
+    '2026-10': '10 - Octubre 2026',
+    '2026-11': '11 - Noviembre 2026',
+    '2026-12': '12 - Diciembre 2026'
   };
 
   tbody.innerHTML = declaraciones.map(d => {
-    const isEnProceso = d.periodo === '2026-10' || d.estatus === 'EN_PROCESO';
+    const isEnProceso = d.estatus === 'EN_PROCESO';
     const isSelected = d.periodo === currentSelected;
     const statusPill = isEnProceso
       ? `<span class="badge" style="background:#dbeafe; color:#1e40af;">EN PREPARACIÓN</span>`
@@ -6479,6 +6520,7 @@ function imprimirDeclaracionForma30() {
 
   const vBase = Number(d.ventas_base_bs || 0);
   const vDeb = Number(d.debito_fiscal_bs || 0);
+  const vExento = Number(d.exento_ventas_bs ?? fiscalStateNew.vExentoActual ?? 0);
   const cBase = Number(d.compras_base_bs || 0);
   const cCred = Number(d.credito_fiscal_bs || 0);
   const excAnt = Number(d.excedente_anterior_bs || 0);
@@ -6488,6 +6530,7 @@ function imprimirDeclaracionForma30() {
   const totCred = cCred + excAnt;
   const cuotaTributaria = vDeb > totCred ? Number((vDeb - totCred).toFixed(2)) : 0.0;
   const excedenteCredito = totCred > vDeb ? Number((totCred - vDeb).toFixed(2)) : 0.0;
+  const isF30Declarada = d.estatus ? d.estatus === 'DECLARADO' : isPeriodoFiscalDeclarado(periodo);
 
   const printHtml = `
     <div class="print-preview-container seniat-portrait-f30">
@@ -6533,8 +6576,8 @@ function imprimirDeclaracionForma30() {
           <tr>
             <td style="background:#f1f5f9; font-weight:800;">5. DOMICILIO FISCAL:</td>
             <td colspan="2" style="font-size: 8.2px;">AV. SUR 11 ENTRE ESQUINAS BOLÍVAR Y MIRANDA, CASA N° 112, LOCAL S/N, URB. SAN AGUSTÍN DEL NORTE, CARACAS (ZONA POSTAL 1010)</td>
-            <td style="font-weight:800; text-align:center; background:${periodo === '2026-10' ? '#eff6ff' : '#f0fdf4'}; color:${periodo === '2026-10' ? '#1e40af' : '#15803d'};">
-              ${periodo === '2026-10' ? 'BORRADOR / EN PROCESO' : 'DECLARADA ANTE SENIAT'}
+            <td style="font-weight:800; text-align:center; background:${isF30Declarada ? '#f0fdf4' : '#eff6ff'}; color:${isF30Declarada ? '#15803d' : '#1e40af'};">
+              ${isF30Declarada ? 'DECLARADA ANTE SENIAT' : 'BORRADOR / EN PROCESO'}
             </td>
           </tr>
         </tbody>
@@ -6556,7 +6599,7 @@ function imprimirDeclaracionForma30() {
             <td style="width: 24px; text-align:center; font-weight:700;">1</td>
             <td>Ventas Internas No Gravadas (Exentas / Exoneradas / No Sujetas)</td>
             <td style="text-align:center; font-family:monospace; background:#f8fafc; font-weight:700;">[40]</td>
-            <td style="text-align:right; font-family:monospace;">0,00</td>
+            <td style="text-align:right; font-family:monospace;">${fmtBs(vExento)}</td>
             <td style="text-align:center; background:#f8fafc;">-</td>
             <td style="text-align:right; font-family:monospace;">-</td>
           </tr>
@@ -7048,7 +7091,8 @@ async function loadModuloRetencionesISLR() {
       fetch('/api/islr/conceptos')
     ]);
     if (cfgRes.ok) {
-      islrState.config = await cfgRes.json();
+      const cfgPayload = await cfgRes.json();
+      islrState.config = cfgPayload?.config ? { ...cfgPayload, ...cfgPayload.config } : cfgPayload;
       const utLbl = document.getElementById('lbl-ut-vigente');
       if (utLbl) utLbl.textContent = Number(islrState.config.valor_ut_bs || 43).toLocaleString('es-VE', { minimumFractionDigits: 2 });
     }
@@ -7335,8 +7379,26 @@ async function actualizarProximoNumeroISLR() {
     recalcularLineasISLR();
   }
 
+  const esExistente = modalEl?.dataset?.esExistente === 'true';
+  const isCerrado = isPeriodoFiscalDeclarado(periodo);
+  const btnEmitir = document.getElementById('btn-submit-islr') || document.querySelector('#modal-emitir-islr button[type="submit"]');
+  if (btnEmitir) {
+    if (isCerrado) {
+      btnEmitir.disabled = true;
+      btnEmitir.style.background = '#94a3b8';
+      btnEmitir.textContent = `🔒 Período ${periodo} Cerrado (Forma 30 Declarada)`;
+    } else {
+      btnEmitir.disabled = false;
+      btnEmitir.style.background = '';
+      const compVal = document.getElementById('m-islr-nro-comprobante')?.value || '';
+      btnEmitir.textContent = esExistente
+        ? `💾 Guardar Corrección del Comprobante N° ${compVal}`
+        : `✅ Emitir y Ver Comprobante Oficial (PA SNAT/2026/00093)`;
+    }
+  }
+
   // Si ya estamos corrigiendo un comprobante existente y anclado, NO cambiar el número
-  if (modalEl?.dataset?.esExistente === 'true') {
+  if (esExistente) {
     return;
   }
 
@@ -7413,8 +7475,14 @@ function aplicarServicioYContribuyenteEnModalISLR(actualizarFilas = true, codigo
         selConc.value = targetCod;
         const opt = selConc.options[selConc.selectedIndex];
         if (opt) {
-          tr.querySelector('.islr-f-pct-base').value = parseFloat(opt.dataset.base) || resolucion.concepto.pct_base || 100;
-          tr.querySelector('.islr-f-pct-tarifa').value = parseFloat(opt.dataset.tarifa) || resolucion.concepto.pct_tarifa || 2;
+          const pctBase = parseFloat(opt.dataset.base);
+          const pctTarifa = parseFloat(opt.dataset.tarifa);
+          tr.querySelector('.islr-f-pct-base').value = Number.isFinite(pctBase) ? pctBase : (resolucion.concepto.pct_base || 100);
+          tr.querySelector('.islr-f-pct-tarifa').value = Number.isFinite(pctTarifa) ? pctTarifa : (resolucion.concepto.pct_tarifa || 2);
+          const descInp = tr.querySelector('.islr-f-desc');
+          if (descInp) {
+            descInp.value = opt.dataset.desc || resolucion.concepto.descripcion.toUpperCase();
+          }
         }
       }
     });
@@ -7510,7 +7578,7 @@ async function cargarFacturaDirectaEnModalISLR(f) {
   }
 
   // 2. Formatear fecha a DD/MM/AAAA
-  let fechaDoc = f.fecha || '31/10/2026';
+  let fechaDoc = f.fecha || (typeof getHoyLocalISO === 'function' ? getHoyLocalISO() : new Date().toLocaleDateString('en-CA'));
   if (/^\d{4}-\d{2}-\d{2}$/.test(fechaDoc)) {
     const [y, m, d] = fechaDoc.split('-');
     fechaDoc = `${d}/${m}/${y}`;
@@ -7545,7 +7613,7 @@ async function cargarFacturaDirectaEnModalISLR(f) {
   }
 
   const dirFiscal = f.direccion_fiscal || prov?.direccion_fiscal || (cleanRif.includes('50714716') ? 'ESQ. QUESERA A NIQUITAO, EDIF. PARQUE CARABOBO PLAZA, TORRE A PISO 15, CARACAS' : 'CARACAS, DISTRITO CAPITAL');
-  const emailProv = f.email || prov?.email || (cleanRif.includes('50714716') ? 'facturacion@unioncontableglobal.com' : 'administracion@proveedor.com');
+  const emailProv = f.email || prov?.email || (cleanRif.includes('50714716') ? 'facturacion@unioncontableglobal.com' : '');
 
   document.getElementById('m-islr-direccion').value = dirFiscal;
   document.getElementById('m-islr-email').value = emailProv;
@@ -7579,20 +7647,53 @@ async function cargarFacturaDirectaEnModalISLR(f) {
   const totBs = Number(f.total_bs !== undefined && f.total_bs !== null && f.total_bs !== '' ? f.total_bs : (f.monto_total_bs || 0));
   const baseBs = Number(f.base_imponible_bs !== undefined && f.base_imponible_bs !== null && f.base_imponible_bs !== '' ? f.base_imponible_bs : (totBs > 0 ? (totBs / 1.16) : 0));
 
-  // 7. Renglón de detalle de factura objeto de retención con Base y Total correctos
+  // 7. Si ya existe comprobante emitido con detalles en BD, conservar sus líneas guardadas
   const tbodyItems = document.getElementById('tbody-modal-islr-items');
   if (tbodyItems) tbodyItems.innerHTML = '';
 
-  agregarFilaDetalleISLR({
-    libro_compra_id: f.id,
-    fecha_factura: fechaDoc,
-    nro_factura: f.nro_factura || '000014',
-    nro_control: f.nro_control || '00-00000015',
-    codigo_concepto: codConcepto,
-    descripcion_concepto: descConcepto,
-    monto_total_bs: totBs,
-    base_imponible_bs: baseBs
-  });
+  let cargadoDesdeComp = false;
+  if (esExistente && retIdAsignado) {
+    try {
+      const compRes = await fetch(`/api/islr/comprobantes/${retIdAsignado}`);
+      if (compRes.ok) {
+        const compData = await compRes.json();
+        if (compData.direccion_sujeto) document.getElementById('m-islr-direccion').value = compData.direccion_sujeto;
+        if (compData.email_sujeto) document.getElementById('m-islr-email').value = compData.email_sujeto;
+        if (compData.concepto_general) document.getElementById('m-islr-concepto-general').value = compData.concepto_general;
+        if (Array.isArray(compData.detalles) && compData.detalles.length > 0) {
+          compData.detalles.forEach(det => {
+            agregarFilaDetalleISLR({
+              libro_compra_id: det.libro_compra_id || f.id,
+              fecha_factura: det.fecha_factura || fechaDoc,
+              nro_factura: det.nro_factura || f.nro_factura || '',
+              nro_control: det.nro_control || f.nro_control || '',
+              nro_nota_credito: det.nro_nota_credito || '',
+              codigo_concepto: det.codigo_concepto || codConcepto,
+              descripcion_concepto: det.descripcion_concepto || descConcepto,
+              monto_total_bs: det.monto_total_bs,
+              base_imponible_bs: det.base_imponible_bs
+            });
+          });
+          cargadoDesdeComp = true;
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudieron cargar líneas existentes ISLR:', e.message);
+    }
+  }
+
+  if (!cargadoDesdeComp) {
+    agregarFilaDetalleISLR({
+      libro_compra_id: f.id,
+      fecha_factura: fechaDoc,
+      nro_factura: f.nro_factura || '',
+      nro_control: f.nro_control || '',
+      codigo_concepto: codConcepto,
+      descripcion_concepto: descConcepto,
+      monto_total_bs: totBs,
+      base_imponible_bs: baseBs
+    });
+  }
 
   // 8. Forzar recálculo inmediato de retenciones y totales
   recalcularLineasISLR();
@@ -7658,7 +7759,7 @@ function agregarFilaDetalleISLR(prefill = null) {
     <td><input type="text" class="form-control font-mono islr-f-ndnc" value="${prefill?.nro_nota_credito || ''}" placeholder="01-REG" style="padding:4px 6px; font-size:0.73rem;"></td>
     <td>
       <select class="form-control islr-f-concepto" style="padding:3px 6px; font-size:0.73rem; margin-bottom:3px; font-weight:700;" onchange="onCambioConceptoFilaISLR(this)">
-        ${conceptosList.map(c => `<option value="${c.codigo}" data-base="${c.pct_base}" data-tarifa="${c.pct_tarifa}" data-sust="${c.aplica_sustraendo}" ${c.codigo === defaultCod ? 'selected' : ''}>[${c.codigo}] ${c.descripcion} (${c.pct_tarifa}%)</option>`).join('')}
+        ${conceptosList.map(c => `<option value="${c.codigo}" data-base="${c.pct_base}" data-tarifa="${c.pct_tarifa}" data-sust="${c.aplica_sustraendo}" data-desc="${escapeHtml(String(c.descripcion || '').toUpperCase())}" ${c.codigo === defaultCod ? 'selected' : ''}>[${c.codigo}] ${c.descripcion} (${c.pct_tarifa}%)</option>`).join('')}
       </select>
       <input type="text" class="form-control islr-f-desc" value="${escapeHtml(prefill?.descripcion_concepto || foundConcept.descripcion.toUpperCase())}" placeholder="Descripción en comprobante" style="padding:3px 6px; font-size:0.72rem;">
     </td>
@@ -7693,10 +7794,14 @@ function onCambioConceptoFilaISLR(selectEl) {
   const opt = selectEl.options[selectEl.selectedIndex];
   if (!tr || !opt) return;
 
-  const pctBase = parseFloat(opt.dataset.base) || 100;
-  const pctTarifa = parseFloat(opt.dataset.tarifa) || 2;
-  tr.querySelector('.islr-f-pct-base').value = pctBase;
-  tr.querySelector('.islr-f-pct-tarifa').value = pctTarifa;
+  const pctBase = parseFloat(opt.dataset.base);
+  const pctTarifa = parseFloat(opt.dataset.tarifa);
+  tr.querySelector('.islr-f-pct-base').value = Number.isFinite(pctBase) ? pctBase : 100;
+  tr.querySelector('.islr-f-pct-tarifa').value = Number.isFinite(pctTarifa) ? pctTarifa : 2;
+  const descInp = tr.querySelector('.islr-f-desc');
+  if (descInp && opt.dataset.desc) {
+    descInp.value = opt.dataset.desc;
+  }
   recalcularLineasISLR();
 }
 
@@ -7707,6 +7812,7 @@ function recalcularLineasISLR() {
   const tipoPers = document.getElementById('m-islr-tipo-persona')?.value || 'PJ-D';
   const utBs = Number(islrState.config?.valor_ut_bs || 43.00);
   const factorSust = Number(islrState.config?.factor_sustraendo || 83.3334);
+  const umbralSust = utBs * factorSust;
 
   let totDoc = 0;
   let totBase = 0;
@@ -7719,10 +7825,10 @@ function recalcularLineasISLR() {
     const pctBase = parseFloat(tr.querySelector('.islr-f-pct-base')?.value) || 100;
     const pctTarifa = parseFloat(tr.querySelector('.islr-f-pct-tarifa')?.value) || 0;
 
-    // Sustraendo automático para PN-R cuando aplique (1% o 3%): UT * 83.3334 * %Tarifa
+    // Sustraendo legal Decreto 1.808: solo PN-R con tarifa 1% o 3% cuando base > umbral UT * 83.3334
     let sustraendo = 0.0;
-    if (tipoPers === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3)) {
-      sustraendo = Number((utBs * factorSust * (pctTarifa / 100)).toFixed(2));
+    if (tipoPers === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3) && baseBs > umbralSust) {
+      sustraendo = Number((umbralSust * (pctTarifa / 100)).toFixed(2));
     }
 
     const baseObjeto = baseBs * (pctBase / 100);
@@ -7877,7 +7983,10 @@ async function eliminarComprobanteISLR(id) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error eliminando comprobante');
     showToast('Comprobante ISLR eliminado', 'success');
-    await loadComprobantesISLR();
+    await Promise.all([
+      loadComprobantesISLR(),
+      typeof loadLibroCompras === 'function' ? loadLibroCompras() : Promise.resolve()
+    ]);
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -8762,7 +8871,7 @@ async function guardarTasaBcvDiaria(e) {
     return;
   }
 
-  const fechaVal = inputFecha?.value || new Date().toISOString().split('T')[0];
+  const fechaVal = inputFecha?.value || getHoyLocalISO();
 
   if (btn) {
     btn.disabled = true;
@@ -9422,7 +9531,8 @@ function guardarAperturaActa(e) {
     tasa_bcv,
     auditor_tienda,
     gerente_dg67,
-    contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+    contador_ucg: 'Contador Público Colegiado (C.P.C.)',
+    estatus: 'ABIERTA',
     fecha_apertura_registro: new Date().toISOString()
   };
 
@@ -9430,6 +9540,7 @@ function guardarAperturaActa(e) {
   localStorage.setItem('dg67_acta_iniciada_202610', JSON.stringify(actaData));
   state.actaActiva = actaData;
   state.actaAperturada = true;
+  state.tomaFisicaEstatus = 'ABIERTA';
 
   try {
     fetch('/api/auditoria/toma-fisica/apertura', {
@@ -9443,7 +9554,7 @@ function guardarAperturaActa(e) {
   actualizarOpcionesDrawerActa(numero);
   closeModal('modal-apertura-acta-inventario');
 
-  showToast(`✅ Acta Oficial [${numero}] aperturada. Tasa de Cierre fijada en Bs. ${tasa_bcv.toFixed(2)} / USD (31/10/2026).`, 'success');
+  showToast(`✅ Acta Oficial [${numero}] aperturada. Tasa de Cierre fijada en Bs. ${tasa_bcv.toFixed(2)} / USD (${fecha}).`, 'success');
 
   if (aperturaActaCallback) {
     const cb = aperturaActaCallback;
@@ -9475,7 +9586,7 @@ function actualizarBannerActaActiva() {
   if (bNro) bNro.textContent = acta.numero;
   if (bPer) bPer.textContent = `(Toma Física ${acta.periodo === '2026-10' ? 'Octubre 2026' : acta.periodo})`;
   if (bDg67) bDg67.textContent = `Inversiones DG 67, C.A. (${acta.auditor_tienda})`;
-  if (bTasa) bTasa.textContent = `Bs. ${tasaCierreNum.toFixed(2)} / USD (Fija 31/10/2026)`;
+  if (bTasa) bTasa.textContent = `Bs. ${tasaCierreNum.toFixed(2)} / USD (${acta.fecha || acta.periodo || 'Cierre'})`;
   if (tasaBadge) tasaBadge.textContent = `Bs. ${tasaCierreNum.toFixed(2)}`;
 
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -9672,7 +9783,7 @@ function abrirModalCierreTomaFisica() {
 
   const total = Array.isArray(pzeroProductos) ? pzeroProductos.length : 0;
   const auditados = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1).length : 0;
-  const diferencias = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1 && Math.abs(Number(p.diferencia_unidades || 0)) > 0.0001).length : 0;
+  const diferencias = Array.isArray(pzeroProductos) ? pzeroProductos.filter(p => p.auditado === 1 && Math.abs(Number(p.diferencia ?? p.diferencia_unidades ?? 0)) > 0.0001).length : 0;
 
   const resPer = document.getElementById('cierre-resumen-periodo');
   const resAud = document.getElementById('cierre-resumen-auditados');
@@ -9683,7 +9794,7 @@ function abrirModalCierreTomaFisica() {
   const gerInput = document.getElementById('cierre-acta-gerente-dg67');
   const chk = document.getElementById('cierre-declaracion-jurada');
 
-  if (resPer) resPer.textContent = acta.periodo === '2026-10' ? 'Octubre 2026' : (acta.periodo || 'Octubre 2026');
+  if (resPer) resPer.textContent = acta.periodo === '2026-10' ? 'Octubre 2026' : (acta.periodo || 'Período Activo');
   if (resAud) resAud.textContent = `${auditados} / ${total}`;
   if (resDif) resDif.textContent = `${diferencias} artículos`;
   if (numActa) numActa.value = acta.numero || 'ACTA-INV-202610-01';
@@ -9702,6 +9813,8 @@ async function confirmarCierreTomaFisica(e) {
   const numActa = document.getElementById('cierre-acta-numero')?.value || 'ACTA-INV-202610-01';
   const aud = document.getElementById('cierre-acta-auditor-tienda')?.value || 'Personal de Almacén DG 67';
   const ger = document.getElementById('cierre-acta-gerente-dg67')?.value || 'Gerencia General DG 67';
+  const acta = (typeof obtenerActaActiva === 'function' ? obtenerActaActiva() : null) || {};
+  const tasaCierre = Number(acta.tasa_bcv || pzeroTasaBcv || (typeof getTasaBcvPorFechaOPeriodo === 'function' ? getTasaBcvPorFechaOPeriodo(acta.periodo || '2026-10') : 889.58) || 889.58);
   const btn = document.getElementById('btn-confirmar-cierre-toma');
 
   if (btn) {
@@ -9714,13 +9827,14 @@ async function confirmarCierreTomaFisica(e) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        periodo: '2026-10',
+        periodo: acta.periodo || '2026-10',
         numero_acta: numActa,
+        tasa_bcv: tasaCierre,
         usuario: state.currentUser?.usuario || 'ADMIN_DG67',
         fecha_cierre: new Date().toISOString(),
         auditor_tienda: aud,
         gerente_dg67: ger,
-        contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
+        contador_ucg: 'Contador Público Colegiado (C.P.C.)'
       })
     });
     const data = await res.json();
@@ -10488,13 +10602,22 @@ async function abrirModalActaOficial() {
     const { empresa, resumen, items, acta_numero, fecha_acta, tasa_bcv } = data;
     const actaActiva = (typeof obtenerActaActiva === 'function') ? obtenerActaActiva() : null;
     const actaNumFinal = actaActiva?.numero || acta_numero;
-    const actaFechaFinal = actaActiva?.fecha || fecha_acta;
+    const actaFechaFinal = actaActiva?.fecha || fecha_acta || getHoyLocalISO();
     const actaAlmacenFinal = actaActiva?.almacen || `Almacén Principal DG 67 (Tienda y Depósito)`;
+
+    // Formateo local del texto de fecha sin hardcoding de mes/año
+    let textoFechaActa = actaFechaFinal;
+    const mFec = String(actaFechaFinal).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (mFec) {
+      const mesesNom = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      const nomMes = mesesNom[Math.max(0, Math.min(11, parseInt(mFec[2], 10) - 1))];
+      textoFechaActa = `${parseInt(mFec[3], 10)} días del mes de ${nomMes} de ${mFec[1]}`;
+    }
 
     // Poblar Encabezado
     if (document.getElementById('acta-numero')) document.getElementById('acta-numero').textContent = actaNumFinal;
     if (document.getElementById('acta-fecha')) document.getElementById('acta-fecha').textContent = actaFechaFinal;
-    if (document.getElementById('acta-fecha-texto')) document.getElementById('acta-fecha-texto').textContent = `${actaFechaFinal.split('-')[2] || '31'} días del mes de octubre de 2026`;
+    if (document.getElementById('acta-fecha-texto')) document.getElementById('acta-fecha-texto').textContent = textoFechaActa;
     if (document.getElementById('acta-almacen')) document.getElementById('acta-almacen').textContent = actaAlmacenFinal;
     if (document.getElementById('acta-tasa-bcv')) document.getElementById('acta-tasa-bcv').textContent = `Bs. ${fmtBs(tasa_bcv)} / USD`;
 
@@ -10603,6 +10726,12 @@ function imprimirActaOficial() {
   if (!printArea) return;
 
   const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    if (typeof showToast === 'function') {
+      showToast('Permita las ventanas emergentes en su navegador para imprimir el Acta Oficial.', 'warning');
+    }
+    return;
+  }
   printWindow.document.write(`
     <!DOCTYPE html>
     <html lang="es">
@@ -10628,11 +10757,13 @@ function imprimirActaOficial() {
     </html>
   `);
   printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => {
+  printWindow.onload = () => {
+    printWindow.focus();
     printWindow.print();
+  };
+  printWindow.onafterprint = () => {
     printWindow.close();
-  }, 400);
+  };
 }
 
 window.abrirModalActaOficial = abrirModalActaOficial;

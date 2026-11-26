@@ -3568,10 +3568,9 @@ app.get('/api/islr/config', async (req, res) => {
       imprenta_providencia: '',
       imprenta_fecha_asignacion: ''
     };
-    if (rs.rows[0]) {
-      await db.execute("UPDATE config_fiscal_islr SET aplica_imprenta_digital = 0, agente_email = 'dg67contable@gmail.com' WHERE id = 1").catch(() => {});
-      row.aplica_imprenta_digital = 0;
-      row.agente_email = 'dg67contable@gmail.com';
+    if (result.rows[0]) {
+      res.json({ ...result.rows[0], config: result.rows[0] });
+      return;
     }
     res.json(row);
   } catch (error) {

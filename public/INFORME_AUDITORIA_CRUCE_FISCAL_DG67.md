@@ -2,9 +2,8 @@
 ## Carga de Entradas y Salidas (Sep - Oct 2026), Diagnóstico de Inconsistencias y Corrección de Filtro al Corte
 
 **Fecha de Auditoría:** 3 de Noviembre de 2026  
-**Empresa Auditada:** INVERSIONES DG 67, C.A. (RIF: J-50700865-7)  
-**Asesores Auditores:** UNIÓN CONTABLE GLOBAL  
-**Sistema:** SISCON-ES DG67 / Cloudflare Serverless + Turso Cloud Engine  
+**Contribuyente:** INVERSIONES DG 67, C.A. (RIF: J-50700865-7)  
+**Alcance:** Control de Inventarios Art. 177 RISLR y Libros Especiales de IVA SENIAT  
 
 ---
 

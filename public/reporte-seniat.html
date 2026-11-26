@@ -13,11 +13,19 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --ucg-navy: #000080;
-      --ucg-blue: #0A5CF5;
+      --rep-navy: #000080;
+      --rep-blue: #0A5CF5;
       --text-dark: #0f172a;
       --text-muted: #475569;
       --border-color: #94a3b8;
+    }
+
+    .sub-ref-usd {
+      font-size: 6.7px;
+      color: #0369a1;
+      font-weight: 700;
+      display: block;
+      margin-top: 1px;
     }
 
     * {
@@ -75,7 +83,7 @@
       border-radius: 6px;
       border: 1.5px solid #cbd5e1;
       background: #f8fafc;
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
     }
 
     .btn {
@@ -93,7 +101,7 @@
     }
 
     .btn-print {
-      background: linear-gradient(135deg, var(--ucg-navy), var(--ucg-blue));
+      background: linear-gradient(135deg, var(--rep-navy), var(--rep-blue));
       color: #ffffff;
       box-shadow: 0 2px 8px rgba(0, 0, 128, 0.25);
     }
@@ -134,7 +142,7 @@
       align-items: center;
       gap: 14px;
       padding-bottom: 10px;
-      border-bottom: 2px solid var(--ucg-navy);
+      border-bottom: 2px solid var(--rep-navy);
       margin-bottom: 10px;
     }
 
@@ -148,7 +156,7 @@
     .client-header-name {
       font-size: 10px;
       font-weight: 900;
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
       text-transform: uppercase;
       line-height: 1.15;
     }
@@ -166,7 +174,7 @@
     .report-main-title {
       font-size: 12.5px;
       font-weight: 900;
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
       text-transform: uppercase;
       letter-spacing: 0.02em;
       margin: 2px 0;
@@ -189,7 +197,7 @@
     .agency-name {
       font-size: 9px;
       font-weight: 900;
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
       text-transform: uppercase;
     }
 
@@ -222,7 +230,7 @@
     }
 
     .data-value.highlight {
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
       font-size: 10px;
     }
 
@@ -237,7 +245,7 @@
     .summary-card {
       background: #ffffff;
       border: 1px solid #94a3b8;
-      border-left: 3px solid var(--ucg-navy);
+      border-left: 3px solid var(--rep-navy);
       padding: 6px 9px;
       border-radius: 4px;
     }
@@ -253,7 +261,7 @@
       font-size: 11px;
       font-weight: 900;
       font-family: 'JetBrains Mono', monospace;
-      color: var(--ucg-navy);
+      color: var(--rep-navy);
       margin-top: 2px;
     }
 
@@ -284,7 +292,7 @@
     }
 
     .report-table tr.group-header th {
-      background: var(--ucg-navy);
+      background: var(--rep-navy);
       color: #ffffff;
       font-size: 7.2px;
       letter-spacing: 0.02em;
@@ -410,7 +418,7 @@
   <div class="print-actions-bar">
     <div class="toolbar-row">
       <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-weight: 900; color: var(--ucg-navy); font-size: 12px;">
+        <span style="font-weight: 900; color: var(--rep-navy); font-size: 12px;">
           📘 Cumplimiento Normativo SENIAT (Art. 177 RISLR & Art. 32–35 Código de Comercio)
         </span>
         <select id="sel-vista" class="toolbar-select" style="background:#eff6ff; border-color:#2563eb;" onchange="cambiarModoVista()">
@@ -458,10 +466,9 @@
           <input type="date" id="inp-hasta" class="toolbar-input" value="2026-12-31" onchange="cargarLibroInventarioSeniat()">
         </span>
 
-        <select id="sel-moneda" class="toolbar-select" onchange="renderTablaActual()">
-          <option value="VES">🇻🇪 Moneda Curso Legal: Bolívares (VES) + Ref. USD</option>
-          <option value="USD">💵 Vista en Dólares Referenciales ($ USD)</option>
-        </select>
+        <span style="font-size: 10.5px; font-weight: 700; color: #0f172a; background: #e0f2fe; border: 1px solid #bae6fd; padding: 4px 8px; border-radius: 6px;">
+          🇻🇪 Bolívares (Bs.) + Ref. ($ USD)
+        </span>
 
         <select id="sel-almacen" class="toolbar-select" onchange="cargarLibroInventarioSeniat()">
           <option value="TODOS">🏢 Todos los Almacenes</option>
@@ -699,10 +706,7 @@
       if (!datosLibroActual || !datosLibroActual.items) return;
 
       const vista = document.getElementById('sel-vista')?.value || 'ART_177';
-      const moneda = document.getElementById('sel-moneda')?.value || 'VES';
-      const esVes = moneda === 'VES';
-      const sym = esVes ? 'Bs.' : '$';
-      const fmtM = esVes ? fmtBs : (v) => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const dualCell = (ves, usd) => `Bs. ${fmtBs(ves)}<div class="sub-ref-usd">${fmtUsd(usd)} USD</div>`;
 
       const filtroMov = document.getElementById('sel-filtro-mov')?.value || 'TODOS';
       const almacen = document.getElementById('sel-almacen')?.value || 'TODOS';
@@ -723,7 +727,7 @@
       let tSalVenta = 0, tSalAuto = 0, tSalRet = 0, tSalMues = 0, tSalMerma = 0;
       let tCantSal = 0, tVesSal = 0, tUsdSal = 0;
       let tCantFin = 0, tVesFin = 0, tUsdFin = 0;
-      let tCantFis = 0, tVesFis = 0, tDiffUnd = 0, tDiffVes = 0;
+      let tCantFis = 0, tVesFis = 0, tUsdFis = 0, tDiffUnd = 0, tDiffVes = 0, tDiffUsd = 0;
 
       for (const p of items) {
         tCantIni += (p.cant_inicial || 0);
@@ -750,20 +754,22 @@
 
         tCantFis += (p.conteo_fisico || 0);
         tVesFis += (p.valor_fisico_ves || 0);
+        tUsdFis += (p.valor_fisico_usd || 0);
         tDiffUnd += (p.diferencia_unidades || 0);
         tDiffVes += (p.diferencia_ves || 0);
+        tDiffUsd += (p.diferencia_usd || 0);
       }
 
-      // Actualizar Tarjetas Resumen Superior
+      // Actualizar Tarjetas Resumen Superior (Siempre Bolívares prominente + Ref. USD)
       document.getElementById('lbl-total-items').textContent = fmtNum(items.length);
-      document.getElementById('lbl-init-val').textContent = esVes ? `Bs. ${fmtBs(tVesIni)}` : fmtUsd(tUsdIni);
-      document.getElementById('lbl-init-und').textContent = `${fmtNum(tCantIni)} unds (${fmtUsd(tUsdIni)})`;
-      document.getElementById('lbl-ent-val').textContent = esVes ? `Bs. ${fmtBs(tVesEnt)}` : fmtUsd(tUsdEnt);
-      document.getElementById('lbl-ent-und').textContent = `+${fmtNum(tCantEnt)} unds (${fmtUsd(tUsdEnt)})`;
-      document.getElementById('lbl-sal-val').textContent = esVes ? `Bs. ${fmtBs(tVesSal)}` : fmtUsd(tUsdSal);
-      document.getElementById('lbl-sal-und').textContent = `-${fmtNum(tCantSal)} unds (${fmtUsd(tUsdSal)})`;
-      document.getElementById('lbl-fin-val').textContent = esVes ? `Bs. ${fmtBs(tVesFin)}` : fmtUsd(tUsdFin);
-      document.getElementById('lbl-fin-und').textContent = `${fmtNum(tCantFin)} unds (${fmtUsd(tUsdFin)})`;
+      document.getElementById('lbl-init-val').textContent = `Bs. ${fmtBs(tVesIni)}`;
+      document.getElementById('lbl-init-und').textContent = `${fmtNum(tCantIni)} unds (${fmtUsd(tUsdIni)} USD)`;
+      document.getElementById('lbl-ent-val').textContent = `Bs. ${fmtBs(tVesEnt)}`;
+      document.getElementById('lbl-ent-und').textContent = `+${fmtNum(tCantEnt)} unds (${fmtUsd(tUsdEnt)} USD)`;
+      document.getElementById('lbl-sal-val').textContent = `Bs. ${fmtBs(tVesSal)}`;
+      document.getElementById('lbl-sal-und').textContent = `-${fmtNum(tCantSal)} unds (${fmtUsd(tUsdSal)} USD)`;
+      document.getElementById('lbl-fin-val').textContent = `Bs. ${fmtBs(tVesFin)}`;
+      document.getElementById('lbl-fin-und').textContent = `${fmtNum(tCantFin)} unds (${fmtUsd(tUsdFin)} USD)`;
 
       const thead = document.getElementById('report-thead');
       const tbody = document.getElementById('report-tbody');
@@ -776,26 +782,26 @@
           <tr>
             <td class="text-center font-mono font-bold">1105-01</td>
             <td class="font-bold">INVENTARIO FINAL DE MERCANCÍAS (AL CIERRE DEL EJERCICIO)</td>
-            <td class="text-right font-mono font-bold" style="color:#000080;">Bs. ${fmtBs(tVesFis)}</td>
+            <td class="text-right font-mono font-bold" style="color:#000080;">${dualCell(tVesFis, tUsdFis)}</td>
             <td class="text-right font-mono">-</td>
           </tr>
           <tr>
             <td class="text-center font-mono font-bold">5101-01</td>
             <td class="font-bold">COSTO DE VENTAS DETERMINADO (INV. INICIAL + COMPRAS - INV. FINAL)</td>
-            <td class="text-right font-mono font-bold" style="color:#9f1239;">Bs. ${fmtBs(tVesSal)}</td>
+            <td class="text-right font-mono font-bold" style="color:#9f1239;">${dualCell(tVesSal, tUsdSal)}</td>
             <td class="text-right font-mono">-</td>
           </tr>
           <tr>
             <td class="text-center font-mono font-bold">1105-00</td>
             <td style="padding-left:20px;">A: INVENTARIO INICIAL DE MERCANCÍAS</td>
             <td class="text-right font-mono">-</td>
-            <td class="text-right font-mono font-bold">Bs. ${fmtBs(tVesIni)}</td>
+            <td class="text-right font-mono font-bold">${dualCell(tVesIni, tUsdIni)}</td>
           </tr>
           <tr>
             <td class="text-center font-mono font-bold">5102-01</td>
             <td style="padding-left:20px;">A: COMPRAS NETAS DE MERCANCÍAS DEL EJERCICIO</td>
             <td class="text-right font-mono">-</td>
-            <td class="text-right font-mono font-bold">Bs. ${fmtBs(tVesEnt)}</td>
+            <td class="text-right font-mono font-bold">${dualCell(tVesEnt, tUsdEnt)}</td>
           </tr>
         `;
 
@@ -812,40 +818,35 @@
             <th style="text-align:left;">DESCRIPCIÓN DEL REPUESTO / MERCANCÍA</th>
             <th>UND</th>
             <th>ALMACÉN</th>
-            <th>CPP UNIT. (${sym})</th>
+            <th>CPP UNIT. (Bs. / USD)</th>
             <th style="background:#eff6ff;">EXIST. TEÓRICA</th>
-            <th style="background:#eff6ff;">VALOR TEÓRICO (${sym})</th>
+            <th style="background:#eff6ff;">VALOR TEÓRICO (Bs. / USD)</th>
             <th style="background:#ecfdf5;">CONTEO FÍSICO</th>
-            <th style="background:#ecfdf5;">VALOR FÍSICO (${sym})</th>
+            <th style="background:#ecfdf5;">VALOR FÍSICO (Bs. / USD)</th>
             <th style="background:#fff1f2;">DIF. (UND)</th>
-            <th style="background:#fff1f2;">AJUSTE (${sym})</th>
+            <th style="background:#fff1f2;">AJUSTE (Bs. / USD)</th>
             <th>ESTADO AUDITORÍA</th>
           </tr>
         `;
 
         tbody.innerHTML = items.map((p, idx) => {
-          const cpp = esVes ? p.costo_promedio_ves : p.costo_unitario_usd;
-          const vTeo = esVes ? p.monto_final_ves : p.monto_final_usd;
-          const vFis = esVes ? p.valor_fisico_ves : p.valor_fisico_usd;
-          const vDif = esVes ? p.diferencia_ves : p.diferencia_usd;
-
           return `
             <tr>
               <td class="text-center font-mono">${idx + 1}</td>
-              <td class="font-mono font-bold" style="color:var(--ucg-navy);">${p.codigo}</td>
+              <td class="font-mono font-bold" style="color:var(--rep-navy);">${p.codigo}</td>
               <td class="font-bold">${p.descripcion}</td>
               <td class="text-center">${p.unidad_medida}</td>
               <td class="text-center">${p.almacen}</td>
-              <td class="text-right font-mono">${fmtM(cpp)}</td>
+              <td class="text-right font-mono">${dualCell(p.costo_promedio_ves, p.costo_unitario_usd)}</td>
               <td class="text-right font-mono font-bold">${p.cant_final}</td>
-              <td class="text-right font-mono">${fmtM(vTeo)}</td>
+              <td class="text-right font-mono">${dualCell(p.monto_final_ves, p.monto_final_usd)}</td>
               <td class="text-right font-mono font-bold" style="background:#f0fdf4;">
                 <input type="number" step="1" value="${p.conteo_fisico}" class="no-print" style="width:58px; text-align:right; font-family:monospace; font-weight:700; border:1px solid #86efac; border-radius:4px; padding:1px 3px;" onchange="actualizarConteoFisico(${p.producto_id}, this)">
                 <span style="display:none;" class="only-print">${p.conteo_fisico}</span>
               </td>
-              <td class="text-right font-mono font-bold" style="color:#065f46;">${fmtM(vFis)}</td>
+              <td class="text-right font-mono font-bold" style="color:#065f46;">${dualCell(p.valor_fisico_ves, p.valor_fisico_usd)}</td>
               <td class="text-right font-mono font-bold" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${p.diferencia_unidades}</td>
-              <td class="text-right font-mono" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${fmtM(vDif)}</td>
+              <td class="text-right font-mono" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${dualCell(p.diferencia_ves, p.diferencia_usd)}</td>
               <td class="text-center" style="font-size:7px; font-weight:800; color:${p.diferencia_unidades === 0 ? '#166534' : '#9f1239'};">
                 ${p.diferencia_unidades === 0 ? '✅ CONFORME' : '⚠️ AJUSTAR'}
               </td>
@@ -857,11 +858,11 @@
           <tr>
             <td colspan="6" class="text-right">TOTALES DEL LIBRO DE INVENTARIOS Y BALANCES (${items.length} ÍTEMS):</td>
             <td class="text-right font-mono">${fmtNum(tCantFin)}</td>
-            <td class="text-right font-mono">${fmtM(esVes ? tVesFin : tUsdFin)}</td>
+            <td class="text-right font-mono">${dualCell(tVesFin, tUsdFin)}</td>
             <td class="text-right font-mono" style="color:#065f46;">${fmtNum(tCantFis)}</td>
-            <td class="text-right font-mono" style="color:#065f46;">${fmtM(esVes ? tVesFis : tUsdFin)}</td>
+            <td class="text-right font-mono" style="color:#065f46;">${dualCell(tVesFis, tUsdFis)}</td>
             <td class="text-right font-mono">${fmtNum(tDiffUnd)}</td>
-            <td class="text-right font-mono">${fmtM(tDiffVes)}</td>
+            <td class="text-right font-mono">${dualCell(tDiffVes, tDiffUsd)}</td>
             <td></td>
           </tr>
         `;
@@ -905,7 +906,7 @@
         } else {
           tbody.innerHTML = resumen.map(m => `
             <tr>
-              <td class="text-center font-mono font-bold" style="white-space:nowrap; color:var(--ucg-navy);">${m.periodo}</td>
+              <td class="text-center font-mono font-bold" style="white-space:nowrap; color:var(--rep-navy);">${m.periodo}</td>
               <td class="font-bold" style="white-space:nowrap;">${m.nombre} <span style="font-size:7px; color:#64748b;">(${m.fecha_corte})</span></td>
               <td class="text-right font-mono" style="white-space:nowrap;">Bs. ${fmtBs(m.tasa_bcv)}</td>
               <td class="text-right font-mono">${fmtNum(m.saldo_inicial_und)}</td>
@@ -917,8 +918,8 @@
               <td class="text-right font-mono font-bold" style="color:#9f1239;">-${fmtNum(m.salidas_und)} <span style="font-size:7px; font-weight:600;">(${m.sal_ventas_und}/${m.sal_otros_und})</span></td>
               <td class="text-right font-mono" style="color:#9f1239;">Bs. ${fmtBs(m.salidas_ves)}</td>
               <td class="text-right font-mono" style="color:#475569;">${fmtUsd(m.salidas_usd)}</td>
-              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--ucg-navy);">${fmtNum(m.saldo_final_und)}</td>
-              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--ucg-navy);">Bs. ${fmtBs(m.saldo_final_ves)}</td>
+              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--rep-navy);">${fmtNum(m.saldo_final_und)}</td>
+              <td class="text-right font-mono font-bold" style="background:#f8fafc; color:var(--rep-navy);">Bs. ${fmtBs(m.saldo_final_ves)}</td>
               <td class="text-right font-mono" style="background:#f8fafc; color:#475569;">${fmtUsd(m.saldo_final_usd)}</td>
               <td class="text-center font-mono">${m.total_docs || 0}</td>
             </tr>
@@ -947,8 +948,8 @@
               <td class="text-right font-mono" style="color:#9f1239;">-${fmtNum(totSalU)}</td>
               <td class="text-right font-mono" style="color:#9f1239;">Bs. ${fmtBs(totSalV)}</td>
               <td class="text-right font-mono">${fmtUsd(totSalD)}</td>
-              <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtNum(pFin.saldo_final_und)}</td>
-              <td class="text-right font-mono" style="color:var(--ucg-navy);">Bs. ${fmtBs(pFin.saldo_final_ves)}</td>
+              <td class="text-right font-mono" style="color:var(--rep-navy);">${fmtNum(pFin.saldo_final_und)}</td>
+              <td class="text-right font-mono" style="color:var(--rep-navy);">Bs. ${fmtBs(pFin.saldo_final_ves)}</td>
               <td class="text-right font-mono">${fmtUsd(pFin.saldo_final_usd)}</td>
               <td class="text-center font-mono">${totDocs}</td>
             </tr>
@@ -957,7 +958,7 @@
         return;
       }
 
-      // VISTA ESTÁNDAR OBLIGATORIA: ART. 177 RISLR CON SALIDAS TIPIFICADAS Y COSTO PROMEDIO PONDERADO
+      // VISTA ESTÁNDAR OBLIGATORIA: ART. 177 RISLR CON SALIDAS TIPIFICADAS Y COSTO PROMEDIO PONDERADO (Bs. + Ref. USD)
       thead.innerHTML = `
         <tr class="group-header">
           <th colspan="6">IDENTIFICACIÓN DEL ÍTEM Y COSTO PROMEDIO PONDERADO</th>
@@ -972,23 +973,23 @@
           <th style="width:19%; text-align:left;">DESCRIPCIÓN DE LA MERCANCÍA / REPUESTO</th>
           <th style="width:2.8%;">UND</th>
           <th style="width:5.8%;">ALMACÉN</th>
-          <th style="width:5.5%;">CPP UNIT. (${sym})</th>
+          <th style="width:5.5%;">CPP UNIT. (Bs./USD)</th>
           <!-- 1. Inicial -->
           <th style="width:4.2%; background:#eff6ff;">CANT. INIC.</th>
-          <th style="width:6.8%; background:#eff6ff;">COSTO INIC. (${sym})</th>
+          <th style="width:6.8%; background:#eff6ff;">COSTO INIC. (Bs./USD)</th>
           <!-- 2. Entradas -->
           <th style="width:4.2%; background:#ecfdf5;">CANT. ENT.</th>
-          <th style="width:6.8%; background:#ecfdf5;">COSTO ENT. (${sym})</th>
+          <th style="width:6.8%; background:#ecfdf5;">COSTO ENT. (Bs./USD)</th>
           <!-- 3. Salidas Discriminadas -->
           <th style="width:3.8%; background:#fff1f2;" title="Salidas por Factura de Venta">VENTA</th>
           <th style="width:3.5%; background:#fff1f2;" title="Salidas por Autoconsumo Interno">AUTOC.</th>
           <th style="width:3.5%; background:#fff1f2;" title="Retiro de Accionistas o Socios">RETIRO</th>
           <th style="width:3.5%; background:#fff1f2;" title="Muestras Promocionales">MUEST.</th>
           <th style="width:3.5%; background:#fff1f2;" title="Mermas, Daños o Ajustes">MERMA</th>
-          <th style="width:6.8%; background:#fff1f2;">COSTO SALIDAS (${sym})</th>
+          <th style="width:6.8%; background:#fff1f2;">COSTO SALIDAS (Bs./USD)</th>
           <!-- 4. Final -->
           <th style="width:4.3%; background:#e0e7ff;">EXIST. FINAL</th>
-          <th style="width:7.5%; background:#e0e7ff;">VALOR FINAL (${sym})</th>
+          <th style="width:7.5%; background:#e0e7ff;">VALOR FINAL (Bs./USD)</th>
         </tr>
       `;
 
@@ -996,12 +997,6 @@
         tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="padding:18px;">No hay repuestos que coincidan con el filtro seleccionado.</td></tr>`;
       } else {
         tbody.innerHTML = items.map((p, idx) => {
-          const cpp = esVes ? p.costo_promedio_ves : p.costo_unitario_usd;
-          const vIni = esVes ? p.monto_inicial_ves : p.monto_inicial_usd;
-          const vEnt = esVes ? p.monto_entradas_ves : p.monto_entradas_usd;
-          const vSal = esVes ? p.monto_salidas_ves : p.monto_salidas_usd;
-          const vFin = esVes ? p.monto_final_ves : p.monto_final_usd;
-
           const hasEnt = p.cant_entradas > 0;
           const hasSal = p.cant_salidas > 0;
           const mermaAj = Number((p.sal_merma_und || 0) + (p.sal_ajuste_und || 0));
@@ -1009,27 +1004,27 @@
           return `
             <tr>
               <td class="text-center font-mono">${idx + 1}</td>
-              <td class="font-mono font-bold" style="color: var(--ucg-navy);">${p.codigo}</td>
+              <td class="font-mono font-bold" style="color: var(--rep-navy);">${p.codigo}</td>
               <td class="font-bold">${p.descripcion}</td>
               <td class="text-center">${p.unidad_medida || 'UND'}</td>
               <td class="text-center" style="font-size:7px;">${p.almacen}</td>
-              <td class="text-right font-mono">${fmtM(cpp)}</td>
+              <td class="text-right font-mono">${dualCell(p.costo_promedio_ves, p.costo_unitario_usd)}</td>
               <!-- 1. Inicial -->
               <td class="text-right font-mono">${p.cant_inicial}</td>
-              <td class="text-right font-mono">${fmtM(vIni)}</td>
+              <td class="text-right font-mono">${dualCell(p.monto_inicial_ves, p.monto_inicial_usd)}</td>
               <!-- 2. Entradas -->
               <td class="text-right font-mono font-bold" style="color:${hasEnt ? '#065f46' : '#64748b'};">${hasEnt ? '+' + p.cant_entradas : '0'}</td>
-              <td class="text-right font-mono" style="color:${hasEnt ? '#065f46' : '#64748b'};">${fmtM(vEnt)}</td>
+              <td class="text-right font-mono" style="color:${hasEnt ? '#065f46' : '#64748b'};">${dualCell(p.monto_entradas_ves, p.monto_entradas_usd)}</td>
               <!-- 3. Salidas Discriminadas -->
               <td class="text-right font-mono font-bold" style="color:${p.sal_venta_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_venta_und || 0}</td>
               <td class="text-right font-mono" style="color:${p.sal_autoconsumo_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_autoconsumo_und || 0}</td>
               <td class="text-right font-mono" style="color:${p.sal_retiro_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_retiro_und || 0}</td>
               <td class="text-right font-mono" style="color:${p.sal_muestra_und > 0 ? '#9f1239' : '#94a3b8'};">${p.sal_muestra_und || 0}</td>
               <td class="text-right font-mono" style="color:${mermaAj > 0 ? '#9f1239' : '#94a3b8'};">${mermaAj}</td>
-              <td class="text-right font-mono font-bold" style="color:${hasSal ? '#9f1239' : '#64748b'};">${fmtM(vSal)}</td>
+              <td class="text-right font-mono font-bold" style="color:${hasSal ? '#9f1239' : '#64748b'};">${dualCell(p.monto_salidas_ves, p.monto_salidas_usd)}</td>
               <!-- 4. Final -->
-              <td class="text-right font-mono font-bold" style="color: var(--ucg-navy); background:#f8fafc;">${p.cant_final}</td>
-              <td class="text-right font-mono font-bold" style="color: var(--ucg-navy); background:#f8fafc;">${fmtM(vFin)}</td>
+              <td class="text-right font-mono font-bold" style="color: var(--rep-navy); background:#f8fafc;">${p.cant_final}</td>
+              <td class="text-right font-mono font-bold" style="color: var(--rep-navy); background:#f8fafc;">${dualCell(p.monto_final_ves, p.monto_final_usd)}</td>
             </tr>
           `;
         }).join('');
@@ -1037,19 +1032,19 @@
 
       tfoot.innerHTML = `
         <tr>
-          <td colspan="6" class="text-right">TOTALES GENERALES ART. 177 RISLR (${items.length} ÍTEMS EN ${moneda}):</td>
+          <td colspan="6" class="text-right">TOTALES GENERALES ART. 177 RISLR (${items.length} ÍTEMS • Bs. / $ USD):</td>
           <td class="text-right font-mono">${fmtNum(tCantIni)}</td>
-          <td class="text-right font-mono">${fmtM(esVes ? tVesIni : tUsdIni)}</td>
+          <td class="text-right font-mono">${dualCell(tVesIni, tUsdIni)}</td>
           <td class="text-right font-mono" style="color:#065f46;">+${fmtNum(tCantEnt)}</td>
-          <td class="text-right font-mono" style="color:#065f46;">${fmtM(esVes ? tVesEnt : tUsdEnt)}</td>
+          <td class="text-right font-mono" style="color:#065f46;">${dualCell(tVesEnt, tUsdEnt)}</td>
           <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalVenta)}</td>
           <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalAuto)}</td>
           <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalRet)}</td>
           <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalMues)}</td>
           <td class="text-right font-mono" style="color:#9f1239;">${fmtNum(tSalMerma)}</td>
-          <td class="text-right font-mono" style="color:#9f1239;">${fmtM(esVes ? tVesSal : tUsdSal)}</td>
-          <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtNum(tCantFin)}</td>
-          <td class="text-right font-mono" style="color:var(--ucg-navy);">${fmtM(esVes ? tVesFin : tUsdFin)}</td>
+          <td class="text-right font-mono" style="color:#9f1239;">${dualCell(tVesSal, tUsdSal)}</td>
+          <td class="text-right font-mono" style="color:var(--rep-navy);">${fmtNum(tCantFin)}</td>
+          <td class="text-right font-mono" style="color:var(--rep-navy);">${dualCell(tVesFin, tUsdFin)}</td>
         </tr>
       `;
     }

@@ -192,6 +192,15 @@ export async function syncCatalogoConceptosISLR(db) {
 // FORMATEADORES ESTRICTOS XSD PORTAL SENIAT (RelacionRetencionesISLR)
 // ==============================================================================
 
+export function escapeXml(val) {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export function formatRifSeniat(rif) {
   return String(rif || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 }
@@ -203,10 +212,10 @@ export function isRifSeniatValido(cleanRif) {
 export function formatFacturaSeniat(nroFactura) {
   let clean = String(nroFactura || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   if (!clean || clean === 'SN' || clean === 'NA' || clean === 'SF') {
-    return '0';
+    return '';
   }
   if (clean.length > 10) {
-    clean = clean.replace(/^0+/, '') || '0';
+    clean = clean.replace(/^0+/, '') || '';
     if (clean.length > 10) clean = clean.slice(-10);
   }
   return clean;
@@ -258,7 +267,7 @@ export function buildXmlRelacionRetencionesISLR({ agenteRif, periodo, rows = [],
 
   const xmlLines = [
     `<?xml version="1.0" encoding="ISO-8859-1"?>`,
-    `<RelacionRetencionesISLR RifAgente="${cleanAgenteRif}" Periodo="${yyyymm}">`
+    `<RelacionRetencionesISLR RifAgente="${escapeXml(cleanAgenteRif)}" Periodo="${escapeXml(yyyymm)}">`
   ];
 
   const detallesPreview = [];
@@ -363,13 +372,13 @@ export function buildXmlRelacionRetencionesISLR({ agenteRif, periodo, rows = [],
     }
 
     xmlLines.push(`  <DetalleRetencion>`);
-    xmlLines.push(`    <RifRetenido>${cleanRifRetenido}</RifRetenido>`);
-    xmlLines.push(`    <NumeroFactura>${cleanFactura}</NumeroFactura>`);
-    xmlLines.push(`    <NumeroControl>${cleanControl}</NumeroControl>`);
-    xmlLines.push(`    <FechaOperacion>${fechaOp}</FechaOperacion>`);
-    xmlLines.push(`    <CodigoConcepto>${codConcepto}</CodigoConcepto>`);
-    xmlLines.push(`    <MontoOperacion>${montoOpStr}</MontoOperacion>`);
-    xmlLines.push(`    <PorcentajeRetencion>${pctRetStr}</PorcentajeRetencion>`);
+    xmlLines.push(`    <RifRetenido>${escapeXml(cleanRifRetenido)}</RifRetenido>`);
+    xmlLines.push(`    <NumeroFactura>${escapeXml(cleanFactura)}</NumeroFactura>`);
+    xmlLines.push(`    <NumeroControl>${escapeXml(cleanControl)}</NumeroControl>`);
+    xmlLines.push(`    <FechaOperacion>${escapeXml(fechaOp)}</FechaOperacion>`);
+    xmlLines.push(`    <CodigoConcepto>${escapeXml(codConcepto)}</CodigoConcepto>`);
+    xmlLines.push(`    <MontoOperacion>${escapeXml(montoOpStr)}</MontoOperacion>`);
+    xmlLines.push(`    <PorcentajeRetencion>${escapeXml(pctRetStr)}</PorcentajeRetencion>`);
     xmlLines.push(`  </DetalleRetencion>`);
 
     const groupKey = `${codConcepto}|${resolucion.tipo_contribuyente}|${pctRetStr}`;
@@ -471,14 +480,13 @@ export async function obtenerDatosXmlISLR(db, periodo) {
           d.sustraendo_bs,
           d.impuesto_retenido_bs,
           lc.tipo_servicio as lc_tipo_servicio,
-          p.tipo_servicio as prov_tipo_servicio,
-          p.tipo_persona as prov_tipo_persona,
-          p.codigo_concepto_islr as prov_codigo_concepto
+          (SELECT p.tipo_servicio FROM proveedores p WHERE UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.sujeto_rif, '-', ''), ' ', '')) ORDER BY p.id ASC LIMIT 1) as prov_tipo_servicio,
+          (SELECT p.tipo_persona FROM proveedores p WHERE UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.sujeto_rif, '-', ''), ' ', '')) ORDER BY p.id ASC LIMIT 1) as prov_tipo_persona,
+          (SELECT p.codigo_concepto_islr FROM proveedores p WHERE UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.sujeto_rif, '-', ''), ' ', '')) ORDER BY p.id ASC LIMIT 1) as prov_codigo_concepto
         FROM retenciones_islr r
         JOIN retenciones_islr_detalles d ON r.id = d.retencion_id
         LEFT JOIN libro_compras lc ON d.libro_compra_id = lc.id
-        LEFT JOIN proveedores p ON UPPER(REPLACE(REPLACE(p.rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(r.sujeto_rif, '-', ''), ' ', ''))
-        WHERE r.periodo = ?
+        WHERE r.periodo = ? AND COALESCE(r.estatus, 'EMITIDO') != 'ANULADO'
         ORDER BY r.nro_comprobante ASC, d.nro_operacion ASC
       `,
       args: [targetPeriodo]

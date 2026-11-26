@@ -44,7 +44,7 @@ export async function conciliarReporteZ(reporteZId, db) {
   for (const m of movsRes.rows) {
     let num = m.numero_factura_numerico;
     if (!num && m.numero_documento) {
-      const match = String(m.numero_documento).match(/(\d+)/);
+      const match = String(m.numero_documento).match(/(\d+)(?!.*\d)/);
       if (match) num = parseInt(match[1], 10);
     }
 
@@ -564,7 +564,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
     for (const r of movsDia.rows) {
       totalBs += Number(r.total_bs) || 0;
       totalUnds += Number(r.total_unds) || 0;
-      const match = String(r.numero_documento).match(/(\d+)/) || String(r.observaciones).match(/(\d+)/);
+      const match = String(r.numero_documento).match(/(\d+)(?!.*\d)/) || String(r.observaciones).match(/(\d+)(?!.*\d)/);
       if (match) factNums.push(parseInt(match[1], 10));
     }
 
@@ -851,7 +851,7 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
     // Normalizar número de factura limpio
     let num = r.numero_factura_numerico;
     if (!num) {
-      const match = String(r.numero_documento).match(/(\d+)/) || String(r.observaciones).match(/(\d+)/);
+      const match = String(r.numero_documento).match(/(\d+)(?!.*\d)/) || String(r.observaciones).match(/(\d+)(?!.*\d)/);
       if (match) num = parseInt(match[1], 10);
     }
     if (num) dia.facturas_nums.push(num);

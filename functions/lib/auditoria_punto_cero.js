@@ -154,7 +154,7 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   });
 
   if (prodRes.rows.length === 0) {
-    throw new Error(`Producto con ID ${productoId} no encontrado en la base de datos.`);
+    throw new Error('El artículo seleccionado ya no existe o fue retirado del catálogo.');
   }
 
   const periodo = fecha.slice(0, 7);
@@ -241,7 +241,7 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   const tienePrecioUsd = (rawPrecioUsdAct !== null && rawPrecioUsdAct !== undefined && rawPrecioUsdAct !== '' && !isNaN(Number(rawPrecioUsdAct)) && Number(rawPrecioUsdAct) > 0);
   const nuevoPrecio = tienePrecioBs
     ? Number((Number(rawPrecioBsAct) / tasaNum).toFixed(2))
-    : (tienePrecioUsd ? Number(Number(rawPrecioUsdAct).toFixed(2)) : Number(p.precio_venta_usd || (nuevoCosto * 1.30)));
+    : (tienePrecioUsd ? Number(Number(rawPrecioUsdAct).toFixed(2)) : Number((Number(p.precio_venta_usd || (nuevoCosto * 1.30))).toFixed(2)));
 
   const isInactive = Number(inactivo) === 1 ? 1 : 0;
   const isActivo = isInactive === 1 ? 0 : 1;
@@ -746,8 +746,14 @@ export async function crearProductoAuditoria(payload, db) {
 }
 
 export async function toggleAuditadoProducto(productoId, auditado, db) {
+  const actaRes = await db.execute("SELECT estatus FROM actas_toma_fisica WHERE estatus = 'CERRADA' ORDER BY updated_at DESC LIMIT 1").catch(() => ({ rows: [] }));
+  const actaOpenRes = await db.execute("SELECT estatus FROM actas_toma_fisica WHERE estatus = 'ABIERTA' LIMIT 1").catch(() => ({ rows: [] }));
+  if (actaOpenRes.rows.length === 0 && actaRes.rows.length > 0) {
+    throw new Error('La Toma Física está cerrada. Reabra el acta antes de modificar artículos auditados.');
+  }
+
   const isAuditado = Number(auditado) === 1 ? 1 : 0;
-  const fecha = isAuditado ? new Date().toISOString().slice(0, 10) : null;
+  const fecha = isAuditado ? new Date().toLocaleDateString('en-CA') : null;
 
   await db.execute({
     sql: `UPDATE productos SET auditado = ?, fecha_auditoria = ? WHERE id = ?`,

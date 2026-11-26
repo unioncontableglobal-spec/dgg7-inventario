@@ -135,8 +135,8 @@ body {
 }
 
 .sidebar-logo {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
   flex-shrink: 0;
   filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.45));
@@ -2100,6 +2100,16 @@ input:focus {
     margin: 6mm 8mm;
   }
 
+  @page portrait_page {
+    size: portrait;
+    margin: 8mm;
+  }
+
+  .seniat-portrait-f30,
+  .islr-official-sheet {
+    page: portrait_page;
+  }
+
   html,
   body {
     height: auto !important;
@@ -2112,11 +2122,6 @@ input:focus {
     print-color-adjust: exact !important;
   }
 
-  .app-layout,
-  .app-sidebar,
-  .app-main-wrapper,
-  .app-topbar,
-  .main-content,
   .toast-container,
   .modal-header,
   .modal-footer,
@@ -2124,7 +2129,24 @@ input:focus {
     display: none !important;
   }
 
-  #modal-impresion-fiscal {
+  body:has(#modal-impresion-fiscal[style*="flex"]) .app-layout,
+  body:has(#modal-impresion-fiscal[style*="flex"]) .app-sidebar,
+  body:has(#modal-impresion-fiscal[style*="flex"]) .app-main-wrapper,
+  body:has(#modal-impresion-fiscal[style*="flex"]) .app-topbar,
+  body:has(#modal-impresion-fiscal[style*="flex"]) .main-content {
+    display: none !important;
+  }
+
+  body:has(#modal-acta-oficial[style*="flex"]) .app-layout {
+    display: none !important;
+  }
+
+  #modal-impresion-fiscal:not([style*="flex"]) {
+    display: none !important;
+  }
+
+  #modal-impresion-fiscal[style*="flex"],
+  #modal-acta-oficial[style*="flex"] {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -2136,7 +2158,8 @@ input:focus {
     background: #ffffff !important;
   }
 
-  #modal-impresion-fiscal .modal-box {
+  #modal-impresion-fiscal[style*="flex"] .modal-box,
+  #modal-acta-oficial[style*="flex"] .modal-box {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -2151,6 +2174,7 @@ input:focus {
   }
 
   #modal-print-body,
+  #print-area-acta-oficial,
   .print-preview-container {
     display: block !important;
     width: 100% !important;
@@ -4288,9 +4312,11 @@ body {
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid transparent;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  background: #ffffff;
   cursor: pointer;
   text-align: left;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -4299,17 +4325,17 @@ body {
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   font-family: inherit;
-  color: #ffffff;
+  color: #0f172a;
   outline: none;
   text-decoration: none;
 }
 
 .pzero-fase-card:hover {
   transform: translateY(-2px);
-  filter: brightness(1.08);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 .pzero-fase-card:active {
@@ -4321,16 +4347,15 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.85rem;
-  font-weight: 900;
+  font-weight: 800;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  border: 1px solid #cbd5e1;
 }
 
 /* Contenedor central de texto */
@@ -4344,20 +4369,21 @@ body {
 
 .pzero-fase-card .fase-sub {
   font-size: 0.65rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   line-height: 1.15;
   margin-bottom: 2px;
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .pzero-fase-card .fase-title {
-  font-size: 0.92rem;
+  font-size: 0.90rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #0f172a;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -4367,10 +4393,10 @@ body {
 
 /* Ícono lateral derecho */
 .pzero-fase-card .fase-icon {
-  font-size: 1.45rem;
+  font-size: 1.35rem;
   line-height: 1;
   flex-shrink: 0;
-  opacity: 0.92;
+  opacity: 0.85;
   margin-left: auto;
 }
 
@@ -4382,99 +4408,82 @@ body {
   font-size: 0.60rem;
   font-weight: 800;
   letter-spacing: 0.04em;
-  padding: 1.5px 7px;
+  padding: 2px 7px;
   border-radius: 4px;
-  margin-top: 3px;
+  margin-top: 4px;
   width: fit-content;
   text-transform: uppercase;
   transition: all 0.2s ease;
 }
 
 .fase-checklist-status.status-done {
-  background: #10b981 !important;
-  color: #ffffff !important;
-  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.45);
+  background: #dcfce7 !important;
+  color: #059669 !important;
+  border: 1px solid #86efac !important;
 }
 
 .fase-checklist-status.status-progress {
-  background: #f59e0b !important;
-  color: #ffffff !important;
-  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.45);
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border: 1px solid #fde68a !important;
 }
 
 .fase-checklist-status.status-pending {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
 .pzero-fase-card .fase-badge-num.step-done {
-  background: #10b981 !important;
+  background: #059669 !important;
   color: #ffffff !important;
-  border-color: #34d399 !important;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6) !important;
+  border-color: #059669 !important;
 }
 
 .pzero-fase-card .fase-badge-num.step-progress {
-  background: #f59e0b !important;
+  background: #d97706 !important;
   color: #ffffff !important;
-  border-color: #fcd34d !important;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6) !important;
+  border-color: #d97706 !important;
 }
 
-/* 1. Tarjeta Azul (Apertura de Acta) */
+/* 1. Paso 1: Apertura */
 .pzero-fase-azul {
-  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-  border-color: #1e3a8a;
-  box-shadow: 0 3px 10px rgba(30, 64, 175, 0.28);
+  border-left-color: #0284c7;
 }
-
 .pzero-fase-azul .fase-sub {
-  color: #bfdbfe;
+  color: #0284c7;
 }
 
-/* 2. Tarjeta Verde (Modo Ajuste Rápido) */
+/* 2. Paso 2: Conteo */
 .pzero-fase-verde {
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-  border-color: #047857;
-  box-shadow: 0 3px 10px rgba(5, 150, 105, 0.28);
+  border-left-color: #059669;
 }
-
 .pzero-fase-verde .fase-sub {
-  color: #d1fae5;
+  color: #059669;
 }
 
-/* 3. Tarjeta Negra / Azul Marino (Ver / Imprimir Acta) */
+/* 3. Paso 3: Acta */
 .pzero-fase-negro {
-  background: linear-gradient(135deg, #0B2447 0%, #1e293b 100%);
-  border-color: #020617;
-  box-shadow: 0 3px 10px rgba(11, 36, 71, 0.28);
+  border-left-color: #0f172a;
 }
-
 .pzero-fase-negro .fase-sub {
-  color: #cbd5e1;
+  color: #0f172a;
 }
 
-/* 4. Tarjeta Naranja (Cerrar Toma Física) */
+/* 4. Paso 4: Cerrar */
 .pzero-fase-naranja {
-  background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
-  border-color: #9a3412;
-  box-shadow: 0 3px 10px rgba(194, 65, 12, 0.28);
+  border-left-color: #be123c;
 }
-
 .pzero-fase-naranja .fase-sub {
-  color: #fed7aa;
+  color: #be123c;
 }
 
-/* 4b. Tarjeta Reabrir (Estatus Cerrado) */
+/* 4b. Reabrir */
 .pzero-fase-reabrir {
-  background: linear-gradient(135deg, #047857 0%, #059669 100%);
-  border-color: #065f46;
-  box-shadow: 0 3px 10px rgba(4, 120, 87, 0.28);
+  border-left-color: #059669;
 }
-
 .pzero-fase-reabrir .fase-sub {
-  color: #a7f3d0;
+  color: #059669;
 }
 /* ==========================================================================
    CARGA MASIVA Y EXTRACTOR INTELIGENTE DE FACTURAS PDF (LIBRO DE COMPRAS)
@@ -4846,30 +4855,30 @@ div[style*="border-top: 4px solid"] {
   font-weight: 500 !important;
 }
 
-/* 6. Botones Corporativos Unificados (Cero Efectos Neón / Estilo SAP) */
+/* 6. Botones Corporativos Unificados (Estándar SUMA | #0f172a + #0284c7) */
 .btn-navy,
 button[style*="background:#0B2447"],
 button[style*="background: #0B2447"],
 button[style*="background:linear-gradient(135deg, #0B2447"],
 button[style*="background: linear-gradient(135deg, #0B2447"] {
-  background: #1e3a8a !important;
+  background: #0f172a !important;
   color: #ffffff !important;
-  border: 1px solid #1e3a8a !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  border: 1px solid #0f172a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
 }
 
 .btn-navy:hover,
 button[style*="background:#0B2447"]:hover,
 button[style*="background: #0B2447"]:hover {
-  background: #1d4ed8 !important;
-  border-color: #1d4ed8 !important;
+  background: #0284c7 !important;
+  border-color: #0284c7 !important;
 }
 
 /* Botón Retención ISLR / IVA */
 button[onclick*="emitirISLR"],
 button[onclick*="emitirRetencion"],
 button[title*="Retención ISLR"] {
-  background: #1e3a8a !important;
+  background: #0f172a !important;
   color: #ffffff !important;
   border: none !important;
   border-radius: 4px !important;
@@ -4878,7 +4887,7 @@ button[title*="Retención ISLR"] {
 
 button[onclick*="emitirISLR"]:hover,
 button[onclick*="emitirRetencion"]:hover {
-  background: #1d4ed8 !important;
+  background: #0284c7 !important;
 }
 
 /* 7. Banners Informativos Tipo Enterprise Toolbar */
@@ -4897,10 +4906,10 @@ div[style*="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"] {
 
 #banner-carga-masiva-pdf button,
 button[onclick*="abrirModalCargaMasivaPDF"] {
-  background: #1e3a8a !important;
+  background: #0284c7 !important;
   color: #ffffff !important;
   border-radius: 6px !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.15) !important;
 }
 
 /* 8. Píldoras de Meses (Filtros de Período) */

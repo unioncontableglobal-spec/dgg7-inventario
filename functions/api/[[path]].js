@@ -52,9 +52,94 @@ async function hashPassword(password) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function parseAlicuotaDecimal(val, defaultVal = 0.16) {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  const num = Number(val);
+  if (!Number.isFinite(num) || num < 0) return defaultVal;
+  return num > 1 ? Number((num / 100).toFixed(4)) : num;
+}
+
+function isRifValidoFormato(rif) {
+  return /^[VEJGPC]-?\d{7,9}-?\d?$/i.test(String(rif || '').trim());
+}
+
+function normalizeFactNum(val) {
+  const m = String(val || '').match(/(\d+)(?!.*\d)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function traducirErrorNegocio(err) {
+  const msg = String(err?.message || err || 'Error desconocido');
+  if (/UNIQUE constraint failed/i.test(msg)) {
+    return 'Ya existe un registro con ese número de documento, código o comprobante.';
+  }
+  if (/CHECK constraint failed/i.test(msg)) {
+    return 'Uno de los valores numéricos ingresados no es válido (verifique cantidades y montos mayores a 0).';
+  }
+  if (/FOREIGN KEY constraint failed/i.test(msg)) {
+    return 'Alguno de los registros referenciados no existe o fue eliminado.';
+  }
+  return msg;
+}
+
+async function recalculateDeclaracionIva(periodo, db) {
+  if (!periodo) return;
+  try {
+    const [vRes, cRes, prevRes] = await Promise.all([
+      db.execute({
+        sql: `SELECT COALESCE(SUM(base_imponible_bs), 0) as v_base, COALESCE(SUM(iva_bs), 0) as v_deb, COUNT(DISTINCT fecha) as v_dias FROM libro_ventas WHERE periodo = ?`,
+        args: [periodo]
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(SUM(base_imponible_bs), 0) as c_base, COALESCE(SUM(iva_bs), 0) as c_cred, COUNT(*) as c_facs FROM libro_compras WHERE periodo = ?`,
+        args: [periodo]
+      }),
+      db.execute({
+        sql: `SELECT excedente_siguiente_bs FROM declaraciones_iva WHERE periodo < ? ORDER BY periodo DESC LIMIT 1`,
+        args: [periodo]
+      })
+    ]);
+
+    const vBase = Number(vRes.rows[0]?.v_base || 0);
+    const vDeb = Number(vRes.rows[0]?.v_deb || 0);
+    const vDias = Number(vRes.rows[0]?.v_dias || 0);
+    const cBase = Number(cRes.rows[0]?.c_base || 0);
+    const cCred = Number(cRes.rows[0]?.c_cred || 0);
+    const cFacs = Number(cRes.rows[0]?.c_facs || 0);
+    const excAnt = Number(prevRes.rows[0]?.excedente_siguiente_bs || 0);
+    const totCred = Number((cCred + excAnt).toFixed(2));
+    const saldo = Number((vDeb - totCred).toFixed(2));
+    const aPagar = saldo > 0 ? saldo : 0;
+    const excSig = saldo < 0 ? Math.abs(saldo) : 0;
+
+    await db.execute({
+      sql: `
+        INSERT INTO declaraciones_iva (
+          periodo, ventas_base_bs, debito_fiscal_bs, compras_base_bs, credito_fiscal_bs,
+          iva_retenido_bs, excedente_anterior_bs, excedente_siguiente_bs, total_a_pagar_bs,
+          total_compras_facturas, total_ventas_dias, estatus
+        ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(periodo) DO UPDATE SET
+          ventas_base_bs = excluded.ventas_base_bs,
+          debito_fiscal_bs = excluded.debito_fiscal_bs,
+          compras_base_bs = excluded.compras_base_bs,
+          credito_fiscal_bs = excluded.credito_fiscal_bs,
+          excedente_anterior_bs = excluded.excedente_anterior_bs,
+          excedente_siguiente_bs = excluded.excedente_siguiente_bs,
+          total_a_pagar_bs = excluded.total_a_pagar_bs,
+          total_compras_facturas = excluded.total_compras_facturas,
+          total_ventas_dias = excluded.total_ventas_dias
+        WHERE declaraciones_iva.estatus != 'DECLARADO'
+      `,
+      args: [periodo, vBase, vDeb, cBase, cCred, excAnt, excSig, aPagar, cFacs, vDias, periodo <= '2026-09' ? 'DECLARADO' : 'EN_PROCESO']
+    });
+  } catch (e) {
+    console.warn('No se pudo recalcular Forma 30:', e.message);
+  }
+}
+
 async function isPeriodoDeclarado(periodo, db) {
   if (!periodo) return false;
-  if (periodo <= '2026-09') return true;
   try {
     const res = await db.execute({
       sql: "SELECT estatus FROM declaraciones_iva WHERE periodo = ? LIMIT 1",
@@ -66,7 +151,7 @@ async function isPeriodoDeclarado(periodo, db) {
   } catch (e) {
     console.error('Error verificando estatus de período declarado:', e);
   }
-  return false;
+  return periodo <= '2026-09';
 }
 
 const corsHeaders = {
@@ -496,13 +581,15 @@ export async function onRequest(context) {
                 ELSE 'Clasificado como Proveedor de Mercancía - Requiere cuadre con entrada'
               END
           WHERE proveedor_id = ?
+            AND NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'DECLARADO')
+            AND (libro_compras.periodo > '2026-09' OR EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'EN_PROCESO'))
         `,
         args: [tipo_servicio, aplicaInvInt, nuevoEstatus, aplicaInvInt, id]
       });
 
       return jsonResponse({
         success: true,
-        message: `Proveedor ID #${id} clasificado como ${aplicaInvInt ? 'Proveedor de Mercancía' : 'Gasto/Servicio'} (Cód. ISLR ${codIslr})`
+        message: `Proveedor clasificado como ${aplicaInvInt ? 'Mercancía / Inventario' : 'Gasto / Servicio'} (Cód. ISLR ${codIslr}).`
       });
     }
 
@@ -511,6 +598,9 @@ export async function onRequest(context) {
       const b = await request.json();
       const { rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion, telefono, email, tipo_persona, direccion_fiscal, codigo_concepto_islr } = b;
       const cleanRif = rif ? String(rif).trim().toUpperCase() : null;
+      if (cleanRif && !isRifValidoFormato(cleanRif)) {
+        return jsonResponse({ error: 'Formato de RIF inválido. Ejemplo válido: J-12345678-9 o V-12345678-0.' }, 400);
+      }
       const cleanRazon = razon_social ? String(razon_social).trim() : null;
       const cleanTipo = tipo_servicio || 'MERCANCIA_REPUESTOS';
       const aplicaInvInt = (aplica_inventario === 1 || aplica_inventario === true || aplica_inventario === '1') ? 1 : 0;
@@ -548,11 +638,13 @@ export async function onRequest(context) {
                 ELSE 'Clasificado como Proveedor de Mercancía - Requiere cuadre con entrada'
               END
           WHERE proveedor_id = ?
+            AND NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'DECLARADO')
+            AND (libro_compras.periodo > '2026-09' OR EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'EN_PROCESO'))
         `,
         args: [cleanTipo, aplicaInvInt, nuevoEstatus, aplicaInvInt, id]
       });
 
-      return jsonResponse({ success: true, message: 'Proveedor actualizado' });
+      return jsonResponse({ success: true, message: 'Proveedor actualizado exitosamente.' });
     }
 
     if (path.startsWith('/api/proveedores/') && method === 'DELETE') {
@@ -689,31 +781,33 @@ export async function onRequest(context) {
         fechaTasa = cfgRes.rows[0]?.fecha_bcv_activa_dia || 'Al día';
 
         sql = `
-          SELECT producto_id, codigo, descripcion, unidad_medida, 
-                 categoria, almacen, stock_minimo, costo_referencial_usd, 
-                 stock_actual, valor_total_usd, estado_stock
-          FROM vista_inventario_actual
+          SELECT v.producto_id, v.codigo, v.descripcion, v.unidad_medida, 
+                 v.categoria, v.almacen, v.stock_minimo, v.costo_referencial_usd, 
+                 COALESCE(p.precio_venta_usd, 0) AS precio_venta_usd,
+                 v.stock_actual, v.valor_total_usd, v.estado_stock
+          FROM vista_inventario_actual v
+          LEFT JOIN productos p ON p.id = v.producto_id
           WHERE 1=1
         `;
 
         if (q) {
-          sql += ` AND (codigo LIKE ? OR descripcion LIKE ?)`;
+          sql += ` AND (v.codigo LIKE ? OR v.descripcion LIKE ?)`;
           args.push(`%${q}%`, `%${q}%`);
         }
         if (cat && cat !== 'TODAS') {
-          sql += ` AND categoria = ?`;
+          sql += ` AND v.categoria = ?`;
           args.push(cat);
         }
         if (alm && alm !== 'TODOS') {
-          sql += ` AND almacen = ?`;
+          sql += ` AND v.almacen = ?`;
           args.push(alm);
         }
         if (est && est !== 'TODOS') {
-          sql += ` AND estado_stock = ?`;
+          sql += ` AND v.estado_stock = ?`;
           args.push(est);
         }
 
-        sql += ` ORDER BY codigo ASC LIMIT ?`;
+        sql += ` ORDER BY v.codigo ASC LIMIT ?`;
         args.push(limit);
       }
 
@@ -738,17 +832,25 @@ export async function onRequest(context) {
       const codigo = decodeURIComponent(path.replace('/api/kardex/', ''));
       const metodoQuery = String(url.searchParams.get('metodo') || '').toUpperCase();
 
-      const [prodRes, cfgRes] = await Promise.all([
+      const [prodRes, cfgRes, tasasRes] = await Promise.all([
         db.execute({
           sql: `SELECT * FROM vista_inventario_actual WHERE UPPER(codigo) = UPPER(?)`,
           args: [codigo]
         }),
-        db.execute("SELECT metodo_valoracion_kardex FROM config_fiscal_islr WHERE id = 1")
+        db.execute("SELECT metodo_valoracion_kardex, tasa_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1"),
+        db.execute("SELECT periodo, tasa_bcv FROM tasas_bcv_periodo")
       ]);
 
       if (prodRes.rows.length === 0) {
         return jsonResponse({ error: 'Producto no encontrado' }, 404);
       }
+
+      const tasasKardexMap = {};
+      for (const tr of (tasasRes.rows || [])) {
+        tasasKardexMap[tr.periodo] = Number(tr.tasa_bcv || 0);
+      }
+      const tasaIni2025 = tasasKardexMap['2025-12'] || 298.1431;
+      const tasaActivaDia = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.26);
 
       const metodoActivo = (metodoQuery === 'PEPS' || metodoQuery === 'FIFO')
         ? 'PEPS'
@@ -767,27 +869,31 @@ export async function onRequest(context) {
             m.numero_documento,
             COALESCE(m.nro_control, '-') as nro_control,
             COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
-            COALESCE(NULLIF(md.tasa_bcv_operacion, 0), m.tasa_bcv, 68.50) as tasa_bcv,
+            COALESCE(NULLIF(md.tasa_bcv_operacion, 0), NULLIF(m.tasa_bcv, 0), ?) as tasa_bcv,
             COALESCE(m.fecha_tasa_bcv, m.fecha) as fecha_tasa_bcv,
             COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as tercero,
             COALESCE(pr.rif, '-') as tercero_rif,
             md.cantidad,
             COALESCE(NULLIF(md.costo_unitario_divisa, 0), md.costo_unitario_usd) as costo_unitario_usd,
             COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_ves) as costo_unitario_ves,
-            CASE WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA') OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as entrada,
-            CASE WHEN m.tipo = 'SALIDA_VENTA' OR (m.tipo='AJUSTE' AND COALESCE(m.subtipo,'') NOT LIKE '%POSITIVO%') THEN md.cantidad ELSE 0 END as salida
+            CASE WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                      OR (m.tipo='AJUSTE' AND (UPPER(COALESCE(m.subtipo,'')) LIKE '%POSITIVO%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%ENTRADA%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%SOBRANTE%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%OMISION%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%RECLASIF%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%SINCERACION%'))
+                 THEN md.cantidad ELSE 0 END as entrada,
+            CASE WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                      OR (m.tipo='AJUSTE' AND NOT (UPPER(COALESCE(m.subtipo,'')) LIKE '%POSITIVO%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%ENTRADA%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%SOBRANTE%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%OMISION%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%RECLASIF%' OR UPPER(COALESCE(m.subtipo,'')) LIKE '%SINCERACION%'))
+                 THEN md.cantidad ELSE 0 END as salida
           FROM movimiento_detalles md
           JOIN movimientos m ON md.movimiento_id = m.id
           LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
           WHERE md.producto_id = ?
           ORDER BY m.fecha ASC, m.id ASC
         `,
-        args: [prod.producto_id]
+        args: [tasaActivaDia, prod.producto_id]
       });
 
       let balance = 0;
       let cppUsd = refUsd;
-      let cppVes = Number((refUsd * 52.02).toFixed(2));
+      let cppVes = Number((refUsd * tasaIni2025).toFixed(2));
       let valTotalUsd = 0;
       let valTotalVes = 0;
       const fifoQueue = [];
@@ -795,7 +901,8 @@ export async function onRequest(context) {
       const history = movsRes.rows.map(row => {
         const ent = Number(row.entrada || 0);
         const sal = Number(row.salida || 0);
-        const tasa = Number(row.tasa_bcv || 68.50);
+        const rowPer = String(row.fecha || '').slice(0, 7);
+        const tasa = Number(row.tasa_bcv || tasasKardexMap[rowPer] || tasaActivaDia);
         const unitUsd = Number(row.costo_unitario_usd || 0) > 0 ? Number(row.costo_unitario_usd) : (cppUsd > 0 ? cppUsd : refUsd);
         const unitVes = Number(row.costo_unitario_ves || 0) > 0 ? Number(row.costo_unitario_ves) : Number((unitUsd * tasa).toFixed(2));
 
@@ -850,7 +957,7 @@ export async function onRequest(context) {
             movCostoTotalVes = costVesAcc;
             movCostoUnitUsd = sal > 0 ? costUsdAcc / sal : cppUsd;
             movCostoUnitVes = sal > 0 ? costVesAcc / sal : cppVes;
-            balance = Math.max(0, balance - sal);
+            balance = balance - sal;
             valTotalUsd = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitUsd, 0);
             valTotalVes = fifoQueue.reduce((acc, l) => acc + l.qty * l.unitVes, 0);
             if (balance > 0) {
@@ -863,7 +970,7 @@ export async function onRequest(context) {
             movCostoUnitVes = cppVes;
             movCostoTotalVes = sal * cppVes;
 
-            balance = Math.max(0, balance - sal);
+            balance = balance - sal;
             valTotalUsd = balance * cppUsd;
             valTotalVes = balance * cppVes;
           }
@@ -899,6 +1006,65 @@ export async function onRequest(context) {
         },
         historial: history
       });
+    }
+
+    if (path === '/api/inventario/toma-fisica' && method === 'POST') {
+      const body = await request.json();
+      const { producto_id, conteo_fisico, observacion_auditoria, generar_ajuste_automatico, usuario_responsable } = body || {};
+      if (!producto_id || conteo_fisico === undefined || conteo_fisico === null || isNaN(Number(conteo_fisico))) {
+        return jsonResponse({ error: 'Debe indicar el artículo y una cantidad física válida.' }, 400);
+      }
+
+      const actaClosedRes = await db.execute("SELECT periodo FROM actas_toma_fisica WHERE estatus = 'CERRADA' ORDER BY updated_at DESC LIMIT 1").catch(() => ({ rows: [] }));
+      const actaOpenRes = await db.execute("SELECT periodo FROM actas_toma_fisica WHERE estatus = 'ABIERTA' LIMIT 1").catch(() => ({ rows: [] }));
+      if (actaOpenRes.rows.length === 0 && actaClosedRes.rows.length > 0) {
+        return jsonResponse({ error: 'El acta de Toma Física está cerrada. Reabra el acta antes de modificar conteos.' }, 403);
+      }
+
+      const fechaHoy = new Date().toLocaleDateString('en-CA');
+      await db.execute({
+        sql: `UPDATE productos SET conteo_fisico_cierre = ?, stock_auditado_fisico = ?, fecha_conteo_fisico = ?, observacion_auditoria = ?, auditado = 1 WHERE id = ?`,
+        args: [Number(conteo_fisico), Number(conteo_fisico), fechaHoy, observacion_auditoria || 'Verificado en Toma Física de Cierre', Number(producto_id)]
+      });
+
+      if (generar_ajuste_automatico) {
+        const [stRes, cfgRes] = await Promise.all([
+          db.execute({ sql: `SELECT stock_actual, costo_referencial_usd FROM vista_inventario_actual WHERE producto_id = ?`, args: [Number(producto_id)] }),
+          db.execute("SELECT tasa_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
+        ]);
+        if (stRes.rows.length > 0) {
+          const teo = Number(stRes.rows[0].stock_actual || 0);
+          const fis = Number(conteo_fisico);
+          const diff = Number((fis - teo).toFixed(2));
+          if (diff !== 0) {
+            const tasaOp = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.58);
+            const esPositivo = diff > 0;
+            const subtipo = esPositivo ? 'AJUSTE_POSITIVO_SOBRANTE' : 'MERMA_DANO';
+            const movHeader = await db.execute({
+              sql: `INSERT INTO movimientos (tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable, observaciones, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion)
+                    VALUES ('AJUSTE', ?, ?, ?, ?, ?, ?, ?, ?, 'USD', 'CPP') RETURNING id`,
+              args: [
+                subtipo, fechaHoy,
+                `ACTA-CIERRE-${producto_id}-${Date.now().toString().slice(-4)}`,
+                `CTRL-AUD-${producto_id}`,
+                usuario_responsable || 'ADMIN_DG67',
+                observacion_auditoria || `Ajuste por Toma Física (Teórico: ${teo}, Físico: ${fis})`,
+                tasaOp, fechaHoy
+              ]
+            });
+            const movId = Number(movHeader.rows[0]?.id || movHeader.lastInsertRowid);
+            const costoUsd = Number(stRes.rows[0].costo_referencial_usd || 0);
+            const costoBs = Number((costoUsd * tasaOp).toFixed(2));
+            await db.execute({
+              sql: `INSERT INTO movimiento_detalles (movimiento_id, producto_id, cantidad, costo_unitario_usd, costo_unitario_ves, costo_unitario_divisa, tasa_bcv_operacion, costo_unitario_bs)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              args: [movId, Number(producto_id), Math.abs(diff), costoUsd, costoBs, costoUsd, tasaOp, costoBs]
+            });
+          }
+        }
+      }
+
+      return jsonResponse({ success: true, message: 'Conteo físico registrado exitosamente.' });
     }
 
     // ----------------------------------------------------
@@ -1154,27 +1320,29 @@ export async function onRequest(context) {
       `).catch(() => {});
       await db.execute("ALTER TABLE actas_toma_fisica ADD COLUMN tasa_bcv REAL DEFAULT 889.58;").catch(() => {});
 
-      const actaRes = await db.execute({
-        sql: "SELECT * FROM actas_toma_fisica WHERE periodo = ? LIMIT 1",
-        args: [periodo]
-      });
+      const [actaRes, cfgRes] = await Promise.all([
+        db.execute({ sql: "SELECT * FROM actas_toma_fisica WHERE periodo = ? LIMIT 1", args: [periodo] }),
+        db.execute("SELECT tasa_bcv_activa_dia FROM config_fiscal_islr WHERE id = 1")
+      ]);
+      const tasaVigente = Number(cfgRes.rows[0]?.tasa_bcv_activa_dia || 889.58);
+
       if (actaRes.rows.length === 0) {
         const numActa = `ACTA-INV-${periodo.replace('-', '')}-01`;
         await db.execute({
           sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
-                VALUES (?, ?, 'ABIERTA', 889.58, 'Personal de Almacén / Auditor DG 67', 'Gerencia General DG 67', 'Lcda. Liliana Chacón • CPC (Unión Contable Global)', datetime('now', 'localtime'))
+                VALUES (?, ?, 'ABIERTA', ?, 'Personal de Almacén / Auditor DG 67', 'Gerencia General DG 67', 'Contador Público Colegiado (C.P.C.)', datetime('now', 'localtime'))
                 ON CONFLICT(periodo) DO NOTHING`,
-          args: [periodo, numActa]
+          args: [periodo, numActa, tasaVigente]
         }).catch(() => {});
 
         return jsonResponse({
           periodo,
           estatus: 'ABIERTA',
           numero_acta: numActa,
-          tasa_bcv: 889.58,
+          tasa_bcv: tasaVigente,
           auditor_tienda: 'Personal de Almacén / Auditor DG 67',
           gerente_dg67: 'Gerencia General DG 67',
-          contador_ucg: 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+          contador_ucg: 'Contador Público Colegiado (C.P.C.)',
           fecha_cierre: null,
           usuario_cierre: null
         });
@@ -1190,78 +1358,70 @@ export async function onRequest(context) {
         auditor_tienda: a.auditor_tienda,
         gerente_dg67: a.gerente_dg67,
         contador_ucg: a.contador_ucg,
-        tasa_bcv: Number(a.tasa_bcv || 889.58)
+        tasa_bcv: Number(a.tasa_bcv || tasaVigente)
       });
     }
 
     if (path === '/api/auditoria/toma-fisica/apertura' && method === 'POST') {
       const body = await request.json();
-      const {
-        periodo = '2026-10',
-        numero_acta = 'ACTA-INV-202610-01',
-        tasa_bcv = 889.58,
-        auditor_tienda = 'Personal de Almacén / Auditor DG 67',
-        gerente_dg67 = 'Gerencia General DG 67',
-        contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)'
-      } = body || {};
+      const periodo = body?.periodo || '2026-10';
+      const numActaFinal = body?.numero_acta || body?.numero || `ACTA-INV-${periodo.replace('-', '')}-01`;
+      const fechaCorteFinal = body?.fecha_corte || body?.fecha || new Date().toLocaleDateString('en-CA');
+      const tasaBcvFinal = Number(body?.tasa_bcv) > 0 ? Number(body.tasa_bcv) : 889.58;
+      const auditorTienda = body?.auditor_tienda || 'Personal de Almacén / Auditor DG 67';
+      const gerenteDg67 = body?.gerente_dg67 || 'Gerencia General DG 67';
+      const contadorUcg = body?.contador_ucg || 'Contador Público Colegiado (C.P.C.)';
+
+      const prevActa = await db.execute({ sql: "SELECT estatus FROM actas_toma_fisica WHERE periodo = ? LIMIT 1", args: [periodo] }).catch(() => ({ rows: [] }));
+      if (prevActa.rows[0]?.estatus === 'CERRADA') {
+        return jsonResponse({ error: `El acta de Toma Física del período ${periodo} ya está cerrada. Reabra el acta para modificarla.` }, 409);
+      }
 
       await db.execute({
-        sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
-              VALUES (?, ?, 'ABIERTA', ?, ?, ?, ?, datetime('now', 'localtime'))
+        sql: `INSERT INTO actas_toma_fisica (periodo, numero_acta, estatus, fecha_corte, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg, updated_at)
+              VALUES (?, ?, 'ABIERTA', ?, ?, ?, ?, ?, datetime('now', 'localtime'))
               ON CONFLICT(periodo) DO UPDATE SET
                 numero_acta = excluded.numero_acta,
+                fecha_corte = COALESCE(excluded.fecha_corte, actas_toma_fisica.fecha_corte),
                 tasa_bcv = excluded.tasa_bcv,
                 auditor_tienda = excluded.auditor_tienda,
                 gerente_dg67 = excluded.gerente_dg67,
                 contador_ucg = excluded.contador_ucg,
                 updated_at = datetime('now', 'localtime')`,
-        args: [periodo, numero_acta, tasa_bcv, auditor_tienda, gerente_dg67, contador_ucg]
+        args: [periodo, numActaFinal, fechaCorteFinal, tasaBcvFinal, auditorTienda, gerenteDg67, contadorUcg]
       });
 
       return jsonResponse({
         success: true,
         periodo,
         estatus: 'ABIERTA',
-        numero_acta
+        numero_acta: numActaFinal,
+        fecha_corte: fechaCorteFinal,
+        tasa_bcv: tasaBcvFinal
       });
     }
 
     if (path === '/api/auditoria/toma-fisica/cerrar' && method === 'POST') {
       const body = await request.json();
-      const {
-        periodo = '2026-10',
-        numero_acta = 'ACTA-INV-202610-01',
-        usuario = 'ADMIN_DG67',
-        fecha_cierre = new Date().toISOString(),
-        auditor_tienda = 'Personal de Almacén DG 67',
-        gerente_dg67 = 'Gerencia General Inversiones DG 67, C.A.',
-        contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
-        tasa_bcv = 889.58
-      } = body || {};
+      const periodo = body?.periodo || '2026-10';
+      const prevRes = await db.execute({ sql: "SELECT numero_acta, tasa_bcv FROM actas_toma_fisica WHERE periodo = ? LIMIT 1", args: [periodo] }).catch(() => ({ rows: [] }));
+      const prevRow = prevRes.rows[0] || {};
+      const numero_acta = body?.numero_acta || prevRow.numero_acta || `ACTA-INV-${periodo.replace('-', '')}-01`;
+      const usuario = body?.usuario || 'ADMIN_DG67';
+      const fecha_cierre = body?.fecha_cierre || new Date().toISOString();
+      const auditor_tienda = body?.auditor_tienda || 'Personal de Almacén DG 67';
+      const gerente_dg67 = body?.gerente_dg67 || 'Gerencia General Inversiones DG 67, C.A.';
+      const contador_ucg = body?.contador_ucg || 'Contador Público Colegiado (C.P.C.)';
+      const tasa_bcv = Number(body?.tasa_bcv) > 0 ? Number(body.tasa_bcv) : Number(prevRow.tasa_bcv || 889.58);
 
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS actas_toma_fisica (
-          periodo TEXT PRIMARY KEY,
-          numero_acta TEXT,
-          estatus TEXT DEFAULT 'ABIERTA',
-          fecha_corte TEXT,
-          fecha_cierre TEXT,
-          usuario_cierre TEXT,
-          auditor_tienda TEXT,
-          gerente_dg67 TEXT,
-          contador_ucg TEXT,
-          tasa_bcv REAL DEFAULT 889.58,
-          resumen_items TEXT,
-          updated_at TEXT
-        );
-      `).catch(() => {});
-      await db.execute("ALTER TABLE actas_toma_fisica ADD COLUMN tasa_bcv REAL DEFAULT 889.58;").catch(() => {});
+      const resumenRes = await db.execute("SELECT COUNT(*) as total, SUM(CASE WHEN auditado=1 THEN 1 ELSE 0 END) as auditados FROM productos").catch(() => ({ rows: [] }));
+      const resumenJson = JSON.stringify(resumenRes.rows[0] || {});
 
       await db.execute({
         sql: `
           INSERT INTO actas_toma_fisica 
-          (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, tasa_bcv, updated_at)
-          VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+          (periodo, numero_acta, estatus, fecha_corte, fecha_cierre, usuario_cierre, auditor_tienda, gerente_dg67, contador_ucg, tasa_bcv, resumen_items, updated_at)
+          VALUES (?, ?, 'CERRADA', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
           ON CONFLICT(periodo) DO UPDATE SET
             numero_acta = excluded.numero_acta,
             estatus = 'CERRADA',
@@ -1271,9 +1431,10 @@ export async function onRequest(context) {
             gerente_dg67 = excluded.gerente_dg67,
             contador_ucg = excluded.contador_ucg,
             tasa_bcv = excluded.tasa_bcv,
+            resumen_items = excluded.resumen_items,
             updated_at = datetime('now', 'localtime')
         `,
-        args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg, Number(tasa_bcv || 889.58)]
+        args: [periodo, numero_acta, fecha_cierre.slice(0, 10), fecha_cierre, usuario, auditor_tienda, gerente_dg67, contador_ucg, tasa_bcv, resumenJson]
       });
 
       return jsonResponse({
@@ -1283,7 +1444,8 @@ export async function onRequest(context) {
         estatus: 'CERRADA',
         fecha_cierre,
         usuario_cierre: usuario,
-        mensaje: `✅ Toma Física del período ${periodo} formalmente cerrada y sellada.`
+        tasa_bcv,
+        mensaje: `Toma Física del período ${periodo} cerrada y sellada.`
       });
     }
 
@@ -1476,12 +1638,26 @@ export async function onRequest(context) {
       `);
 
       await db.execute(`
+        UPDATE movimiento_detalles
+        SET tasa_bcv_operacion = COALESCE(
+              (SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id),
+              movimiento_detalles.tasa_bcv_operacion
+            ),
+            costo_unitario_bs = ROUND(COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) * COALESCE((SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id), 889.58), 2),
+            costo_unitario_ves = ROUND(COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) * COALESCE((SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id), 889.58), 2)
+        WHERE COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) > 0
+      `).catch(() => {});
+
+      await db.execute(`
         UPDATE libro_compras
         SET tasa_bcv = COALESCE(
               (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
               libro_compras.tasa_bcv,
               889.58
-            )
+            ),
+            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2),
+            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2),
+            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2)
       `);
 
       await db.execute(`
@@ -1490,12 +1666,16 @@ export async function onRequest(context) {
               (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
               libro_ventas.tasa_bcv,
               889.58
-            )
+            ),
+            exento_divisa = ROUND(COALESCE(exento_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
+            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
+            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
+            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2)
       `);
 
       return jsonResponse({
         success: true,
-        message: 'Revalorización de cierres ejecutada exitosamente con doble expresión monetaria (Bs./USD).'
+        message: 'Revalorización de cierres ejecutada exitosamente en Bs. y $ USD.'
       });
     }
 
@@ -1504,7 +1684,11 @@ export async function onRequest(context) {
     // ----------------------------------------------------
     if (path === '/api/movimientos' && method === 'GET') {
       const tipo = url.searchParams.get('tipo');
-      const limit = parseInt(url.searchParams.get('limit') || '150', 10);
+      const subtipo = url.searchParams.get('subtipo');
+      const desde = url.searchParams.get('desde');
+      const hasta = url.searchParams.get('hasta');
+      const q = url.searchParams.get('q');
+      const limit = parseInt(url.searchParams.get('limit') || '200', 10);
 
       let sql = `
         SELECT 
@@ -1516,14 +1700,14 @@ export async function onRequest(context) {
           m.numero_documento,
           COALESCE(m.nro_control, '-') as nro_control,
           COALESCE(m.usuario_responsable, 'ADMIN_SISTEMA') as usuario_responsable,
-          COALESCE(m.tasa_bcv, 68.50) as tasa_bcv,
+          COALESCE(m.tasa_bcv, 889.26) as tasa_bcv,
           m.observaciones,
           COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as proveedor_nombre,
           COALESCE(pr.rif, '-') as proveedor_rif,
           COUNT(md.id) as total_items,
           COALESCE(SUM(md.cantidad), 0) as total_unidades,
           ROUND(COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), p.costo_referencial_usd)), 0), 2) as total_usd,
-          ROUND(COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), p.costo_referencial_usd * COALESCE(m.tasa_bcv, 68.50))), 0), 2) as total_ves
+          ROUND(COALESCE(SUM(md.cantidad * COALESCE(NULLIF(md.costo_unitario_ves, 0), p.costo_referencial_usd * COALESCE(m.tasa_bcv, 889.26))), 0), 2) as total_ves
         FROM movimientos m
         LEFT JOIN proveedores pr ON m.proveedor_id = pr.id
         LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
@@ -1534,6 +1718,23 @@ export async function onRequest(context) {
       if (tipo && tipo !== 'TODOS') {
         sql += ` AND m.tipo = ?`;
         args.push(tipo);
+      }
+      if (subtipo && subtipo !== 'TODOS') {
+        sql += ` AND COALESCE(m.subtipo, m.tipo) = ?`;
+        args.push(subtipo);
+      }
+      if (desde) {
+        sql += ` AND m.fecha >= ?`;
+        args.push(desde);
+      }
+      if (hasta) {
+        sql += ` AND m.fecha <= ?`;
+        args.push(hasta);
+      }
+      if (q && q.trim() !== '') {
+        sql += ` AND (m.numero_documento LIKE ? OR COALESCE(m.nro_control, '') LIKE ? OR COALESCE(m.observaciones, '') LIKE ? OR COALESCE(pr.razon_social, '') LIKE ? OR COALESCE(p.codigo, '') LIKE ? OR COALESCE(p.descripcion, '') LIKE ?)`;
+        const term = `%${q.trim()}%`;
+        args.push(term, term, term, term, term, term);
       }
       sql += ` GROUP BY m.id ORDER BY m.fecha DESC, m.id DESC LIMIT ?`;
       args.push(limit);
@@ -1554,7 +1755,7 @@ export async function onRequest(context) {
       const id = path.split('/')[3];
       const [hdr, dtl] = await Promise.all([
         db.execute({
-          sql: `SELECT m.*, COALESCE(pr.razon_social, 'N/A') as proveedor_nombre, COALESCE(pr.rif, 'N/A') as proveedor_rif
+          sql: `SELECT m.*, COALESCE(pr.razon_social, 'CLIENTE / GENERAL') as proveedor_nombre, COALESCE(pr.rif, '-') as proveedor_rif
                 FROM movimientos m LEFT JOIN proveedores pr ON m.proveedor_id = pr.id WHERE m.id = ?`,
           args: [id]
         }),
@@ -1564,9 +1765,14 @@ export async function onRequest(context) {
           args: [id]
         })
       ]);
+      const hRow = hdr.rows[0] || null;
       return jsonResponse({
-        header: hdr.rows[0] || null,
-        detalles: dtl.rows
+        header: hRow ? {
+          ...hRow,
+          leyenda_tasa_bcv: `Tasa Oficial BCV al ${hRow.fecha_tasa_bcv || hRow.fecha}: Bs. ${Number(hRow.tasa_bcv || 0).toFixed(2)}`
+        } : null,
+        detalles: dtl.rows,
+        items: dtl.rows
       });
     }
 
@@ -1577,31 +1783,69 @@ export async function onRequest(context) {
       const body = await request.json();
       const {
         tipo, subtipo, fecha, numero_documento, nro_control, usuario_responsable,
-        documento_afectado, tasa_bcv, proveedor_id, observaciones, items
+        documento_afectado, tasa_bcv, proveedor_id, observaciones, items,
+        fecha_factura, tasa_bcv_factura, metodo_valoracion
       } = body;
 
       if (!tipo || !['ENTRADA_COMPRA', 'SALIDA_VENTA', 'AJUSTE'].includes(tipo)) {
-        return jsonResponse({ error: 'Tipo de movimiento inválido' }, 400);
+        return jsonResponse({ error: 'Tipo de movimiento inválido.' }, 400);
       }
       if (!fecha) {
-        return jsonResponse({ error: 'La fecha es obligatoria (Art. 177 RISLR)' }, 400);
+        return jsonResponse({ error: 'La fecha es obligatoria.' }, 400);
       }
       if (!numero_documento || String(numero_documento).trim() === '') {
-        return jsonResponse({ error: 'El número de documento es obligatorio' }, 400);
+        return jsonResponse({ error: 'El número de factura o documento es obligatorio.' }, 400);
       }
       if (!items || !Array.isArray(items) || items.length === 0) {
-        return jsonResponse({ error: 'Debe incluir al menos un producto en el movimiento' }, 400);
+        return jsonResponse({ error: 'Debe incluir al menos un artículo en la lista.' }, 400);
       }
 
       const subtipoNorm = subtipo || (tipo === 'ENTRADA_COMPRA' ? 'COMPRA_NACIONAL' : (tipo === 'SALIDA_VENTA' ? 'VENTA' : 'AJUSTE'));
+      const subUpper = String(subtipoNorm).toUpperCase();
       const usuarioNorm = (usuario_responsable && String(usuario_responsable).trim()) || 'CAJA_DG67';
       const periodoMov = String(fecha).slice(0, 7);
+      const docClean = String(numero_documento).trim();
 
       if (await isPeriodoDeclarado(periodoMov, db)) {
         if (subtipoNorm !== 'COMPRA_EXTEMPORANEA_INVENTARIO' && !body.solo_inventario) {
           return jsonResponse({
-            error: `⛔ Bloqueo Fiscal de Seguridad: El período ${periodoMov} ya ha sido DECLARADO formalmente ante el SENIAT. No se permiten nuevos asientos ni alteraciones en períodos fiscales cerrados.`
+            error: `El período ${periodoMov} ya está DECLARADO y CERRADO ante el SENIAT. No se permiten nuevos movimientos en meses cerrados.`
           }, 403);
+        }
+      }
+
+      // Validar cantidades positivas y existencia de productos antes de crear cabecera
+      const parsedItems = [];
+      for (const it of items) {
+        const pid = parseInt(it.producto_id, 10);
+        const qty = Number(it.cantidad);
+        if (!pid || !Number.isFinite(qty) || qty <= 0) {
+          return jsonResponse({ error: 'Todas las cantidades de artículos deben ser mayores a cero.' }, 400);
+        }
+        parsedItems.push({ ...it, producto_id: pid, cantidad: qty });
+      }
+
+      const isAjusteSalida = (tipo === 'AJUSTE' && !subUpper.includes('POSITIVO') && !subUpper.includes('SOBRANTE') && !subUpper.includes('ENTRADA') && !subUpper.includes('OMISION') && !subUpper.includes('RECLASIF') && !subUpper.includes('DEVOLUCION'));
+      if (tipo === 'SALIDA_VENTA' || isAjusteSalida) {
+        const requestedByProd = new Map();
+        for (const it of parsedItems) {
+          requestedByProd.set(it.producto_id, (requestedByProd.get(it.producto_id) || 0) + it.cantidad);
+        }
+        for (const [pid, qtyReq] of requestedByProd.entries()) {
+          const stRes = await db.execute({
+            sql: "SELECT codigo, descripcion, stock_actual FROM vista_inventario_actual WHERE producto_id = ? LIMIT 1",
+            args: [pid]
+          });
+          if (stRes.rows.length === 0) {
+            return jsonResponse({ error: 'Uno de los artículos seleccionados no existe en el catálogo.' }, 400);
+          }
+          const stRow = stRes.rows[0];
+          const disp = Number(stRow.stock_actual || 0);
+          if (disp < qtyReq) {
+            return jsonResponse({
+              error: `Stock insuficiente para [${stRow.codigo}] ${stRow.descripcion}: disponible ${disp} unds, solicitado ${qtyReq} unds.`
+            }, 400);
+          }
         }
       }
 
@@ -1609,44 +1853,69 @@ export async function onRequest(context) {
       const tasaDefaultMes = Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const tasaNum = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : tasaDefaultMes;
       const fechaTasaMes = body.fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
-      const ctrlNorm = (nro_control && String(nro_control).trim()) || (tipo === 'ENTRADA_COMPRA' ? '00-S/CTRL' : 'ZOA0000176');
+      const ctrlNorm = (nro_control && String(nro_control).trim()) || (tipo === 'ENTRADA_COMPRA' ? '00-S/CTRL' : 'Z0A0000176');
+      const metodoVal = ['CPP', 'PEPS'].includes(String(metodo_valoracion || '').toUpperCase()) ? String(metodo_valoracion).toUpperCase() : 'CPP';
 
-      let numFacturaNum = null;
-      const matchNum = String(numero_documento).match(/(\d+)/);
-      if (matchNum) numFacturaNum = parseInt(matchNum[1], 10);
+      const numFacturaNum = normalizeFactNum(docClean);
 
-      // VALIDACIÓN ANTI-DUPLICADOS PARA ENTRADAS DE ALMACÉN
-      if (tipo === 'ENTRADA_COMPRA' && proveedor_id) {
-        const dupEnt = await verificarDuplicadoEntradaAlmacen(proveedor_id, numero_documento, null, db);
-        if (dupEnt.duplicado) {
+      // VALIDACIÓN ANTI-DUPLICADOS PARA ENTRADAS DE ALMACÉN (con o sin proveedor)
+      if (tipo === 'ENTRADA_COMPRA') {
+        if (proveedor_id) {
+          const dupEnt = await verificarDuplicadoEntradaAlmacen(proveedor_id, docClean, null, db);
+          if (dupEnt.duplicado) {
+            return jsonResponse({ error: dupEnt.mensaje, duplicado: true, detalle: dupEnt }, 409);
+          }
+        } else {
+          const dupNoProv = await db.execute({
+            sql: "SELECT id FROM movimientos WHERE tipo = 'ENTRADA_COMPRA' AND fecha = ? AND UPPER(TRIM(numero_documento)) = UPPER(?) LIMIT 1",
+            args: [fecha, docClean]
+          });
+          if (dupNoProv.rows.length > 0) {
+            return jsonResponse({
+              error: `Ya existe una entrada registrada el ${fecha} con el documento N° ${docClean}.`,
+              duplicado: true
+            }, 409);
+          }
+        }
+      }
+
+      // VALIDACIÓN ANTI-DUPLICADOS PARA VENTAS
+      if (tipo === 'SALIDA_VENTA') {
+        const dupVta = await db.execute({
+          sql: `SELECT id FROM movimientos WHERE tipo = 'SALIDA_VENTA' AND fecha = ? AND (UPPER(TRIM(numero_documento)) = UPPER(?) ${numFacturaNum ? 'OR numero_factura_numerico = ?' : ''}) LIMIT 1`,
+          args: numFacturaNum ? [fecha, docClean, numFacturaNum] : [fecha, docClean]
+        });
+        if (dupVta.rows.length > 0) {
           return jsonResponse({
-            error: dupEnt.mensaje,
-            duplicado: true,
-            detalle: dupEnt
+            error: `La factura de venta N° ${docClean} ya fue registrada en la fecha ${fecha}.`,
+            duplicado: true
           }, 409);
         }
       }
 
       const headerResult = await db.execute({
         sql: `INSERT INTO movimientos 
-              (tipo, subtipo, fecha, numero_documento, numero_factura_numerico, nro_control, usuario_responsable,
+              (tipo, subtipo, fecha, fecha_factura, tasa_bcv_factura, numero_documento, numero_factura_numerico, nro_control, usuario_responsable,
                documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones,
                estatus_conciliacion)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CPP', ?, ?, 'PENDIENTE_UCG')
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_UCG')
               RETURNING id`,
         args: [
-          tipo, subtipoNorm, fecha, String(numero_documento).trim(), numFacturaNum, ctrlNorm, usuarioNorm,
-          documento_afectado || '', tasaNum, fechaTasaMes, body.moneda_operacion || 'USD',
+          tipo, subtipoNorm, fecha, fecha_factura || fecha, Number(tasa_bcv_factura) > 0 ? Number(tasa_bcv_factura) : tasaNum,
+          docClean, numFacturaNum, ctrlNorm, usuarioNorm,
+          documento_afectado || '', tasaNum, fechaTasaMes, body.moneda_operacion || 'USD', metodoVal,
           proveedor_id ? parseInt(proveedor_id, 10) : null, observaciones || ''
         ]
       });
 
       const movimientoId = Number(headerResult.rows[0]?.id || headerResult.lastInsertRowid);
+      const aplicaIvaMov = (tipo === 'ENTRADA_COMPRA' || tipo === 'SALIDA_VENTA');
+      const pctIvaMov = aplicaIvaMov ? 0.16 : 0;
 
       const detailStatements = [];
-      for (const it of items) {
-        const pid = parseInt(it.producto_id, 10);
-        const qty = parseFloat(it.cantidad) || 1;
+      for (const it of parsedItems) {
+        const pid = it.producto_id;
+        const qty = it.cantidad;
         const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
 
         let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
@@ -1662,8 +1931,8 @@ export async function onRequest(context) {
         const precioUnitBs = parseFloat(it.precio_unitario_bs || Number((precioUnitDiv * tasaItem).toFixed(2)));
         const baseDiv = Number((qty * precioUnitDiv).toFixed(2));
         const baseBs = Number((qty * precioUnitBs).toFixed(2));
-        const ivaDiv = Number((baseDiv * 0.16).toFixed(2));
-        const ivaBs = Number((baseBs * 0.16).toFixed(2));
+        const ivaDiv = Number((baseDiv * pctIvaMov).toFixed(2));
+        const ivaBs = Number((baseBs * pctIvaMov).toFixed(2));
         const totDiv = Number((baseDiv + ivaDiv).toFixed(2));
         const totBs = Number((baseBs + ivaBs).toFixed(2));
 
@@ -1689,7 +1958,12 @@ export async function onRequest(context) {
         });
       }
 
-      await db.batch(detailStatements);
+      try {
+        await db.batch(detailStatements);
+      } catch (batchErr) {
+        await db.execute({ sql: "DELETE FROM movimientos WHERE id = ?", args: [movimientoId] }).catch(() => {});
+        throw batchErr;
+      }
 
       let resultadoCruce = null;
       if (tipo === 'SALIDA_VENTA') {
@@ -1706,10 +1980,14 @@ export async function onRequest(context) {
       } else if (tipo === 'ENTRADA_COMPRA') {
         let lcId = body.libro_compras_id || null;
         if (!lcId && numFacturaNum) {
-          const matchLC = await db.execute({
-            sql: `SELECT id FROM libro_compras WHERE (nro_factura LIKE ? OR REPLACE(nro_factura, '0', '') = ?) AND aplica_inventario = 1 LIMIT 1`,
-            args: [`%${numFacturaNum}%`, String(numFacturaNum)]
-          });
+          let sqlMatch = `SELECT id FROM libro_compras WHERE aplica_inventario = 1 AND (libro_compras.movimiento_id IS NULL OR libro_compras.movimiento_id = 0) AND (UPPER(TRIM(nro_factura)) = UPPER(?) OR CAST(LTRIM(REPLACE(nro_factura, '-', ''), '0') AS INTEGER) = ?)`;
+          const argsMatch = [docClean, numFacturaNum];
+          if (proveedor_id) {
+            sqlMatch += ` AND proveedor_id = ?`;
+            argsMatch.push(parseInt(proveedor_id, 10));
+          }
+          sqlMatch += ` LIMIT 1`;
+          const matchLC = await db.execute({ sql: sqlMatch, args: argsMatch });
           if (matchLC.rows.length > 0) {
             lcId = matchLC.rows[0].id;
           }
@@ -1725,9 +2003,9 @@ export async function onRequest(context) {
 
       return jsonResponse({
         success: true,
-        message: `Movimiento (${subtipoNorm}) registrado exitosamente con doble expresión Bs./USD`,
+        message: `Movimiento registrado exitosamente (Bs. y $ USD).`,
         movimientoId,
-        itemsCount: items.length,
+        itemsCount: parsedItems.length,
         conciliacion: resultadoCruce
       });
     }
@@ -1890,25 +2168,12 @@ export async function onRequest(context) {
       return jsonResponse(res);
     }
 
-    if (path === '/api/fiscal/verificar-duplicado-compra' && method === 'GET') {
-      const rif = url.searchParams.get('rif');
-      const numFact = url.searchParams.get('nro_factura');
-      const numCtrl = url.searchParams.get('nro_control');
-      const excId = url.searchParams.get('exclude_id');
-      const res = await verificarDuplicadoLibroCompras(rif, numFact, numCtrl, excId, db);
-      return jsonResponse(res);
-    }
-
     if (path === '/api/fiscal/libro-compras' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
       const id = url.searchParams.get('id');
-      
-      // Auto-sanación fiscal: DG 67 es Contribuyente Ordinario del IVA (No Retenedor de IVA en compras)
-      try {
-        await db.execute("UPDATE libro_compras SET iva_retenido_bs = 0.0, iva_retenido_divisa = 0.0 WHERE iva_retenido_bs > 0");
-      } catch (e) {
-        console.error('Error auto-sanando iva_retenido_bs:', e);
-      }
+      const tipoServicio = url.searchParams.get('tipo_servicio');
+      const estatus = url.searchParams.get('estatus');
+      const aplicaInventario = url.searchParams.get('aplica_inventario');
 
       let sql = `
         SELECT 
@@ -1930,6 +2195,18 @@ export async function onRequest(context) {
       } else if (periodo && periodo !== 'TODOS') {
         sql += ` AND lc.periodo = ?`;
         args.push(periodo);
+      }
+      if (tipoServicio && tipoServicio !== 'TODOS') {
+        sql += ` AND lc.tipo_servicio = ?`;
+        args.push(tipoServicio);
+      }
+      if (estatus && estatus !== 'TODOS') {
+        sql += ` AND lc.estatus_conciliacion = ?`;
+        args.push(estatus);
+      }
+      if (aplicaInventario !== null && aplicaInventario !== undefined && aplicaInventario !== '' && aplicaInventario !== 'TODOS') {
+        sql += ` AND lc.aplica_inventario = ?`;
+        args.push(Number(aplicaInventario) ? 1 : 0);
       }
       sql += ` ORDER BY lc.fecha ASC, lc.nro_operacion ASC, lc.id ASC`;
       const res = await db.execute({ sql, args });
@@ -1984,12 +2261,28 @@ export async function onRequest(context) {
         return jsonResponse({ error: 'Debe registrar la Base Imponible o Ventas Exentas.' }, 400);
       }
 
+      const desdeN = normalizeFactNum(factura_desde);
+      const hastaN = normalizeFactNum(factura_hasta);
+      if (desdeN && hastaN && desdeN > hastaN) {
+        return jsonResponse({ error: 'El rango de facturas es inválido: la factura Desde debe ser menor o igual a Hasta.' }, 400);
+      }
+
+      const numZ = String(numero_reporte_z || '').trim();
+      const serial = String(serial_impresora || 'Z0A0000176').trim();
+      const dupZ = await db.execute({
+        sql: "SELECT id FROM libro_ventas WHERE fecha = ? AND UPPER(TRIM(numero_reporte_z)) = UPPER(?) AND UPPER(TRIM(serial_impresora)) = UPPER(?) LIMIT 1",
+        args: [fecha, numZ, serial]
+      });
+      if (dupZ.rows.length > 0) {
+        return jsonResponse({ error: `Ya existe el Reporte Z N° ${numZ} registrado el ${fecha} para la máquina ${serial}.` }, 409);
+      }
+
       const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
       const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
       const monedaOp = moneda_divisa || 'USD';
 
-      const ali = Number(alicuota) || 0.16;
+      const ali = parseAlicuotaDecimal(alicuota, 0.16);
       let baseBs = Number(base_imponible_bs) || 0.0;
       let baseDiv = Number(base_imponible_divisa) || 0.0;
       if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
@@ -2005,8 +2298,6 @@ export async function onRequest(context) {
       const totalCalc = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaCalc + exBs).toFixed(2));
       const totalDivCalc = (total_divisa !== undefined && total_divisa !== null && total_divisa !== '') ? Number(total_divisa) : Number((totalCalc / tasaOp).toFixed(2));
       const cant = Number(cantidad_comprobantes) || 1;
-      const numZ = String(numero_reporte_z || '').trim();
-      const serial = String(serial_impresora || 'Z0A0000176').trim();
       const cantAnul = Number(cantidad_anuladas) || 0;
       const totAnulBs = Number(total_anulaciones_bs) || 0.0;
       const anulLista = String(facturas_anuladas_lista || '').trim();
@@ -2030,11 +2321,12 @@ export async function onRequest(context) {
 
       const zId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
       const resultadoCruce = await conciliarReporteZ(zId, db);
+      await recalculateDeclaracionIva(periodo, db);
 
       return jsonResponse({
         success: true,
         id: zId,
-        message: 'Reporte Z guardado con éxito en Libro de Ventas (Conciliación Automática)',
+        message: 'Reporte Z guardado con éxito en Libro de Ventas.',
         conciliacion: resultadoCruce
       });
     }
@@ -2042,13 +2334,15 @@ export async function onRequest(context) {
     if ((path.startsWith('/api/fiscal/libro-ventas/') && (method === 'PUT' || method === 'POST')) || (path === '/api/fiscal/libro-ventas' && method === 'PUT')) {
       const body = await request.json();
       const zId = parseInt(path === '/api/fiscal/libro-ventas' ? body.id : path.split('/').pop(), 10);
-      if (!zId) return jsonResponse({ error: 'ID de Reporte Z inválido para actualización' }, 400);
+      if (!zId) return jsonResponse({ error: 'ID de Reporte Z inválido para actualización.' }, 400);
 
       const existingZ = await db.execute({ sql: "SELECT periodo FROM libro_ventas WHERE id = ?", args: [zId] });
-      const targetPeriodo = body.periodo || existingZ.rows[0]?.periodo;
-      if (await isPeriodoDeclarado(targetPeriodo, db)) {
+      if (existingZ.rows.length === 0) return jsonResponse({ error: 'Reporte Z no encontrado.' }, 404);
+      const oldPer = existingZ.rows[0]?.periodo;
+      const targetPeriodo = body.periodo || oldPer;
+      if ((await isPeriodoDeclarado(oldPer, db)) || (await isPeriodoDeclarado(targetPeriodo, db))) {
         return jsonResponse({
-          error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
+          error: `El período fiscal ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
         }, 403);
       }
 
@@ -2061,10 +2355,10 @@ export async function onRequest(context) {
       } = body;
 
       if (!periodo || !fecha) {
-        return jsonResponse({ error: 'Faltan campos requeridos (Período y Fecha)' }, 400);
+        return jsonResponse({ error: 'Faltan campos requeridos (Período y Fecha).' }, 400);
       }
       if (!numero_reporte_z || String(numero_reporte_z).trim() === '') {
-        return jsonResponse({ error: 'El N° de Reporte Z es obligatorio según normativa SENIAT (Providencia 00071).' }, 400);
+        return jsonResponse({ error: 'El N° de Reporte Z es obligatorio (Providencia 00071).' }, 400);
       }
       if (!serial_impresora || String(serial_impresora).trim() === '') {
         return jsonResponse({ error: 'El Serial de la Máquina Fiscal es obligatorio.' }, 400);
@@ -2072,13 +2366,18 @@ export async function onRequest(context) {
       if (!factura_desde || !factura_hasta) {
         return jsonResponse({ error: 'El rango correlativo de facturas (Desde / Hasta) es obligatorio.' }, 400);
       }
+      const desdeN = normalizeFactNum(factura_desde);
+      const hastaN = normalizeFactNum(factura_hasta);
+      if (desdeN && hastaN && desdeN > hastaN) {
+        return jsonResponse({ error: 'El rango de facturas es inválido: la factura Desde debe ser menor o igual a Hasta.' }, 400);
+      }
 
       const tasaPerRes = await db.execute({ sql: "SELECT tasa_bcv, fecha_cierre FROM tasas_bcv_periodo WHERE periodo = ?", args: [periodo] });
       const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
       const monedaOp = moneda_divisa || 'USD';
 
-      const ali = Number(alicuota) || 0.16;
+      const ali = parseAlicuotaDecimal(alicuota, 0.16);
       let baseBs = Number(base_imponible_bs) || 0.0;
       let baseDiv = Number(base_imponible_divisa) || 0.0;
       if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
@@ -2119,11 +2418,13 @@ export async function onRequest(context) {
       });
 
       const resultadoCruce = await conciliarReporteZ(zId, db);
+      await recalculateDeclaracionIva(periodo, db);
+      if (oldPer && oldPer !== periodo) await recalculateDeclaracionIva(oldPer, db);
 
       return jsonResponse({
         success: true,
         id: zId,
-        message: 'Reporte Z actualizado con éxito en el Libro de Ventas (Conciliación Recalculada)',
+        message: 'Reporte Z actualizado con éxito en el Libro de Ventas.',
         conciliacion: resultadoCruce
       });
     }
@@ -2137,8 +2438,10 @@ export async function onRequest(context) {
           error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite eliminar registros de un período cerrado.`
         }, 403);
       }
+      await db.execute({ sql: "UPDATE movimientos SET libro_ventas_id = NULL, estatus_conciliacion = 'PENDIENTE_UCG' WHERE libro_ventas_id = ?", args: [zId] }).catch(() => {});
       await db.execute({ sql: "DELETE FROM libro_ventas WHERE id = ?", args: [zId] });
-      return jsonResponse({ success: true, message: 'Registro de venta eliminado del Libro de Ventas' });
+      await recalculateDeclaracionIva(targetPeriodo, db);
+      return jsonResponse({ success: true, message: 'Registro de venta eliminado del Libro de Ventas.' });
     }
 
     if (path === '/api/fiscal/compras/solo-inventario' && method === 'POST') {
@@ -2205,10 +2508,10 @@ export async function onRequest(context) {
       const tasaDefaultMes = Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : tasaDefaultMes;
 
-      const ali = Number(alicuota) || 16.0;
+      const aliDec = parseAlicuotaDecimal(alicuota, 0.16);
       const baseBs = Number(base_imponible_bs) || 0.0;
-      const ivaBs = Number(iva_bs) || Number((baseBs * (ali / 100)).toFixed(2));
-      const totBs = Number(total_bs) || Number((baseBs + ivaBs).toFixed(2));
+      const ivaBs = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * aliDec).toFixed(2));
+      const totBs = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaBs).toFixed(2));
       const baseDiv = Number((baseBs / tasaOp).toFixed(2));
       const totDiv = Number((totBs / tasaOp).toFixed(2));
 
@@ -2365,6 +2668,9 @@ export async function onRequest(context) {
       }
 
       const cleanRif = String(rif).trim().toUpperCase();
+      if (!isRifValidoFormato(cleanRif)) {
+        return jsonResponse({ error: 'Formato de RIF inválido. Ejemplo válido: J-12345678-9 o V-12345678-0.' }, 400);
+      }
       const cleanRazon = String(razon_social).trim();
 
       // VALIDACIÓN ESTRICTA ANTI-DUPLICADOS FISCALES (SENIAT Art. 75-76 RLIVA)
@@ -2382,10 +2688,10 @@ export async function onRequest(context) {
       const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
 
-      const ali = Number(alicuota) || 0.16;
+      const ali = parseAlicuotaDecimal(alicuota, 0.16);
       const baseBs = Number(base_imponible_bs) || 0.0;
-      const ivaBs = Number(iva_bs) || Number((baseBs * ali).toFixed(2));
-      const totBs = Number(total_bs) || Number((baseBs + ivaBs).toFixed(2));
+      const ivaBs = (iva_bs !== undefined && iva_bs !== null && iva_bs !== '') ? Number(iva_bs) : Number((baseBs * ali).toFixed(2));
+      const totBs = (total_bs !== undefined && total_bs !== null && total_bs !== '') ? Number(total_bs) : Number((baseBs + ivaBs).toFixed(2));
       const baseDiv = Number((baseBs / tasaOp).toFixed(2));
       const ivaDiv = Number((ivaBs / tasaOp).toFixed(2));
       const totDiv = Number((totBs / tasaOp).toFixed(2));
@@ -2484,6 +2790,7 @@ export async function onRequest(context) {
           args: [lcId, matchMovId]
         }).catch(() => {});
       }
+      await recalculateDeclaracionIva(periodo, db);
 
       return jsonResponse({
         success: true,
@@ -2499,25 +2806,26 @@ export async function onRequest(context) {
       const body = await request.json();
       const facturas = Array.isArray(body.facturas) ? body.facturas : [];
       if (facturas.length === 0) {
-        return jsonResponse({ error: 'Se requiere una lista de facturas a asentar' }, 400);
+        return jsonResponse({ error: 'Se requiere una lista de facturas a asentar.' }, 400);
       }
 
       const resultados = [];
       let insertadas = 0;
       let duplicadas = 0;
       let errores = 0;
+      const periodosAfectados = new Set();
 
       for (const f of facturas) {
         try {
           const { periodo, fecha, rif, razon_social, nro_factura, nro_control } = f;
           if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
-            resultados.push({ nro_factura: nro_factura || 'S/N', success: false, error: 'Faltan campos obligatorios' });
+            resultados.push({ nro_factura: nro_factura || 'S/N', rif: rif || '', success: false, error: 'Faltan campos obligatorios' });
             errores++;
             continue;
           }
 
           if (await isPeriodoDeclarado(periodo, db)) {
-            resultados.push({ nro_factura, success: false, error: `Período ${periodo} ya declarado y cerrado` });
+            resultados.push({ nro_factura, rif, success: false, error: `Período ${periodo} ya declarado y cerrado` });
             errores++;
             continue;
           }
@@ -2527,7 +2835,7 @@ export async function onRequest(context) {
 
           const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, null, db);
           if (checkDup.duplicado) {
-            resultados.push({ nro_factura, success: false, duplicado: true, error: checkDup.mensaje });
+            resultados.push({ nro_factura, rif: cleanRif, success: false, duplicado: true, error: checkDup.mensaje });
             duplicadas++;
             continue;
           }
@@ -2536,16 +2844,19 @@ export async function onRequest(context) {
           const tasaOp = Number(f.tasa_bcv) > 0 ? Number(f.tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
           const fechaTasaOp = f.fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
 
-          const ali = Number(f.alicuota) || 0.16;
+          const ali = parseAlicuotaDecimal(f.alicuota, 0.16);
           const baseBs = Number(f.base_imponible_bs) || 0.0;
-          const ivaBs = Number(f.iva_bs) || Number((baseBs * ali).toFixed(2));
-          const totBs = Number(f.total_bs) || Number((baseBs + ivaBs).toFixed(2));
+          const ivaBs = (f.iva_bs !== undefined && f.iva_bs !== null && f.iva_bs !== '') ? Number(f.iva_bs) : Number((baseBs * ali).toFixed(2));
+          const totBs = (f.total_bs !== undefined && f.total_bs !== null && f.total_bs !== '') ? Number(f.total_bs) : Number((baseBs + ivaBs).toFixed(2));
           const baseDiv = Number((baseBs / tasaOp).toFixed(2));
           const ivaDiv = Number((ivaBs / tasaOp).toFixed(2));
           const totDiv = Number((totBs / tasaOp).toFixed(2));
           const esMercancia = (f.aplica_inventario === 1 || f.aplica_inventario === true || f.aplica_inventario === '1');
 
-          const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [cleanRif] });
+          const provRes = await db.execute({
+            sql: "SELECT id FROM proveedores WHERE UPPER(REPLACE(REPLACE(rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(?, '-', ''), ' ', '')) LIMIT 1",
+            args: [cleanRif]
+          });
           let provId = provRes.rows[0]?.id || null;
           if (!provId) {
             try {
@@ -2598,17 +2909,23 @@ export async function onRequest(context) {
 
           const lcId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
           insertadas++;
+          periodosAfectados.add(periodo);
           resultados.push({
             id: lcId,
             nro_factura,
+            rif: cleanRif,
             nro_operacion: nextOp,
             success: true,
             mensaje: `Factura ${nro_factura} asentada con éxito (Op #${nextOp})`
           });
         } catch (err) {
           errores++;
-          resultados.push({ nro_factura: f.nro_factura || 'S/N', success: false, error: err.message });
+          resultados.push({ nro_factura: f.nro_factura || 'S/N', rif: f.rif || '', success: false, error: err.message });
         }
+      }
+
+      for (const per of periodosAfectados) {
+        await recalculateDeclaracionIva(per, db);
       }
 
       return jsonResponse({
@@ -2639,9 +2956,9 @@ export async function onRequest(context) {
       const oldRow = existingC.rows[0];
       const body = await request.json();
       const targetPeriodo = body.periodo || oldRow.periodo;
-      if (await isPeriodoDeclarado(targetPeriodo, db)) {
+      if ((await isPeriodoDeclarado(oldRow.periodo, db)) || (await isPeriodoDeclarado(targetPeriodo, db))) {
         return jsonResponse({
-          error: `El período fiscal ${targetPeriodo} ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
+          error: `El período fiscal ya se encuentra DECLARADO y CERRADO ante el SENIAT. No se permite modificar este comprobante.`
         }, 403);
       }
 
@@ -2655,10 +2972,13 @@ export async function onRequest(context) {
       } = body;
 
       if (!periodo || !fecha || !rif || !razon_social || !nro_factura) {
-        return jsonResponse({ error: 'Faltan campos obligatorios para el Libro de Compras' }, 400);
+        return jsonResponse({ error: 'Faltan campos obligatorios (Período, Fecha, RIF, Razón Social o N° Factura).' }, 400);
       }
 
       const cleanRif = String(rif).trim().toUpperCase();
+      if (!isRifValidoFormato(cleanRif)) {
+        return jsonResponse({ error: 'Formato de RIF inválido. Ejemplo válido: J-12345678-9 o V-12345678-0.' }, 400);
+      }
       const cleanRazon = String(razon_social).trim();
 
       const checkDup = await verificarDuplicadoLibroCompras(cleanRif, nro_factura, nro_control, compId, db);
@@ -2675,7 +2995,7 @@ export async function onRequest(context) {
       const tasaOp = Number(tasa_bcv) > 0 ? Number(tasa_bcv) : Number(tasaPerRes.rows[0]?.tasa_bcv || 889.58);
       const fechaTasaOp = fecha_tasa_bcv || tasaPerRes.rows[0]?.fecha_cierre || fecha;
 
-      const ali = Number(alicuota) || 0.16;
+      const ali = parseAlicuotaDecimal(alicuota, 0.16);
       let baseBs = Number(base_imponible_bs) || 0.0;
       let baseDiv = Number(base_imponible_divisa) || 0.0;
       if (baseBs <= 0 && baseDiv > 0) baseBs = Number((baseDiv * tasaOp).toFixed(2));
@@ -2693,8 +3013,20 @@ export async function onRequest(context) {
       const estatus = esMercancia ? (movIdInt ? 'CONCILIADO' : 'PENDIENTE_DG67') : 'NO_APLICA_GASTO';
       const obs = observaciones_cruce || (esMercancia ? (movIdInt ? `Cruzado con Entrada #${movIdInt}` : 'Pendiente en almacén') : 'Gasto operativo / servicio.');
 
-      const provRes = await db.execute({ sql: "SELECT id FROM proveedores WHERE rif = ? LIMIT 1", args: [cleanRif] });
-      const provId = provRes.rows[0]?.id || null;
+      const provRes = await db.execute({
+        sql: "SELECT id FROM proveedores WHERE UPPER(REPLACE(REPLACE(rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(?, '-', ''), ' ', '')) LIMIT 1",
+        args: [cleanRif]
+      });
+      let provId = provRes.rows[0]?.id || null;
+      if (!provId) {
+        try {
+          const newProv = await db.execute({
+            sql: "INSERT INTO proveedores (rif, razon_social, tipo_servicio, aplica_inventario, porcentaje_retencion) VALUES (?, ?, ?, ?, 0.0) RETURNING id",
+            args: [cleanRif, cleanRazon, tipo_servicio || (esMercancia ? 'MERCANCIA_REPUESTOS' : 'SERVICIOS_CONTABLES_Y_LEGALES'), esMercancia ? 1 : 0]
+          });
+          provId = Number(newProv.rows[0]?.id || newProv.lastInsertRowid);
+        } catch (e) { }
+      }
 
       await db.execute({
         sql: `UPDATE libro_compras SET
@@ -2731,11 +3063,13 @@ export async function onRequest(context) {
           args: [compId, movIdInt]
         }).catch(() => {});
       }
+      await recalculateDeclaracionIva(periodo, db);
+      if (oldRow.periodo && oldRow.periodo !== periodo) await recalculateDeclaracionIva(oldRow.periodo, db);
 
       return jsonResponse({
         success: true,
         id: compId,
-        message: 'Factura actualizada con éxito en Libro de Compras (Doble Expresión Bs./USD)'
+        message: 'Factura actualizada con éxito en Libro de Compras (Bs. y $ USD).'
       });
     }
 
@@ -2750,7 +3084,8 @@ export async function onRequest(context) {
       }
       await db.execute({ sql: "UPDATE movimientos SET libro_compras_id = NULL, estatus_conciliacion = 'NO_CONCILIADO' WHERE libro_compras_id = ?", args: [compId] }).catch(() => {});
       await db.execute({ sql: "DELETE FROM libro_compras WHERE id = ?", args: [compId] });
-      return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras' });
+      await recalculateDeclaracionIva(targetPeriodo, db);
+      return jsonResponse({ success: true, message: 'Factura eliminada del Libro de Compras.' });
     }
 
     // CONSULTA DINÁMICA DE DETALLE DE DECLARACIÓN IVA (SENIAT FORMA 30) POR PERÍODO
@@ -2891,31 +3226,26 @@ export async function onRequest(context) {
       const excSig = saldo < 0 ? Math.abs(saldo) : 0;
 
       await db.execute({
-        sql: `UPDATE declaraciones_iva 
-              SET estatus = ?,
-                  ventas_base_bs = ?,
-                  debito_fiscal_bs = ?,
-                  compras_base_bs = ?,
-                  credito_fiscal_bs = ?,
-                  iva_retenido_bs = 0,
-                  excedente_anterior_bs = ?,
-                  excedente_siguiente_bs = ?,
-                  total_a_pagar_bs = ?,
-                  total_compras_facturas = ?,
-                  total_ventas_dias = ?
-              WHERE periodo = ?`,
+        sql: `INSERT INTO declaraciones_iva (
+                periodo, estatus, ventas_base_bs, debito_fiscal_bs, compras_base_bs,
+                credito_fiscal_bs, iva_retenido_bs, excedente_anterior_bs, excedente_siguiente_bs,
+                total_a_pagar_bs, total_compras_facturas, total_ventas_dias
+              ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+              ON CONFLICT(periodo) DO UPDATE SET
+                estatus = excluded.estatus,
+                ventas_base_bs = excluded.ventas_base_bs,
+                debito_fiscal_bs = excluded.debito_fiscal_bs,
+                compras_base_bs = excluded.compras_base_bs,
+                credito_fiscal_bs = excluded.credito_fiscal_bs,
+                iva_retenido_bs = 0,
+                excedente_anterior_bs = excluded.excedente_anterior_bs,
+                excedente_siguiente_bs = excluded.excedente_siguiente_bs,
+                total_a_pagar_bs = excluded.total_a_pagar_bs,
+                total_compras_facturas = excluded.total_compras_facturas,
+                total_ventas_dias = excluded.total_ventas_dias`,
         args: [
-          nuevoEstatus,
-          vBase,
-          vDeb,
-          cBase,
-          cCred,
-          excAnt,
-          excSig,
-          aPagar,
-          totalFac,
-          totalDias,
-          periodo
+          periodo, nuevoEstatus, vBase, vDeb, cBase, cCred,
+          excAnt, excSig, aPagar, totalFac, totalDias
         ]
       });
 
@@ -2924,8 +3254,8 @@ export async function onRequest(context) {
         periodo,
         estatus: nuevoEstatus,
         mensaje: nuevoEstatus === 'DECLARADO'
-          ? `Período fiscal ${periodo} marcado exitosamente como DECLARADO y CERRADO ante el SENIAT. Libros bloqueados en modo de sólo lectura.`
-          : `Período fiscal ${periodo} reabierto en estado EN_PROCESO.`
+          ? `Período ${periodo} declarado y cerrado ante el SENIAT. Libros bloqueados en modo consulta.`
+          : `Período ${periodo} reabierto para ajustes.`
       });
     }
 
@@ -2933,10 +3263,10 @@ export async function onRequest(context) {
       const res = await db.execute("SELECT * FROM declaraciones_iva ORDER BY periodo ASC");
       const rows = res.rows.map(r => ({ ...r }));
 
-      // Para cualquier período abierto (EN_PROCESO o 2026-10), autocalcular dinámicamente con los libros
+      // Autocalcular dinámicamente cualquier período en preparación
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        if (row.estatus === 'EN_PROCESO' || row.periodo === '2026-10') {
+        if (row.estatus === 'EN_PROCESO') {
           const [vRes, cRes, prevRes] = await Promise.all([
             db.execute({
               sql: `SELECT COALESCE(SUM(base_imponible_bs), 0) as v_base, COALESCE(SUM(iva_bs), 0) as v_deb, COUNT(DISTINCT fecha) as v_dias FROM libro_ventas WHERE periodo = ?`,
@@ -3023,25 +3353,16 @@ export async function onRequest(context) {
     // RETENCIONES ISLR (DECRETO 1808)
     // ----------------------------------------------------
     if (path === '/api/islr/config' && method === 'GET') {
-      await db.execute(`
-        UPDATE config_fiscal_islr 
-        SET agente_email = 'dg67contable@gmail.com',
-            aplica_imprenta_digital = 0
-        WHERE id = 1
-      `).catch(() => {});
-      await db.execute(`
-        UPDATE empresas 
-        SET email = 'dg67contable@gmail.com' 
-        WHERE id = 1 AND (email IS NULL OR email LIKE '%inversionesdg67.com.ve%')
-      `).catch(() => {});
-
       const [cfgRes, empRes] = await Promise.all([
         db.execute("SELECT * FROM config_fiscal_islr WHERE id = 1"),
         db.execute("SELECT * FROM empresas WHERE id = 1")
       ]);
+      const cfg = cfgRes.rows[0] || {};
+      const emp = empRes.rows[0] || {};
       return jsonResponse({
-        config: cfgRes.rows[0] || {},
-        empresa: empRes.rows[0] || {}
+        ...cfg,
+        config: cfg,
+        empresa: emp
       });
     }
 
@@ -3052,13 +3373,24 @@ export async function onRequest(context) {
 
     if (path === '/api/islr/comprobantes' && method === 'GET') {
       const periodo = url.searchParams.get('periodo');
-      let sql = `SELECT * FROM retenciones_islr WHERE 1=1`;
+      const q = url.searchParams.get('q');
+      let sql = `
+        SELECT r.*,
+               (SELECT COUNT(*) FROM retenciones_islr_detalles d WHERE d.retencion_id = r.id) as cantidad_items
+        FROM retenciones_islr r
+        WHERE 1=1
+      `;
       const args = [];
       if (periodo && periodo !== 'TODOS') {
-        sql += ` AND periodo = ?`;
+        sql += ` AND r.periodo = ?`;
         args.push(periodo);
       }
-      sql += ` ORDER BY periodo DESC, id DESC`;
+      if (q && q.trim() !== '') {
+        const term = `%${q.trim()}%`;
+        sql += ` AND (r.nro_comprobante LIKE ? OR r.sujeto_rif LIKE ? OR r.sujeto_razon_social LIKE ? OR EXISTS (SELECT 1 FROM retenciones_islr_detalles d WHERE d.retencion_id = r.id AND d.nro_factura LIKE ?))`;
+        args.push(term, term, term, term);
+      }
+      sql += ` ORDER BY r.periodo DESC, r.id DESC`;
       const res = await db.execute({ sql, args });
       return jsonResponse(res.rows);
     }
@@ -3069,31 +3401,27 @@ export async function onRequest(context) {
       const nroFactura = url.searchParams.get('nro_factura');
       const rif = url.searchParams.get('rif');
 
-      // Si se consulta para una factura específica que ya tiene comprobante emitido, preservar e informar dicho comprobante
       if (libroCompraId || (nroFactura && rif)) {
-        let findSql = `
-          SELECT ri.id, ri.nro_comprobante, ri.periodo 
-          FROM retenciones_islr ri
-          JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id
-          WHERE 1=1
-        `;
-        const findArgs = [];
+        let existingRow = null;
         if (libroCompraId) {
-          findSql += ` AND rid.libro_compra_id = ?`;
-          findArgs.push(libroCompraId);
-        } else {
-          findSql += ` AND rid.nro_factura = ? AND ri.sujeto_rif = ?`;
-          findArgs.push(nroFactura, rif);
+          const r1 = await db.execute({
+            sql: "SELECT ri.id, ri.nro_comprobante, ri.periodo FROM retenciones_islr ri JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id WHERE rid.libro_compra_id = ? ORDER BY ri.id ASC LIMIT 1",
+            args: [libroCompraId]
+          }).catch(() => ({ rows: [] }));
+          if (r1.rows.length > 0) existingRow = r1.rows[0];
         }
-        findSql += ` ORDER BY ri.id ASC LIMIT 1`;
-
-        const existingRes = await db.execute({ sql: findSql, args: findArgs }).catch(() => ({ rows: [] }));
-        if (existingRes.rows.length > 0) {
-          const ex = existingRes.rows[0];
+        if (!existingRow && nroFactura && rif) {
+          const r2 = await db.execute({
+            sql: "SELECT ri.id, ri.nro_comprobante, ri.periodo FROM retenciones_islr ri JOIN retenciones_islr_detalles rid ON ri.id = rid.retencion_id WHERE UPPER(TRIM(rid.nro_factura)) = UPPER(TRIM(?)) AND UPPER(REPLACE(REPLACE(ri.sujeto_rif, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(?, '-', ''), ' ', '')) ORDER BY ri.id ASC LIMIT 1",
+            args: [nroFactura, rif]
+          }).catch(() => ({ rows: [] }));
+          if (r2.rows.length > 0) existingRow = r2.rows[0];
+        }
+        if (existingRow) {
           return jsonResponse({
-            periodo: ex.periodo || periodo,
-            nro_comprobante: ex.nro_comprobante,
-            retencion_id: ex.id,
+            periodo: existingRow.periodo || periodo,
+            nro_comprobante: existingRow.nro_comprobante,
+            retencion_id: existingRow.id,
             es_existente: true
           });
         }
@@ -3103,10 +3431,10 @@ export async function onRequest(context) {
 
       const [resPer, resGlobal] = await Promise.all([
         db.execute({
-          sql: "SELECT nro_comprobante FROM retenciones_islr WHERE nro_comprobante LIKE ? ORDER BY nro_comprobante DESC LIMIT 1",
+          sql: "SELECT nro_comprobante FROM retenciones_islr WHERE nro_comprobante LIKE ? ORDER BY CAST(SUBSTR(nro_comprobante, 7) AS INTEGER) DESC LIMIT 1",
           args: [`${yyyymm}%`]
         }),
-        db.execute("SELECT nro_comprobante FROM retenciones_islr ORDER BY id DESC LIMIT 1")
+        db.execute("SELECT nro_comprobante FROM retenciones_islr WHERE length(nro_comprobante) >= 14 ORDER BY CAST(SUBSTR(nro_comprobante, 7) AS INTEGER) DESC LIMIT 1")
       ]);
 
       let nextSeq = 1;
@@ -3302,14 +3630,12 @@ export async function onRequest(context) {
 
         let sustraendo = 0.0;
         const umbralMinimo = utBs * factorSust;
-        if (tipoPersona === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3)) {
+        if (tipoPersona === 'PN-R' && (pctTarifa === 1 || pctTarifa === 3) && baseImp > umbralMinimo) {
           if (item.sustraendo_bs !== undefined && item.sustraendo_bs !== null && item.sustraendo_bs !== '') {
-            sustraendo = Number(item.sustraendo_bs);
-          } else if (baseImp > umbralMinimo) {
+            sustraendo = Math.max(0, Number(item.sustraendo_bs));
+          } else {
             sustraendo = Number((utBs * factorSust * (pctTarifa / 100)).toFixed(2));
           }
-        } else if (item.sustraendo_bs !== undefined && Number(item.sustraendo_bs) > 0) {
-          sustraendo = Number(item.sustraendo_bs);
         }
 
         const baseObjeto = baseImp * (pctBase / 100);
@@ -3370,14 +3696,15 @@ export async function onRequest(context) {
       let retencionId = body.id ? Number(body.id) : null;
       let existingComp = null;
 
-      if (!retencionId && cleanNroComp) {
-        const existRes = await db.execute({
-          sql: "SELECT * FROM retenciones_islr WHERE nro_comprobante = ? LIMIT 1",
-          args: [cleanNroComp]
-        }).catch(() => ({ rows: [] }));
-        if (existRes.rows.length > 0) {
-          existingComp = existRes.rows[0];
-          retencionId = Number(existingComp.id);
+      if (retencionId) {
+        const byIdRes = await db.execute({ sql: "SELECT * FROM retenciones_islr WHERE id = ? LIMIT 1", args: [retencionId] }).catch(() => ({ rows: [] }));
+        if (byIdRes.rows.length > 0) {
+          existingComp = byIdRes.rows[0];
+          if (await isPeriodoDeclarado(existingComp.periodo, db)) {
+            return jsonResponse({
+              error: `El comprobante pertenece al período ${existingComp.periodo}, el cual está DECLARADO y CERRADO ante el SENIAT.`
+            }, 403);
+          }
         }
       }
 
@@ -3393,6 +3720,19 @@ export async function onRequest(context) {
             existingComp = existDet.rows[0];
             retencionId = Number(existingComp.id);
           }
+        }
+      }
+
+      if (!retencionId && cleanNroComp) {
+        const dupRes = await db.execute({
+          sql: "SELECT id FROM retenciones_islr WHERE nro_comprobante = ? LIMIT 1",
+          args: [cleanNroComp]
+        }).catch(() => ({ rows: [] }));
+        if (dupRes.rows.length > 0) {
+          return jsonResponse({
+            error: `El N° de comprobante ${cleanNroComp} ya está asignado a otra retención. Genere un nuevo correlativo.`,
+            duplicado: true
+          }, 409);
         }
       }
 
@@ -3537,8 +3877,8 @@ export async function onRequest(context) {
       return jsonResponse({
         success: true,
         id: retencionId,
-        nro_comprobante: cleanNroComp,
-        message: `Comprobante de Retención ISLR N° ${cleanNroComp} emitido conforme a la PA SNAT/2026/00093.`
+        nro_comprobante: finalNroComp,
+        message: `Comprobante de Retención ISLR N° ${finalNroComp} emitido conforme a la PA SNAT/2026/00093.`
       });
     }
 
@@ -3616,6 +3956,14 @@ export async function onRequest(context) {
       const periodo = url.searchParams.get('periodo') || '2026-10';
       const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
       const data = await obtenerDatosXmlISLR(db, targetPeriodo);
+      if (data.total_lineas === 0 || (Array.isArray(data.errores_validacion) && data.errores_validacion.length > 0)) {
+        return jsonResponse({
+          error: data.total_lineas === 0
+            ? `No hay retenciones válidas para exportar XML en el período ${targetPeriodo}.`
+            : `Existen errores que impiden validar el XML ante SENIAT: ${data.errores_validacion.join(' | ')}`,
+          errores_validacion: data.errores_validacion || []
+        }, 400);
+      }
       const fileName = `XML_relacionRetencionesISLR_${data.yyyymm}.xml`;
       return new Response(data.xml, {
         status: 200,
@@ -3780,9 +4128,13 @@ export async function onRequest(context) {
         SELECT 
           id as "N_OP",
           fecha as "FECHA",
+          COALESCE(numero_reporte_z, '') as "REPORTE_Z",
+          COALESCE(serial_impresora, 'Z0A0000176') as "SERIAL_FISCAL",
           COALESCE(factura_desde, '') as "DESDE",
           COALESCE(factura_hasta, '') as "HASTA",
           cantidad_comprobantes as "CANT_COMPROBANTES",
+          COALESCE(cantidad_anuladas, 0) as "CANT_ANULADAS",
+          COALESCE(facturas_anuladas_lista, '') as "FACTURAS_ANULADAS",
           total_bs as "TOTAL_BS",
           exento_bs as "EXENTO_BS",
           base_imponible_bs as "BASE_BS",
@@ -3871,12 +4223,12 @@ export async function onRequest(context) {
     }
 
     // Default Fallback
-    return jsonResponse({ error: `Ruta API no implementada o no encontrada: ${method} ${path}` }, 404);
+    return jsonResponse({ error: `Operación no disponible (${method} ${path}).` }, 404);
 
   } catch (err) {
-    console.error('Edge Function Error:', err);
+    console.error('API Error:', err);
     return jsonResponse({
-      error: 'Error interno en el servidor de borde (Cloudflare + Turso): ' + err.message,
+      error: traducirErrorNegocio(err),
       path
     }, 500);
   }

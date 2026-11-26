@@ -152,22 +152,19 @@ function precargarFacturaDisbatteryPendiente(mostrarToast = false) {
 window.precargarFacturaDisbatteryPendiente = precargarFacturaDisbatteryPendiente;
 
 // Abrir Modal de Carga Masiva
-function abrirModalCargaMasivaPDF() {
-  initExtractorCompras();
+async function abrirModalCargaMasivaPDF() {
+  await initExtractorCompras();
   const modal = document.getElementById('modal-carga-masiva-facturas-pdf');
   if (!modal) return;
   modal.style.display = 'flex';
 
   // Sincronizar período con el selector principal del libro
-  const selPerPrincipal = document.getElementById('compras-periodo-select')?.value || '2026-10';
+  const selPerPrincipal = document.getElementById('compras-periodo-select')?.value || getHoyLocalISO().slice(0, 7);
   const selPerModal = document.getElementById('staging-periodo-select');
   if (selPerModal) selPerModal.value = selPerPrincipal;
 
   const tasaDisplay = document.getElementById('staging-tasa-bcv-display');
   if (tasaDisplay) tasaDisplay.textContent = `Bs. ${tasaBcvExtractor.toFixed(2)}`;
-
-  // Precargar automáticamente la factura F0029250 de DISBATTERY LUBRICANTES
-  precargarFacturaDisbatteryPendiente(false);
 
   renderBandejaStagingFacturas();
 }
@@ -491,7 +488,7 @@ async function procesarArchivosPDFMasivos(fileList) {
             pagina: pageNum,
             total_paginas: totalPages,
             periodo: periodoActual,
-            fecha: new Date().toISOString().slice(0, 10),
+            fecha: typeof getHoyLocalISO === 'function' ? getHoyLocalISO() : new Date().toLocaleDateString('en-CA'),
             rif: '',
             razon_social: '',
             nro_factura: '',
@@ -499,7 +496,7 @@ async function procesarArchivosPDFMasivos(fileList) {
             tipo_servicio: 'MERCANCIA_REPUESTOS',
             aplica_inventario: 1,
             base_imponible_bs: 0,
-            alicuota: 16.0,
+            alicuota: 0.16,
             iva_bs: 0,
             total_bs: 0,
             base_imponible_divisa: 0,
@@ -533,7 +530,7 @@ async function procesarArchivosPDFMasivos(fileList) {
         archivo_nombre: file.name,
         file: file,
         periodo: periodoActual,
-        fecha: new Date().toISOString().slice(0, 10),
+        fecha: typeof getHoyLocalISO === 'function' ? getHoyLocalISO() : new Date().toLocaleDateString('en-CA'),
         rif: '',
         razon_social: '',
         nro_factura: '',
@@ -541,7 +538,7 @@ async function procesarArchivosPDFMasivos(fileList) {
         tipo_servicio: 'MERCANCIA_REPUESTOS',
         aplica_inventario: 1,
         base_imponible_bs: 0,
-        alicuota: 16.0,
+        alicuota: 0.16,
         iva_bs: 0,
         total_bs: 0,
         base_imponible_divisa: 0,
@@ -845,10 +842,11 @@ function analizarTextoFacturaSENIAT(text, fileName, fileObject, periodoDefecto, 
 
   // Intento B: Si no encontramos Bs explícito, buscar bloque genérico pero sin caer en headers
   if (totBs === 0) {
-    const mTotGen = cleanText.match(/(?:\bTotal\s+A\s+Pagar|\bTotal\s+Factura|\bTotal\s+Facturado|\bTOTAL)\s*[:=]?\s*(?:USD|\$)?\s*([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})/i);
+    const mTotGen = cleanText.match(/(?:\bTotal\s+A\s+Pagar|\bTotal\s+Factura|\bTotal\s+Facturado|\bTOTAL)\s*[:=]?\s*((?:USD|\$)\s*)?([0-9]{1,3}(?:[.,][0-9]{3})*[.,][0-9]{2})(\s*(?:USD|\$))?/i);
     if (mTotGen) {
-      const val = parseMonto(mTotGen[1]);
-      if (val < 5000 && /USD|\$|DIVISA/i.test(cleanText)) {
+      const val = parseMonto(mTotGen[2]);
+      const tieneMarcaDivisaDirecta = Boolean(mTotGen[1] || mTotGen[3]);
+      if (tieneMarcaDivisaDirecta && val < 5000) {
         totUsd = val;
         totBs = Number((totUsd * tasaBcvFactura).toFixed(2));
       } else {
@@ -1182,6 +1180,10 @@ async function actualizarCampoStaging(idx, campo, valor) {
   if (!stagingFacturasCompras[idx]) return;
   stagingFacturasCompras[idx][campo] = valor;
   if (campo === 'fecha') {
+    const mesMatch = String(valor || '').trim().slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(mesMatch)) {
+      stagingFacturasCompras[idx].mes_factura = mesMatch;
+    }
     validarPeriodoFacturaStaging(stagingFacturasCompras[idx]);
     renderBandejaStagingFacturas();
   } else if (campo === 'rif' || campo === 'nro_factura' || campo === 'nro_control') {
@@ -1194,12 +1196,15 @@ function recalcularMontosStaging(idx, campo, nuevoValor) {
   const f = stagingFacturasCompras[idx];
   if (!f) return;
   const num = parseFloat(nuevoValor) || 0;
+  const tasa = Number(f.tasa_bcv || tasaBcvExtractor || 889.58);
+  const rawAlic = f.alicuota !== undefined && f.alicuota !== null ? Number(f.alicuota) : 0.16;
+  const alicDec = rawAlic > 1 ? rawAlic / 100 : rawAlic;
   if (campo === 'base') {
     f.base_imponible_bs = num;
-    f.iva_bs = Number((num * 0.16).toFixed(2));
+    f.iva_bs = Number((num * alicDec).toFixed(2));
     f.total_bs = Number((num + f.iva_bs).toFixed(2));
-    f.base_imponible_divisa = Number((f.base_imponible_bs / f.tasa_bcv).toFixed(2));
-    f.total_divisa = Number((f.total_bs / f.tasa_bcv).toFixed(2));
+    f.base_imponible_divisa = tasa > 0 ? Number((f.base_imponible_bs / tasa).toFixed(2)) : 0;
+    f.total_divisa = tasa > 0 ? Number((f.total_bs / tasa).toFixed(2)) : 0;
   }
   if (Array.isArray(f.alertas)) {
     f.alertas = f.alertas.filter(a => !a.includes('Descuadre'));
@@ -1230,6 +1235,9 @@ async function asentarSoloInventarioStaging(idx) {
     return;
   }
 
+  const rawAlic = f.alicuota !== undefined && f.alicuota !== null ? Number(f.alicuota) : 0.16;
+  const alicDec = rawAlic > 1 ? rawAlic / 100 : rawAlic;
+
   const payload = {
     fecha: f.fecha,
     rif: f.rif,
@@ -1237,7 +1245,7 @@ async function asentarSoloInventarioStaging(idx) {
     nro_factura: f.nro_factura,
     nro_control: f.nro_control || '00-000000',
     base_imponible_bs: f.base_imponible_bs,
-    alicuota: f.alicuota || 16.0,
+    alicuota: alicDec,
     iva_bs: f.iva_bs,
     total_bs: f.total_bs,
     tasa_bcv: f.tasa_bcv || tasaBcvExtractor || 889.58,
@@ -1263,8 +1271,8 @@ async function asentarSoloInventarioStaging(idx) {
     showToast(`📦 Factura [${f.nro_factura}] registrada exitosamente en Almacén / Inventario (Sin afectación al Libro de Compras).`, 'success');
 
     if (typeof loadLibroCompras === 'function') loadLibroCompras();
-    if (typeof loadInventario === 'function') loadInventario();
-    if (typeof loadMovimientos === 'function') loadMovimientos();
+    if (typeof loadProducts === 'function') loadProducts();
+    if (typeof loadMovements === 'function') loadMovements();
     renderBandejaStagingFacturas();
   } catch (error) {
     console.error('Error asentando solo inventario:', error);
@@ -1287,8 +1295,12 @@ async function asentarFacturaStagingIndividual(idx) {
     return;
   }
 
+  const rawAlic = f.alicuota !== undefined && f.alicuota !== null ? Number(f.alicuota) : 0.16;
+  const alicDec = rawAlic > 1 ? rawAlic / 100 : rawAlic;
+  const periodoPayload = (f.fecha && /^\d{4}-\d{2}/.test(String(f.fecha))) ? String(f.fecha).slice(0, 7) : f.periodo;
+
   const payload = {
-    periodo: f.periodo,
+    periodo: periodoPayload,
     fecha: f.fecha,
     rif: f.rif,
     razon_social: f.razon_social || 'PROVEEDOR GENERAL',
@@ -1297,7 +1309,7 @@ async function asentarFacturaStagingIndividual(idx) {
     tipo_servicio: f.tipo_servicio,
     aplica_inventario: f.aplica_inventario,
     base_imponible_bs: f.base_imponible_bs,
-    alicuota: 0.16,
+    alicuota: alicDec,
     iva_bs: f.iva_bs,
     total_bs: f.total_bs,
     iva_retenido_bs: 0.0,
@@ -1318,6 +1330,8 @@ async function asentarFacturaStagingIndividual(idx) {
       throw new Error(data.error || 'Error al asentar factura');
     }
 
+    f.id = data.id || f.id;
+    f.periodo = periodoPayload;
     f.asentado = true;
     f.estado_validacion = 'ASENTADA';
     showToast(`✅ Factura [${f.nro_factura}] asentada formalmente en el Libro de Compras (Op #${data.nro_operacion || ''}).`, 'success');
@@ -1804,11 +1818,13 @@ function abrirVisorDetalleFacturaStaging(idx) {
 async function sincronizarDetalleHaciaStaging(campo, valor) {
   if (currentDetailIndex === null || !stagingFacturasCompras[currentDetailIndex]) return;
   const f = stagingFacturasCompras[currentDetailIndex];
+  const rawAlic = f.alicuota !== undefined && f.alicuota !== null ? Number(f.alicuota) : 0.16;
+  const alicDec = rawAlic > 1 ? rawAlic / 100 : rawAlic;
 
   if (campo === 'base') {
     const num = parseFloat(valor) || 0;
     f.base_imponible_bs = num;
-    f.iva_bs = Number((num * 0.16).toFixed(2));
+    f.iva_bs = Number((num * alicDec).toFixed(2));
     f.total_bs = Number((num + f.iva_bs).toFixed(2));
     const tasa = Number(f.tasa_bcv || tasaBcvExtractor || 889.58);
     f.base_imponible_divisa = tasa > 0 ? Number((f.base_imponible_bs / tasa).toFixed(2)) : 0;
@@ -1864,6 +1880,10 @@ async function sincronizarDetalleHaciaStaging(campo, valor) {
   }
 
   if (campo === 'fecha') {
+    const mesMatch = String(valor || '').trim().slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(mesMatch)) {
+      f.mes_factura = mesMatch;
+    }
     validarPeriodoFacturaStaging(f);
     const alertPeriodo = document.getElementById('detalle-alerta-periodo');
     const btnAsentarSoloInv = document.getElementById('btn-asentar-solo-inv-desde-detalle');
@@ -1878,6 +1898,24 @@ async function sincronizarDetalleHaciaStaging(campo, valor) {
 
   renderBandejaStagingFacturas();
 }
+
+function revalidarPeriodoStaging() {
+  const periodoSel = document.getElementById('staging-periodo-select')?.value;
+  if (!periodoSel) return;
+  if (typeof getTasaBcvPorFechaOPeriodo === 'function') {
+    tasaBcvExtractor = Number(getTasaBcvPorFechaOPeriodo(periodoSel) || tasaBcvExtractor || 889.58);
+    const tasaDisplay = document.getElementById('staging-tasa-bcv-display');
+    if (tasaDisplay) tasaDisplay.textContent = `Bs. ${tasaBcvExtractor.toFixed(2)}`;
+  }
+  stagingFacturasCompras.forEach(f => {
+    if (!f.asentado) {
+      f.periodo = periodoSel;
+      validarPeriodoFacturaStaging(f, periodoSel);
+    }
+  });
+  renderBandejaStagingFacturas();
+}
+window.revalidarPeriodoStaging = revalidarPeriodoStaging;
 
 // Dar Solo Entrada al Inventario Directamente desde el Modal de Detalle
 async function asentarSoloInventarioDesdeDetalleModal() {
@@ -2003,10 +2041,4 @@ window.asentarSoloInventarioStaging = asentarSoloInventarioStaging;
 window.asentarSoloInventarioDesdeDetalleModal = asentarSoloInventarioDesdeDetalleModal;
 window.precargarFacturaDisbatteryPendiente = precargarFacturaDisbatteryPendiente;
 
-// Precarga automática inmediata al cargar el script
-try {
-  precargarFacturaDisbatteryPendiente(false);
-} catch (e) {
-  console.warn('Error en precarga inicial de Disbattery:', e.message);
-}
 
