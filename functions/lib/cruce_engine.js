@@ -32,7 +32,7 @@ export async function conciliarReporteZ(reporteZId, db) {
           FROM movimientos m
           LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
           WHERE m.tipo = 'SALIDA_VENTA'
-            AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
+            AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
             AND m.fecha = ?
           GROUP BY m.id`,
     args: [z.fecha]
@@ -163,7 +163,7 @@ export async function conciliarVentaIndividual(movimientoId, db) {
   });
   if (movRes.rows.length === 0) return null;
   const mov = movRes.rows[0];
-  if (String(mov.subtipo || 'VENTA').toUpperCase() !== 'VENTA') {
+  if (!['VENTA', 'NORMAL', ''].includes(String(mov.subtipo || 'VENTA').toUpperCase())) {
     await db.execute({
       sql: "UPDATE movimientos SET libro_ventas_id = NULL, estatus_conciliacion = 'NO_APLICA_INTERNO' WHERE id = ?",
       args: [mov.id]
@@ -261,7 +261,7 @@ export async function getResumenCruceDobleVia(periodo, db) {
       COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) AS total_usd
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '') AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
   `;
   const movOrfArgs = [];
   if (periodo && periodo !== 'TODOS') {
@@ -555,7 +555,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
              COALESCE(SUM(md.cantidad), 0) AS total_unds
       FROM movimientos m
       LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-      WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND m.fecha = ?
+      WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '') AND m.fecha = ?
       GROUP BY m.id
       ORDER BY m.id ASC
     `,
@@ -756,7 +756,7 @@ export async function getCruceVentasSalidas(periodo, db) {
       COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) AS total_usd
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '') AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
   `;
   const movOrfArgs = [];
   if (targetPeriodo !== 'TODOS') {
@@ -804,7 +804,7 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
     LEFT JOIN productos p ON md.producto_id = p.id
-    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
   `;
   const args = [];
   if (periodo && periodo !== 'TODOS') {

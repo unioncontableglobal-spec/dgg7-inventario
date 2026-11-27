@@ -478,12 +478,12 @@ export async function onRequest(context) {
             t.tasa_bcv,
             COALESCE(lc.facs_mercancia, comp.cant_compras, 0) as cant_compras,
             COALESCE(comp.unidades_compradas, 0) as unidades_compradas,
-            ROUND(COALESCE(lc.base_mercancia_usd, comp.monto_compras_usd, 0), 2) as compras_usd,
-            ROUND(COALESCE(lc.base_mercancia_bs, comp.monto_compras_bs, 0), 2) as compras_bs,
-            COALESCE(vent.cant_ventas, 0) as cant_ventas,
+            ROUND(COALESCE(NULLIF(lc.base_mercancia_usd, 0), NULLIF(comp.monto_compras_usd, 0), 0), 2) as compras_usd,
+            ROUND(COALESCE(NULLIF(lc.base_mercancia_bs, 0), NULLIF(comp.monto_compras_bs, 0), ROUND(COALESCE(NULLIF(lc.base_mercancia_usd, 0), NULLIF(comp.monto_compras_usd, 0), 0) * t.tasa_bcv, 2), 0), 2) as compras_bs,
+            COALESCE(lv.cant_comprobantes, vent.cant_ventas, 0) as cant_ventas,
             COALESCE(vent.unidades_vendidas, 0) as unidades_vendidas,
-            ROUND(COALESCE(vent.monto_ventas_usd, 0), 2) as ventas_usd,
-            ROUND(COALESCE(vent.monto_ventas_bs, 0), 2) as ventas_bs
+            ROUND(COALESCE(NULLIF(lv.ventas_total_usd, 0), NULLIF(vent.monto_ventas_usd, 0), 0), 2) as ventas_usd,
+            ROUND(COALESCE(NULLIF(lv.ventas_total_bs, 0), NULLIF(vent.monto_ventas_bs, 0), ROUND(COALESCE(NULLIF(lv.ventas_total_usd, 0), NULLIF(vent.monto_ventas_usd, 0), 0) * t.tasa_bcv, 2), 0), 2) as ventas_bs
           FROM tasas_bcv_periodo t
           LEFT JOIN (
             SELECT 
@@ -496,12 +496,22 @@ export async function onRequest(context) {
             GROUP BY periodo
           ) lc ON t.periodo = lc.periodo
           LEFT JOIN (
+            SELECT
+              periodo,
+              SUM(COALESCE(cantidad_comprobantes, 1)) as cant_comprobantes,
+              ROUND(SUM(COALESCE(base_imponible_bs, 0)), 2) as ventas_base_bs,
+              ROUND(SUM(COALESCE(total_bs, 0)), 2) as ventas_total_bs,
+              ROUND(SUM(COALESCE(total_divisa, 0)), 2) as ventas_total_usd
+            FROM libro_ventas
+            GROUP BY periodo
+          ) lv ON t.periodo = lv.periodo
+          LEFT JOIN (
             SELECT 
               substr(m.fecha, 1, 7) as mes,
               count(distinct m.id) as cant_compras,
               sum(md.cantidad) as unidades_compradas,
               ROUND(SUM(COALESCE(NULLIF(md.total_linea_divisa, 0), md.cantidad * COALESCE(NULLIF(md.costo_unitario_usd, 0), 2.5))), 2) as monto_compras_usd,
-              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * m.tasa_bcv, md.cantidad * COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_usd * m.tasa_bcv, 2.5 * m.tasa_bcv))), 2) as monto_compras_bs
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * NULLIF(m.tasa_bcv, 0), md.cantidad * COALESCE(NULLIF(md.costo_unitario_bs, 0), md.costo_unitario_usd * NULLIF(m.tasa_bcv, 0), 0))), 2) as monto_compras_bs
             FROM movimientos m
             JOIN movimiento_detalles md ON m.id = md.movimiento_id
             WHERE m.tipo IN ('ENTRADA_COMPRA', 'INVENTARIO_INICIAL')
@@ -513,10 +523,10 @@ export async function onRequest(context) {
               count(distinct m.id) as cant_ventas,
               sum(md.cantidad) as unidades_vendidas,
               ROUND(SUM(COALESCE(NULLIF(md.total_linea_divisa, 0), md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5))), 2) as monto_ventas_usd,
-              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * m.tasa_bcv, md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5) * m.tasa_bcv)), 2) as monto_ventas_bs
+              ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * NULLIF(m.tasa_bcv, 0), md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5) * NULLIF(m.tasa_bcv, 0))), 2) as monto_ventas_bs
             FROM movimientos m
             JOIN movimiento_detalles md ON m.id = md.movimiento_id
-            WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
+            WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
             GROUP BY substr(m.fecha, 1, 7)
           ) vent ON t.periodo = vent.mes
           ORDER BY t.periodo ASC
@@ -534,7 +544,7 @@ export async function onRequest(context) {
           LEFT JOIN categorias c ON p.categoria_id = c.id
           JOIN movimiento_detalles md ON p.id = md.producto_id
           JOIN movimientos m ON md.movimiento_id = m.id
-          WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
+          WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
           GROUP BY p.id
           ORDER BY unidades_vendidas DESC
           LIMIT 10
@@ -2137,7 +2147,7 @@ export async function onRequest(context) {
           const dupVta = await db.execute({
             sql: `SELECT id, fecha FROM movimientos
                   WHERE tipo = 'SALIDA_VENTA'
-                    AND COALESCE(subtipo, 'VENTA') = 'VENTA'
+                    AND COALESCE(UPPER(subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
                     AND (UPPER(TRIM(numero_documento)) = UPPER(?) ${numFacturaNum ? 'OR (numero_factura_numerico IS NOT NULL AND numero_factura_numerico = ?)' : ''})
                   LIMIT 1`,
             args: numFacturaNum ? [docClean, numFacturaNum] : [docClean]
@@ -2275,7 +2285,7 @@ export async function onRequest(context) {
                            COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs * 1.16), 0) AS cargado_bs
                     FROM movimientos m
                     LEFT JOIN movimiento_detalles md ON md.movimiento_id = m.id
-                    WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'`,
+                    WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')`,
               args: [resolvedLvId]
             })
           ]);

@@ -452,12 +452,12 @@ app.get('/api/dashboard', async (req, res) => {
           t.tasa_bcv,
           COALESCE(lc.facs_mercancia, comp.cant_compras, 0) as cant_compras,
           COALESCE(comp.unidades_compradas, 0) as unidades_compradas,
-          ROUND(COALESCE(lc.base_mercancia_usd, comp.monto_compras_usd, 0), 2) as compras_usd,
-          ROUND(COALESCE(lc.base_mercancia_bs, comp.monto_compras_bs, 0), 2) as compras_bs,
-          COALESCE(vent.cant_ventas, 0) as cant_ventas,
+          ROUND(COALESCE(NULLIF(lc.base_mercancia_usd, 0), NULLIF(comp.monto_compras_usd, 0), 0), 2) as compras_usd,
+          ROUND(COALESCE(NULLIF(lc.base_mercancia_bs, 0), NULLIF(comp.monto_compras_bs, 0), ROUND(COALESCE(NULLIF(lc.base_mercancia_usd, 0), NULLIF(comp.monto_compras_usd, 0), 0) * t.tasa_bcv, 2), 0), 2) as compras_bs,
+          COALESCE(lv.cant_comprobantes, vent.cant_ventas, 0) as cant_ventas,
           COALESCE(vent.unidades_vendidas, 0) as unidades_vendidas,
-          ROUND(COALESCE(vent.monto_ventas_usd, 0), 2) as ventas_usd,
-          ROUND(COALESCE(vent.monto_ventas_bs, 0), 2) as ventas_bs
+          ROUND(COALESCE(NULLIF(lv.ventas_total_usd, 0), NULLIF(vent.monto_ventas_usd, 0), 0), 2) as ventas_usd,
+          ROUND(COALESCE(NULLIF(lv.ventas_total_bs, 0), NULLIF(vent.monto_ventas_bs, 0), ROUND(COALESCE(NULLIF(lv.ventas_total_usd, 0), NULLIF(vent.monto_ventas_usd, 0), 0) * t.tasa_bcv, 2), 0), 2) as ventas_bs
         FROM tasas_bcv_periodo t
         LEFT JOIN (
           SELECT 
@@ -470,12 +470,21 @@ app.get('/api/dashboard', async (req, res) => {
           GROUP BY periodo
         ) lc ON t.periodo = lc.periodo
         LEFT JOIN (
+          SELECT
+            periodo,
+            SUM(COALESCE(cantidad_comprobantes, 1)) as cant_comprobantes,
+            ROUND(SUM(COALESCE(total_bs, 0)), 2) as ventas_total_bs,
+            ROUND(SUM(COALESCE(total_divisa, 0)), 2) as ventas_total_usd
+          FROM libro_ventas
+          GROUP BY periodo
+        ) lv ON t.periodo = lv.periodo
+        LEFT JOIN (
           SELECT 
             substr(m.fecha, 1, 7) as mes,
             count(distinct m.id) as cant_compras,
             sum(md.cantidad) as unidades_compradas,
-            sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.costo_unitario_usd, 0))) as monto_compras_usd,
-            sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.costo_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_compras_bs
+            sum(coalesce(nullif(md.total_linea_divisa, 0), md.cantidad * coalesce(md.costo_unitario_usd, 0))) as monto_compras_usd,
+            sum(coalesce(nullif(md.total_linea_bs, 0), md.cantidad * coalesce(nullif(md.costo_unitario_bs, 0), md.costo_unitario_usd * nullif(m.tasa_bcv, 0), 0))) as monto_compras_bs
           FROM movimientos m
           JOIN movimiento_detalles md ON m.id = md.movimiento_id
           WHERE m.tipo IN ('ENTRADA_COMPRA', 'INVENTARIO_INICIAL')
@@ -486,11 +495,11 @@ app.get('/api/dashboard', async (req, res) => {
             substr(m.fecha, 1, 7) as mes,
             count(distinct m.id) as cant_ventas,
             sum(md.cantidad) as unidades_vendidas,
-            sum(coalesce(md.total_linea_divisa, md.cantidad * coalesce(md.precio_unitario_divisa, md.costo_unitario_usd, 0))) as monto_ventas_usd,
-            sum(coalesce(md.total_linea_bs, md.cantidad * coalesce(md.precio_unitario_bs, md.costo_unitario_usd * m.tasa_bcv, 0))) as monto_ventas_bs
+            sum(coalesce(nullif(md.total_linea_divisa, 0), md.cantidad * coalesce(nullif(md.precio_unitario_divisa, 0), md.costo_unitario_usd, 0))) as monto_ventas_usd,
+            sum(coalesce(nullif(md.total_linea_bs, 0), md.cantidad * coalesce(nullif(md.precio_unitario_bs, 0), md.costo_unitario_usd * nullif(m.tasa_bcv, 0), 0))) as monto_ventas_bs
           FROM movimientos m
           JOIN movimiento_detalles md ON m.id = md.movimiento_id
-          WHERE m.tipo = 'SALIDA_VENTA'
+          WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
           GROUP BY substr(m.fecha, 1, 7)
         ) vent ON t.periodo = vent.mes
         ORDER BY t.periodo ASC
@@ -508,7 +517,7 @@ app.get('/api/dashboard', async (req, res) => {
         LEFT JOIN categorias c ON p.categoria_id = c.id
         JOIN movimiento_detalles md ON p.id = md.producto_id
         JOIN movimientos m ON md.movimiento_id = m.id
-        WHERE m.tipo = 'SALIDA_VENTA'
+        WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')
         GROUP BY p.id
         ORDER BY unidades_vendidas DESC
         LIMIT 10
@@ -1389,7 +1398,7 @@ app.post('/api/movimientos', async (req, res) => {
       if (lvIdNode) {
         const [lvR, ldR] = await Promise.all([
           db.execute({ sql: "SELECT id, numero_reporte_z, cantidad_comprobantes, facturas_faltantes, total_bs FROM libro_ventas WHERE id = ? LIMIT 1", args: [lvIdNode] }),
-          db.execute({ sql: "SELECT COUNT(DISTINCT m.id) AS cnt, COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs * 1.16), 0) AS cargado_bs FROM movimientos m LEFT JOIN movimiento_detalles md ON md.movimiento_id = m.id WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'", args: [lvIdNode] })
+          db.execute({ sql: "SELECT COUNT(DISTINCT m.id) AS cnt, COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs * 1.16), 0) AS cargado_bs FROM movimientos m LEFT JOIN movimiento_detalles md ON md.movimiento_id = m.id WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(UPPER(m.subtipo), 'VENTA') IN ('VENTA', 'NORMAL', '')", args: [lvIdNode] })
         ]);
         if (lvR.rows.length > 0) {
           const lvRow = lvR.rows[0];
