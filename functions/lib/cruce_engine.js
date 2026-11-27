@@ -725,6 +725,8 @@ export async function getCruceVentasSalidas(periodo, db) {
     if (z.facturas_faltantes && z.estatus_conciliacion !== 'CONCILIADO') {
       const nums = z.facturas_faltantes.split(',').map(s => s.trim()).filter(Boolean);
       for (const num of nums) {
+        const totZ = Number(z.total_bs || 0);
+        const cargadoZ = Number(z.total_facturas_cargadas_bs || 0);
         pendientesSalida.push({
           reporte_z_id: z.id,
           periodo: z.periodo,
@@ -732,7 +734,14 @@ export async function getCruceVentasSalidas(periodo, db) {
           numero_reporte_z: z.numero_reporte_z || ('Z-' + z.id),
           serial_impresora: z.serial_impresora || 'Z0A0000176',
           factura_numero: num,
-          tasa_bcv: z.tasa_bcv
+          tasa_bcv: z.tasa_bcv,
+          total_z_bs: totZ,
+          base_z_bs: Number(z.base_imponible_bs || 0),
+          iva_z_bs: Number(z.iva_bs || 0),
+          total_cargado_bs: cargadoZ,
+          saldo_restante_z_bs: Number((totZ - cargadoZ).toFixed(2)),
+          facturas_pendientes_en_z: nums.length,
+          cantidad_comprobantes_z: Number(z.cantidad_comprobantes || nums.length)
         });
       }
     }

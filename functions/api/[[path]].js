@@ -1973,9 +1973,57 @@ export async function onRequest(context) {
 
       const subtipoNorm = subtipo || (tipo === 'ENTRADA_COMPRA' ? 'COMPRA_NACIONAL' : (tipo === 'SALIDA_VENTA' ? 'VENTA' : 'AJUSTE'));
       const subUpper = String(subtipoNorm).toUpperCase();
-      const usuarioNorm = (usuario_responsable && String(usuario_responsable).trim()) || 'CAJA_DG67';
+      const usuarioNorm = String(usuario_responsable || '').trim();
       const periodoMov = String(fecha).slice(0, 7);
       const docClean = String(numero_documento).trim();
+      const obsClean = String(observaciones || '').trim();
+      const ctrlRaw = String(nro_control || '').trim();
+      const isControlReal = (val) => {
+        const cleaned = String(val || '').trim().toUpperCase().replace(/^00-/, '').replace(/S\/CTRL|N\/A|SIN\s*CONTROL/g, '').replace(/[^A-Z0-9]/g, '');
+        return cleaned.length >= 2;
+      };
+      const TOLERANCIA_CUADRE_BS = 0.99;
+
+      // CAMPOS OBLIGATORIOS PARA OPERACIONES PRE-LIBRO (Entradas y Ventas registradas en almacén antes de llegar a Libros Fiscales)
+      const esCompraFiscal = (tipo === 'ENTRADA_COMPRA' && !subUpper.includes('AJUSTE'));
+      const esVentaFiscalPre = (tipo === 'SALIDA_VENTA' && subUpper === 'VENTA');
+      if (esCompraFiscal) {
+        if (!proveedor_id || !parseInt(proveedor_id, 10)) {
+          return jsonResponse({ error: 'Campo obligatorio: seleccione el Proveedor Fiscal antes de registrar la entrada.' }, 400);
+        }
+        if (!fecha_factura || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha_factura))) {
+          return jsonResponse({ error: 'Campo obligatorio: indique la Fecha de Emisión de la Factura Fiscal.' }, 400);
+        }
+        if (subUpper === 'COMPRA_NACIONAL' && !isControlReal(ctrlRaw)) {
+          return jsonResponse({ error: 'Campo obligatorio: ingrese el N° de Control Fiscal SENIAT completo (no dejar en blanco ni solo "00-").' }, 400);
+        }
+        if (!(Number(tasa_bcv_factura || tasa_bcv) > 0)) {
+          return jsonResponse({ error: 'Campo obligatorio: indique una Tasa BCV válida mayor a 0.' }, 400);
+        }
+        if (!body.fecha_tasa_bcv) {
+          return jsonResponse({ error: 'Campo obligatorio: indique la Fecha de la Tasa BCV de la factura.' }, 400);
+        }
+        if (!usuarioNorm) {
+          return jsonResponse({ error: 'Campo obligatorio: indique el Responsable de la recepción.' }, 400);
+        }
+      }
+      if (esVentaFiscalPre) {
+        if (!ctrlRaw || ctrlRaw.length < 3) {
+          return jsonResponse({ error: 'Campo obligatorio: indique el Serial de Máquina Fiscal o N° de Control.' }, 400);
+        }
+        if (!(Number(tasa_bcv) > 0)) {
+          return jsonResponse({ error: 'Campo obligatorio: indique una Tasa BCV válida mayor a 0.' }, 400);
+        }
+        if (!body.fecha_tasa_bcv) {
+          return jsonResponse({ error: 'Campo obligatorio: indique la Fecha de la Tasa BCV.' }, 400);
+        }
+        if (!usuarioNorm) {
+          return jsonResponse({ error: 'Campo obligatorio: indique el Responsable del despacho.' }, 400);
+        }
+        if (obsClean.length < 3) {
+          return jsonResponse({ error: 'Campo obligatorio: indique el Cliente o Motivo de Salida (mínimo 3 caracteres).' }, 400);
+        }
+      }
 
       if (await isPeriodoDeclarado(periodoMov, db)) {
         if (subtipoNorm !== 'COMPRA_EXTEMPORANEA_INVENTARIO' && !body.solo_inventario) {
@@ -1985,13 +2033,27 @@ export async function onRequest(context) {
         }
       }
 
-      // Validar cantidades positivas y existencia de productos antes de crear cabecera
+      // Validar cantidades positivas y costos/precios obligatorios en operaciones fiscales
       const parsedItems = [];
       for (const it of items) {
         const pid = parseInt(it.producto_id, 10);
         const qty = Number(it.cantidad);
         if (!pid || !Number.isFinite(qty) || qty <= 0) {
           return jsonResponse({ error: 'Todas las cantidades de artículos deben ser mayores a cero.' }, 400);
+        }
+        if (esCompraFiscal && subUpper !== 'NOTA_RECEPCION') {
+          const cuUsd = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
+          const cuBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
+          if (!(cuUsd > 0 || cuBs > 0)) {
+            return jsonResponse({ error: 'Campo obligatorio: todos los artículos de una compra fiscal deben tener costo unitario mayor a 0,00.' }, 400);
+          }
+        }
+        if (esVentaFiscalPre) {
+          const puUsd = parseFloat(it.precio_unitario_divisa || 0);
+          const puBs = parseFloat(it.precio_unitario_bs || 0);
+          if (!(puUsd > 0 || puBs > 0)) {
+            return jsonResponse({ error: 'Campo obligatorio: todos los artículos de una factura de venta deben tener precio unitario mayor a 0,00.' }, 400);
+          }
         }
         parsedItems.push({ ...it, producto_id: pid, cantidad: qty });
       }
@@ -2100,43 +2162,26 @@ export async function onRequest(context) {
         }
       }
 
-      const estatusInicial = (tipo === 'SALIDA_VENTA' && !esVentaFiscal) ? 'NO_APLICA_INTERNO' : 'PENDIENTE_UCG';
-      const headerResult = await db.execute({
-        sql: `INSERT INTO movimientos 
-              (tipo, subtipo, fecha, fecha_factura, tasa_bcv_factura, numero_documento, numero_factura_numerico, nro_control, usuario_responsable,
-               documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones,
-               estatus_conciliacion)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              RETURNING id`,
-        args: [
-          tipo, subtipoNorm, fecha, fecha_factura || fecha, Number(tasa_bcv_factura) > 0 ? Number(tasa_bcv_factura) : tasaNum,
-          docClean, numFacturaNum, ctrlNorm, usuarioNorm,
-          documento_afectado || '', tasaNum, fechaTasaMes, body.moneda_operacion || 'USD', metodoVal,
-          proveedor_id ? parseInt(proveedor_id, 10) : null, observaciones || '', estatusInicial
-        ]
-      });
-
-      const movimientoId = Number(headerResult.rows[0]?.id || headerResult.lastInsertRowid);
       const aplicaIvaMov = (tipo === 'ENTRADA_COMPRA' && !subUpper.includes('AJUSTE')) ||
                            (tipo === 'SALIDA_VENTA' && (subUpper === 'VENTA' || subUpper.includes('RETIRO')));
       const pctIvaMov = aplicaIvaMov ? 0.16 : 0;
 
-      const detailStatements = [];
-      const runningStockCpp = new Map();
-      for (const [pid, snap] of prodSnapMap.entries()) {
-        runningStockCpp.set(pid, { stock: snap.stock_actual, costoUsd: snap.costo_referencial_usd });
-      }
-
+      // Precálculo exacto de líneas y totales ANTES de insertar (permite bloqueo estricto de cuadre contra Libros)
+      const computedLines = [];
+      let calcTotalBaseBs = 0;
+      let calcTotalIvaBs = 0;
+      let calcTotalBs = 0;
+      let calcTotalDiv = 0;
       for (const it of parsedItems) {
         const pid = it.producto_id;
         const qty = it.cantidad;
         const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
-        const snap = runningStockCpp.get(pid);
+        const snap = prodSnapMap.get(pid);
 
         let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
         let cBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
         if (cDivisa <= 0 && cBs > 0) cDivisa = Number((cBs / tasaItem).toFixed(2));
-        if (cDivisa <= 0) cDivisa = Number(snap?.costoUsd || 0);
+        if (cDivisa <= 0) cDivisa = Number(snap?.costo_referencial_usd || 0);
         if (cBs <= 0) cBs = Number((cDivisa * tasaItem).toFixed(2));
 
         const precioUnitDiv = parseFloat(it.precio_unitario_divisa || cDivisa);
@@ -2147,6 +2192,161 @@ export async function onRequest(context) {
         const ivaBs = Number((baseBs * pctIvaMov).toFixed(2));
         const totDiv = Number((baseDiv + ivaDiv).toFixed(2));
         const totBs = Number((baseBs + ivaBs).toFixed(2));
+
+        calcTotalBaseBs += baseBs;
+        calcTotalIvaBs += ivaBs;
+        calcTotalBs += totBs;
+        calcTotalDiv += totDiv;
+        computedLines.push({ pid, qty, tasaItem, cDivisa, cBs, precioUnitBs, precioUnitDiv, baseBs, baseDiv, ivaBs, ivaDiv, totBs, totDiv });
+      }
+      calcTotalBaseBs = Number(calcTotalBaseBs.toFixed(2));
+      calcTotalIvaBs = Number(calcTotalIvaBs.toFixed(2));
+      calcTotalBs = Number(calcTotalBs.toFixed(2));
+      calcTotalDiv = Number(calcTotalDiv.toFixed(2));
+
+      const fmtBsErr = (v) => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      // BLOQUEO DE CONTINUACIÓN POR CUADRE ESPEJO CONTRA LIBRO DE COMPRAS (tolerancia estricta de céntimos <= Bs. 0,99)
+      let resolvedLcId = body.libro_compras_id ? parseInt(body.libro_compras_id, 10) : null;
+      if (tipo === 'ENTRADA_COMPRA' && !subUpper.includes('AJUSTE')) {
+        if (!resolvedLcId && numFacturaNum) {
+          let sqlMatchPre = `SELECT id FROM libro_compras WHERE aplica_inventario = 1 AND (movimiento_id IS NULL OR movimiento_id = 0) AND (UPPER(TRIM(nro_factura)) = UPPER(?) OR CAST(LTRIM(REPLACE(nro_factura, '-', ''), '0') AS INTEGER) = ?)`;
+          const argsMatchPre = [docClean, numFacturaNum];
+          if (proveedor_id) {
+            sqlMatchPre += ` AND proveedor_id = ?`;
+            argsMatchPre.push(parseInt(proveedor_id, 10));
+          }
+          sqlMatchPre += ` LIMIT 1`;
+          const matchPre = await db.execute({ sql: sqlMatchPre, args: argsMatchPre });
+          if (matchPre.rows.length > 0) resolvedLcId = Number(matchPre.rows[0].id);
+        }
+        if (resolvedLcId) {
+          const lcCheckRes = await db.execute({
+            sql: "SELECT id, nro_factura, razon_social, base_imponible_bs, iva_bs, total_bs, total_divisa, tasa_bcv FROM libro_compras WHERE id = ? LIMIT 1",
+            args: [resolvedLcId]
+          });
+          if (lcCheckRes.rows.length > 0) {
+            const lcRow = lcCheckRes.rows[0];
+            const targetLcBs = Number(lcRow.total_bs || 0);
+            if (targetLcBs > 0) {
+              const diffBs = Number((calcTotalBs - targetLcBs).toFixed(2));
+              if (Math.abs(diffBs) > TOLERANCIA_CUADRE_BS) {
+                const signo = diffBs > 0 ? '+' : '-';
+                return jsonResponse({
+                  error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Compras): La Entrada (Bs. ${fmtBsErr(calcTotalBs)}) no cuadra con la Factura #${lcRow.nro_factura} reflejada en Libro de Compras (Bs. ${fmtBsErr(targetLcBs)}). Diferencia: ${signo}Bs. ${fmtBsErr(Math.abs(diffBs))} (tolerancia máxima: Bs. 0,99 por céntimos). Ajuste cantidades o costos unitarios hasta lograr un espejo exacto.`,
+                  bloqueo_cuadre: true,
+                  total_libro_bs: targetLcBs,
+                  total_movimiento_bs: calcTotalBs,
+                  diferencia_bs: diffBs,
+                  tolerancia_bs: TOLERANCIA_CUADRE_BS
+                }, 400);
+              }
+            }
+          }
+        }
+      }
+
+      // BLOQUEO DE CONTINUACIÓN POR CUADRE ESPEJO CONTRA LIBRO DE VENTAS / REPORTE Z (tolerancia de céntimos <= Bs. 0,99)
+      let resolvedLvId = body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null;
+      if (esVentaFiscal) {
+        if (!resolvedLvId && numFacturaNum) {
+          const zCandRes = await db.execute({
+            sql: `SELECT id, factura_desde, factura_hasta, facturas_faltantes FROM libro_ventas WHERE estatus_conciliacion != 'CONCILIADO'`,
+            args: []
+          });
+          for (const zc of (zCandRes.rows || [])) {
+            const faltList = String(zc.facturas_faltantes || '').split(',').map(s => normalizeFactNum(s)).filter(Boolean);
+            const fD = normalizeFactNum(zc.factura_desde);
+            const fH = normalizeFactNum(zc.factura_hasta);
+            if (faltList.includes(numFacturaNum) || (fD && fH && numFacturaNum >= fD && numFacturaNum <= fH)) {
+              resolvedLvId = Number(zc.id);
+              break;
+            }
+          }
+        }
+        if (resolvedLvId) {
+          const [lvRes, loadedZRes] = await Promise.all([
+            db.execute({
+              sql: "SELECT id, numero_reporte_z, cantidad_comprobantes, facturas_faltantes, total_bs, total_divisa, tasa_bcv FROM libro_ventas WHERE id = ? LIMIT 1",
+              args: [resolvedLvId]
+            }),
+            db.execute({
+              sql: `SELECT COUNT(DISTINCT m.id) AS cant_cargadas,
+                           COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs * 1.16), 0) AS cargado_bs
+                    FROM movimientos m
+                    LEFT JOIN movimiento_detalles md ON md.movimiento_id = m.id
+                    WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'`,
+              args: [resolvedLvId]
+            })
+          ]);
+          if (lvRes.rows.length > 0) {
+            const lvRow = lvRes.rows[0];
+            const targetZBs = Number(lvRow.total_bs || 0);
+            const yaCargadoBs = Number(loadedZRes.rows[0]?.cargado_bs || 0);
+            const cantCargadas = Number(loadedZRes.rows[0]?.cant_cargadas || 0);
+            const restanteZBs = Number((targetZBs - yaCargadoBs).toFixed(2));
+            const faltantesArr = String(lvRow.facturas_faltantes || '').split(',').map(s => s.trim()).filter(Boolean);
+            const pendientesEnZ = faltantesArr.length > 0 ? faltantesArr.length : Math.max(1, Number(lvRow.cantidad_comprobantes || 1) - cantCargadas);
+
+            if (targetZBs > 0) {
+              if (pendientesEnZ <= 1) {
+                const diffZBs = Number((calcTotalBs - restanteZBs).toFixed(2));
+                if (Math.abs(diffZBs) > TOLERANCIA_CUADRE_BS) {
+                  const signo = diffZBs > 0 ? '+' : '-';
+                  return jsonResponse({
+                    error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Ventas): Con esta salida el Reporte Z #${lvRow.numero_reporte_z || lvRow.id} sumaría Bs. ${fmtBsErr(yaCargadoBs + calcTotalBs)}, pero el Libro de Ventas refleja Bs. ${fmtBsErr(targetZBs)} (saldo por cuadrar: Bs. ${fmtBsErr(restanteZBs)}). Diferencia: ${signo}Bs. ${fmtBsErr(Math.abs(diffZBs))} (tolerancia máxima: Bs. 0,99 por céntimos). Cuadre la factura al espejo antes de continuar.`,
+                    bloqueo_cuadre: true,
+                    total_libro_bs: targetZBs,
+                    saldo_restante_bs: restanteZBs,
+                    total_movimiento_bs: calcTotalBs,
+                    diferencia_bs: diffZBs,
+                    tolerancia_bs: TOLERANCIA_CUADRE_BS
+                  }, 400);
+                }
+              } else if (calcTotalBs > (restanteZBs + TOLERANCIA_CUADRE_BS)) {
+                const excesoBs = Number((calcTotalBs - restanteZBs).toFixed(2));
+                return jsonResponse({
+                  error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Ventas): Esta salida (Bs. ${fmtBsErr(calcTotalBs)}) excede en Bs. ${fmtBsErr(excesoBs)} el saldo disponible del Reporte Z #${lvRow.numero_reporte_z || lvRow.id} (restante: Bs. ${fmtBsErr(restanteZBs)} de Bs. ${fmtBsErr(targetZBs)}). Verifique los montos antes de continuar.`,
+                  bloqueo_cuadre: true,
+                  total_libro_bs: targetZBs,
+                  saldo_restante_bs: restanteZBs,
+                  total_movimiento_bs: calcTotalBs,
+                  diferencia_bs: excesoBs,
+                  tolerancia_bs: TOLERANCIA_CUADRE_BS
+                }, 400);
+              }
+            }
+          }
+        }
+      }
+
+      const estatusInicial = (tipo === 'SALIDA_VENTA' && !esVentaFiscal) ? 'NO_APLICA_INTERNO' : 'PENDIENTE_UCG';
+      const headerResult = await db.execute({
+        sql: `INSERT INTO movimientos 
+              (tipo, subtipo, fecha, fecha_factura, tasa_bcv_factura, numero_documento, numero_factura_numerico, nro_control, usuario_responsable,
+               documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones,
+               estatus_conciliacion)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              RETURNING id`,
+        args: [
+          tipo, subtipoNorm, fecha, fecha_factura || fecha, Number(tasa_bcv_factura) > 0 ? Number(tasa_bcv_factura) : tasaNum,
+          docClean, numFacturaNum, ctrlNorm, usuarioNorm || 'CAJA_DG67',
+          documento_afectado || '', tasaNum, fechaTasaMes, body.moneda_operacion || 'USD', metodoVal,
+          proveedor_id ? parseInt(proveedor_id, 10) : null, obsClean, estatusInicial
+        ]
+      });
+
+      const movimientoId = Number(headerResult.rows[0]?.id || headerResult.lastInsertRowid);
+
+      const detailStatements = [];
+      const runningStockCpp = new Map();
+      for (const [pid, snap] of prodSnapMap.entries()) {
+        runningStockCpp.set(pid, { stock: snap.stock_actual, costoUsd: snap.costo_referencial_usd });
+      }
+
+      for (const ln of computedLines) {
+        const { pid, qty, tasaItem, cDivisa, cBs, precioUnitBs, precioUnitDiv, baseBs, baseDiv, ivaBs, ivaDiv, totBs, totDiv } = ln;
+        const snap = runningStockCpp.get(pid);
 
         detailStatements.push({
           sql: `INSERT INTO movimiento_detalles (
@@ -2196,7 +2396,7 @@ export async function onRequest(context) {
       let resultadoCruce = null;
       if (tipo === 'SALIDA_VENTA') {
         if (esVentaFiscal) {
-          const zId = body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null;
+          const zId = resolvedLvId || (body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null);
           if (zId) {
             await db.execute({
               sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
@@ -2210,20 +2410,7 @@ export async function onRequest(context) {
           resultadoCruce = { estatus: 'NO_APLICA_INTERNO', mensaje: 'Salida interna registrada sin afectación a Reporte Z.' };
         }
       } else if (tipo === 'ENTRADA_COMPRA') {
-        let lcId = body.libro_compras_id || null;
-        if (!lcId && numFacturaNum) {
-          let sqlMatch = `SELECT id FROM libro_compras WHERE aplica_inventario = 1 AND (libro_compras.movimiento_id IS NULL OR libro_compras.movimiento_id = 0) AND (UPPER(TRIM(nro_factura)) = UPPER(?) OR CAST(LTRIM(REPLACE(nro_factura, '-', ''), '0') AS INTEGER) = ?)`;
-          const argsMatch = [docClean, numFacturaNum];
-          if (proveedor_id) {
-            sqlMatch += ` AND proveedor_id = ?`;
-            argsMatch.push(parseInt(proveedor_id, 10));
-          }
-          sqlMatch += ` LIMIT 1`;
-          const matchLC = await db.execute({ sql: sqlMatch, args: argsMatch });
-          if (matchLC.rows.length > 0) {
-            lcId = matchLC.rows[0].id;
-          }
-        }
+        const lcId = resolvedLcId || body.libro_compras_id || null;
         if (lcId) {
           await Promise.all([
             db.execute({ sql: "UPDATE movimientos SET libro_compras_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?", args: [lcId, movimientoId] }),

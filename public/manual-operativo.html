@@ -1537,8 +1537,10 @@
           <div class="callout callout-amber">
             <span class="callout-icon">⚖️</span>
             <div>
-              <strong>REGLA DEL ESPEJO EXACTO — FACTURA FÍSICA = SISTEMA (CERO DIFERENCIAS)</strong>
-              Toda entrada respaldada por una factura de compra debe ser un <strong>espejo fiel y exacto de la factura física</strong>: mismas cantidades, misma Base Imponible, mismo IVA y exactamente el mismo <strong>Total en Bs. / $ USD</strong>. Si detecta cualquier diferencia (aunque sea por decimales o un descuento no aplicado), <strong>no guarde todavía</strong>: revise el costo unitario o consulte antes de registrar.
+              <strong>REGLA DEL ESPEJO EXACTO Y BLOQUEO AUTOMÁTICO (TOLERANCIA MÁXIMA: Bs. 0,99)</strong>
+              Toda entrada respaldada por una factura de compra debe ser un <strong>espejo fiel y exacto de la factura física</strong>: mismas cantidades, misma Base Imponible, mismo IVA y exactamente el mismo <strong>Total en Bs. / $ USD</strong>.
+              <br>• <strong>Si la factura está en el Libro de Compras (pendiente por dar entrada):</strong> SUMA <strong>bloquea automáticamente el botón de registro</strong> si la diferencia supera <strong>Bs. 0,99</strong> (tolerancia exclusiva por redondeo de céntimos). Solo se habilita cuando cuadra al espejo.
+              <br>• <strong>Si la entrada se registra en almacén ANTES de llegar al Libro de Compras:</strong> son estrictamente obligatorios el <strong>Proveedor Fiscal</strong>, <strong>N° de Factura</strong>, <strong>N° de Control Fiscal SENIAT completo</strong> (no dejar en <code>00-</code>), <strong>Fecha de Factura</strong>, <strong>Fecha de Recepción</strong>, <strong>Tasa BCV + Fecha Tasa</strong>, <strong>Responsable</strong> y <strong>Costo Unitario &gt; 0,00</strong> en cada línea.
             </div>
           </div>
 
@@ -1752,8 +1754,10 @@
           <div class="callout callout-amber">
             <span class="callout-icon">⚖️</span>
             <div>
-              <strong>REGLA DEL ESPEJO EXACTO EN VENTAS (CERO DIFERENCIAS)</strong>
-              Cada salida por factura de venta debe ser un <strong>espejo idéntico de la factura física o ticket fiscal</strong> entregado al cliente. Verifique siempre el número de factura, las cantidades y el <strong>Total exacto en Bs. / $ USD</strong> antes de guardar: <strong>no debe haber diferencias</strong> entre lo facturado en caja y lo descargado en el sistema.
+              <strong>REGLA DEL ESPEJO EXACTO EN VENTAS Y BLOQUEO AUTOMÁTICO (≤ Bs. 0,99)</strong>
+              Cada salida por factura de venta debe ser un <strong>espejo idéntico de la factura física o ticket fiscal</strong> entregado al cliente.
+              <br>• <strong>Si está vinculada al Libro de Ventas / Reporte Z:</strong> el sistema <strong>bloquea la continuación</strong> si el monto difiere en más de <strong>Bs. 0,99</strong> (tolerancia exclusiva de céntimos) o si excede el saldo pendiente del Reporte Z.
+              <br>• <strong>Si la salida se registra ANTES de llegar al Libro de Ventas:</strong> son estrictamente obligatorios la <strong>Fecha</strong>, <strong>N° de Factura / Ticket</strong>, <strong>Serial de Máquina Fiscal / N° Control</strong>, <strong>Tasa BCV + Fecha Tasa</strong>, <strong>Responsable</strong>, <strong>Cliente / Motivo</strong> y <strong>Precio Unitario &gt; 0,00</strong> en todas las líneas.
             </div>
           </div>
 

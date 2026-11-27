@@ -1965,15 +1965,240 @@ function renderTablasCruceEntradas() {
   }
 }
 
+const TOLERANCIA_CUADRE_BS = 0.99;
+let compraFiscalVinculada = null;
+let ventaFiscalVinculada = null;
+
+function isControlFiscalValidoUI(val) {
+  const cleaned = String(val || '').trim().toUpperCase()
+    .replace(/^00-/, '')
+    .replace(/S\/CTRL|N\/A|SIN\s*CONTROL/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+  return cleaned.length >= 2;
+}
+
+function evaluarBloqueoCuadreEntrada(totTotalBs = 0, totTotalUsd = 0, totBaseBs = 0) {
+  const box = document.getElementById('cuadre-fiscal-entrada-box');
+  const icon = document.getElementById('cuadre-fiscal-entrada-icon');
+  const msg = document.getElementById('cuadre-fiscal-entrada-msg');
+  const submitBtn = document.getElementById('btn-submit-entrada');
+  const dupVisible = document.getElementById('alerta-duplicado-entrada')?.style.display === 'block';
+  const fmtBsL = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (!compraFiscalVinculada || !(Number(compraFiscalVinculada.total_bs) > 0)) {
+    if (box && icon && msg) {
+      box.style.background = '#fffbeb';
+      box.style.border = '1px solid #fde68a';
+      box.style.borderLeft = '4px solid #d97706';
+      box.style.color = '#78350f';
+      icon.textContent = '⚖️';
+      msg.innerHTML = `<strong style="color:#92400e;">Control Espejo de Factura (Cero Diferencias):</strong> Antes de guardar, confirme que los artículos, la Base Imponible, el IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física de compra</strong>. Si la factura ya está en Libro de Compras, el sistema bloqueará el registro si la diferencia supera <strong>Bs. 0,99</strong> (tolerancia de céntimos).`;
+    }
+    if (submitBtn) {
+      submitBtn.dataset.bloqueoCuadre = '0';
+      if (!dupVisible) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+      }
+    }
+    return { bloqueado: false, diffBs: 0, targetBs: 0 };
+  }
+
+  const targetBs = Number(compraFiscalVinculada.total_bs || 0);
+  const targetUsd = Number(compraFiscalVinculada.total_usd || (targetBs / (compraFiscalVinculada.tasa_bcv || 889.58)));
+  const diffBs = Number((Number(totTotalBs || 0) - targetBs).toFixed(2));
+  const absDiff = Math.abs(diffBs);
+  const bloqueado = absDiff > TOLERANCIA_CUADRE_BS;
+
+  if (bloqueado) {
+    const accion = diffBs < 0 ? `Faltan Bs. ${fmtBsL(absDiff)}` : `Sobran Bs. ${fmtBsL(absDiff)}`;
+    if (box && icon && msg) {
+      box.style.background = '#fef2f2';
+      box.style.border = '1.5px solid #ef4444';
+      box.style.borderLeft = '5px solid #b91c1c';
+      box.style.color = '#7f1d1d';
+      icon.textContent = '⛔';
+      msg.innerHTML = `
+        <strong style="color:#991b1b; display:block; margin-bottom:2px;">BLOQUEO DE CONTINUACIÓN — DESCUADRE CONTRA LIBRO DE COMPRAS (Factura #${escapeHtml(compraFiscalVinculada.nro_factura)})</strong>
+        <div>Libro de Compras: <strong class="font-mono">Bs. ${fmtBsL(targetBs)} ($${targetUsd.toFixed(2)})</strong> &nbsp;|&nbsp; Tu Entrada: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)} ($${Number(totTotalUsd || 0).toFixed(2)})</strong> &nbsp;|&nbsp; Diferencia: <strong class="font-mono" style="color:#b91c1c;">${diffBs > 0 ? '+' : '-'}Bs. ${fmtBsL(absDiff)} (${accion})</strong></div>
+        <div style="font-size:0.74rem; margin-top:2px;">Cuadre los costos unitarios (en Bs.) o cantidades hasta quedar dentro de la tolerancia de céntimos (<strong>≤ Bs. 0,99</strong>) para habilitar el botón de registro.</div>
+      `;
+    }
+    if (submitBtn) {
+      submitBtn.dataset.bloqueoCuadre = '1';
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+      submitBtn.style.cursor = 'not-allowed';
+    }
+    return { bloqueado: true, diffBs, targetBs };
+  }
+
+  if (box && icon && msg) {
+    box.style.background = '#ecfdf5';
+    box.style.border = '1.5px solid #86efac';
+    box.style.borderLeft = '5px solid #059669';
+    box.style.color = '#065f46';
+    icon.textContent = '✅';
+    msg.innerHTML = `
+      <strong style="color:#065f46; display:block; margin-bottom:2px;">CUADRE ESPEJO VERIFICADO CONTRA LIBRO DE COMPRAS (Factura #${escapeHtml(compraFiscalVinculada.nro_factura)})</strong>
+      <div>Libro de Compras: <strong class="font-mono">Bs. ${fmtBsL(targetBs)} ($${targetUsd.toFixed(2)})</strong> &nbsp;|&nbsp; Tu Entrada: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)} ($${Number(totTotalUsd || 0).toFixed(2)})</strong> &nbsp;|&nbsp; Diferencia: <strong class="font-mono">Bs. ${fmtBsL(absDiff)}</strong> (dentro de tolerancia de céntimos) — Listo para registrar.</div>
+    `;
+  }
+  if (submitBtn) {
+    submitBtn.dataset.bloqueoCuadre = '0';
+    if (!dupVisible) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+    }
+  }
+  return { bloqueado: false, diffBs, targetBs };
+}
+
+function evaluarBloqueoCuadreSalida(totTotalBs = 0, totTotalUsd = 0) {
+  const box = document.getElementById('cuadre-fiscal-salida-box');
+  const icon = document.getElementById('cuadre-fiscal-salida-icon');
+  const msg = document.getElementById('cuadre-fiscal-salida-msg');
+  const submitBtn = document.getElementById('btn-submit-salida');
+  const fmtBsL = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (!ventaFiscalVinculada || !(Number(ventaFiscalVinculada.total_z_bs) > 0)) {
+    if (box && icon && msg) {
+      box.style.background = '#fffbeb';
+      box.style.border = '1px solid #fde68a';
+      box.style.borderLeft = '4px solid #d97706';
+      box.style.color = '#78350f';
+      icon.textContent = '⚖️';
+      msg.innerHTML = `<strong style="color:#92400e;">Control Espejo de Factura (Cero Diferencias):</strong> En toda venta facturada, verifique antes de guardar que las cantidades, Base Imponible, IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física / ticket fiscal emitido</strong>. Si está vinculada al Libro de Ventas, el sistema bloqueará el registro si la diferencia supera <strong>Bs. 0,99</strong> (tolerancia de céntimos).`;
+    }
+    if (submitBtn) {
+      submitBtn.dataset.bloqueoCuadre = '0';
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+    }
+    return { bloqueado: false, diffBs: 0, targetBs: 0 };
+  }
+
+  const targetZBs = Number(ventaFiscalVinculada.total_z_bs || 0);
+  const cargadoBs = Number(ventaFiscalVinculada.total_cargado_bs || 0);
+  const restanteBs = Number((ventaFiscalVinculada.saldo_restante_z_bs ?? (targetZBs - cargadoBs)).toFixed(2));
+  const pendEnZ = Number(ventaFiscalVinculada.facturas_pendientes_en_z || 1);
+  const tasaZ = Number(ventaFiscalVinculada.tasa_bcv || 889.58);
+  const numZ = escapeHtml(ventaFiscalVinculada.numero_reporte_z || ('Z-' + ventaFiscalVinculada.reporte_z_id));
+
+  if (pendEnZ <= 1) {
+    const diffBs = Number((Number(totTotalBs || 0) - restanteBs).toFixed(2));
+    const absDiff = Math.abs(diffBs);
+    if (absDiff > TOLERANCIA_CUADRE_BS) {
+      const accion = diffBs < 0 ? `Faltan Bs. ${fmtBsL(absDiff)}` : `Sobran Bs. ${fmtBsL(absDiff)}`;
+      if (box && icon && msg) {
+        box.style.background = '#fef2f2';
+        box.style.border = '1.5px solid #ef4444';
+        box.style.borderLeft = '5px solid #b91c1c';
+        box.style.color = '#7f1d1d';
+        icon.textContent = '⛔';
+        msg.innerHTML = `
+          <strong style="color:#991b1b; display:block; margin-bottom:2px;">BLOQUEO DE CONTINUACIÓN — DESCUADRE CONTRA LIBRO DE VENTAS (${numZ})</strong>
+          <div>Saldo a Cuadrar en Libro: <strong class="font-mono">Bs. ${fmtBsL(restanteBs)} ($${(restanteBs / tasaZ).toFixed(2)})</strong> &nbsp;|&nbsp; Tu Salida: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)} ($${Number(totTotalUsd || 0).toFixed(2)})</strong> &nbsp;|&nbsp; Diferencia: <strong class="font-mono" style="color:#b91c1c;">${diffBs > 0 ? '+' : '-'}Bs. ${fmtBsL(absDiff)} (${accion})</strong></div>
+          <div style="font-size:0.74rem; margin-top:2px;">Esta factura cierra el Reporte Z: ajuste los precios (en Bs.) o cantidades hasta quedar dentro de la tolerancia de céntimos (<strong>≤ Bs. 0,99</strong>) para habilitar el registro.</div>
+        `;
+      }
+      if (submitBtn) {
+        submitBtn.dataset.bloqueoCuadre = '1';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+        submitBtn.style.cursor = 'not-allowed';
+      }
+      return { bloqueado: true, diffBs, targetBs: restanteBs };
+    }
+
+    if (box && icon && msg) {
+      box.style.background = '#ecfdf5';
+      box.style.border = '1.5px solid #86efac';
+      box.style.borderLeft = '5px solid #059669';
+      box.style.color = '#065f46';
+      icon.textContent = '✅';
+      msg.innerHTML = `
+        <strong style="color:#065f46; display:block; margin-bottom:2px;">CUADRE ESPEJO VERIFICADO CONTRA LIBRO DE VENTAS (${numZ})</strong>
+        <div>Saldo a Cuadrar: <strong class="font-mono">Bs. ${fmtBsL(restanteBs)}</strong> &nbsp;|&nbsp; Tu Salida: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)} ($${Number(totTotalUsd || 0).toFixed(2)})</strong> &nbsp;|&nbsp; Diferencia: <strong class="font-mono">Bs. ${fmtBsL(absDiff)}</strong> (dentro de tolerancia de céntimos) — Listo para registrar.</div>
+      `;
+    }
+    if (submitBtn) {
+      submitBtn.dataset.bloqueoCuadre = '0';
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+    }
+    return { bloqueado: false, diffBs, targetBs: restanteBs };
+  }
+
+  // Reporte Z con varias facturas pendientes: impedir exceder el saldo restante del Reporte Z
+  if (Number(totTotalBs || 0) > (restanteBs + TOLERANCIA_CUADRE_BS)) {
+    const exceso = Number((Number(totTotalBs || 0) - restanteBs).toFixed(2));
+    if (box && icon && msg) {
+      box.style.background = '#fef2f2';
+      box.style.border = '1.5px solid #ef4444';
+      box.style.borderLeft = '5px solid #b91c1c';
+      box.style.color = '#7f1d1d';
+      icon.textContent = '⛔';
+      msg.innerHTML = `
+        <strong style="color:#991b1b; display:block; margin-bottom:2px;">BLOQUEO DE CONTINUACIÓN — EXCEDE EL SALDO DEL REPORTE Z (${numZ})</strong>
+        <div>Saldo Pendiente del Z (${pendEnZ} facturas): <strong class="font-mono">Bs. ${fmtBsL(restanteBs)}</strong> &nbsp;|&nbsp; Tu Salida: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)}</strong> &nbsp;|&nbsp; Exceso: <strong class="font-mono" style="color:#b91c1c;">+Bs. ${fmtBsL(exceso)}</strong></div>
+      `;
+    }
+    if (submitBtn) {
+      submitBtn.dataset.bloqueoCuadre = '1';
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+      submitBtn.style.cursor = 'not-allowed';
+    }
+    return { bloqueado: true, diffBs: exceso, targetBs: restanteBs };
+  }
+
+  const quedaraBs = Number((restanteBs - Number(totTotalBs || 0)).toFixed(2));
+  if (box && icon && msg) {
+    box.style.background = '#f0f9ff';
+    box.style.border = '1.5px solid #7dd3fc';
+    box.style.borderLeft = '5px solid #0284c7';
+    box.style.color = '#0c4a6e';
+    icon.textContent = '🔗';
+    msg.innerHTML = `
+      <strong style="color:#0369a1; display:block; margin-bottom:2px;">CUADRE PROGRESIVO CONTRA REPORTE Z (${numZ} • ${pendEnZ} facturas pendientes)</strong>
+      <div>Total Z: <strong class="font-mono">Bs. ${fmtBsL(targetZBs)}</strong> &nbsp;|&nbsp; Saldo Pendiente: <strong class="font-mono">Bs. ${fmtBsL(restanteBs)}</strong> &nbsp;|&nbsp; Esta Factura: <strong class="font-mono">Bs. ${fmtBsL(totTotalBs)}</strong> &nbsp;|&nbsp; Quedará para las restantes: <strong class="font-mono">Bs. ${fmtBsL(Math.max(0, quedaraBs))}</strong>.</div>
+    `;
+  }
+  if (submitBtn) {
+    submitBtn.dataset.bloqueoCuadre = '0';
+    submitBtn.disabled = false;
+    submitBtn.style.opacity = '1';
+    submitBtn.style.cursor = 'pointer';
+  }
+  return { bloqueado: false, diffBs: 0, targetBs: restanteBs };
+}
+
 function seleccionarFacturaCompraParaDetallar(compraId) {
   if (!cruceComprasCache) return;
   const list = cruceComprasCache.facturas_pendientes_almacen || [];
   const compra = list.find(c => Number(c.libro_compra_id) === Number(compraId));
   if (!compra) return;
 
-  // 1. Guardar id en input oculto
+  // 1. Guardar id en input oculto y monto fiscal objetivo para bloqueo espejo
   const hiddenLc = document.getElementById('ent-libro-compra-id');
   if (hiddenLc) hiddenLc.value = compra.libro_compra_id;
+  const totBs = Number(compra.total_bs || 0);
+  const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 889.58)));
+  compraFiscalVinculada = {
+    libro_compra_id: Number(compra.libro_compra_id),
+    nro_factura: compra.nro_factura || '',
+    razon_social: compra.razon_social || '',
+    base_bs: Number(compra.base_imponible_bs || 0),
+    iva_bs: Number(compra.iva_bs || 0),
+    total_bs: totBs,
+    total_usd: totUsd,
+    tasa_bcv: Number(compra.tasa_bcv || 889.58)
+  };
 
   // 2. Autocompletar datos del documento en form-entrada
   const fDoc = document.getElementById('ent-factura');
@@ -2009,26 +2234,28 @@ function seleccionarFacturaCompraParaDetallar(compraId) {
   const title = document.getElementById('banner-entrada-vinculada-title');
   const sub = document.getElementById('banner-entrada-vinculada-sub');
   if (banner) banner.style.display = 'block';
-  const totBs = Number(compra.total_bs || 0);
-  const totUsd = Number(compra.total_divisa || (totBs / (compra.tasa_bcv || 1)));
   if (title) title.innerHTML = `🔗 Vinculando Entrada con Factura #${compra.nro_factura} de ${compra.razon_social}`;
-  if (sub) sub.innerHTML = `Monto Factura: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • RIF: ${compra.rif}. Agregue los repuestos recibidos abajo:`;
+  if (sub) sub.innerHTML = `Monto Fiscal a Cuadrar al Espejo: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • Base: Bs. ${fmtBs(compra.base_imponible_bs || 0)} • IVA: Bs. ${fmtBs(compra.iva_bs || 0)} • RIF: ${compra.rif}.`;
 
-  // 5. Recalcular totales, verificar duplicados y hacer scroll suave al formulario
+  // 5. Recalcular totales, activar bloqueo de cuadre y hacer scroll suave al formulario
   calculateEntryTotals();
   if (typeof verificarEntradaAlmacenDuplicadaUI === 'function') {
     verificarEntradaAlmacenDuplicadaUI();
   }
   document.getElementById('form-entrada')?.scrollIntoView({ behavior: 'smooth' });
-  showToast(`Factura #${compra.nro_factura} vinculada. Agregue los artículos recibidos.`, 'info');
+  showToast(`Factura #${compra.nro_factura} vinculada. Cuadre el total con Bs. ${fmtBs(totBs)} (±Bs. 0,99) para habilitar el registro.`, 'info');
 }
 
 function onCambioSubtipoEntrada() {
   const subtipo = String(document.getElementById('ent-subtipo')?.value || 'COMPRA_NACIONAL').toUpperCase();
   const selProv = document.getElementById('ent-proveedor');
+  const ctrlInp = document.getElementById('ent-control');
   if (selProv) {
     const provOpcional = subtipo.includes('AJUSTE') || subtipo.includes('DEVOLUCION');
     selProv.required = !provOpcional;
+  }
+  if (ctrlInp) {
+    ctrlInp.required = (subtipo === 'COMPRA_NACIONAL');
   }
   calculateEntryTotals();
 }
@@ -2037,8 +2264,10 @@ window.onCambioSubtipoEntrada = onCambioSubtipoEntrada;
 function desvincularEntradaLibroCompra() {
   const hiddenLc = document.getElementById('ent-libro-compra-id');
   if (hiddenLc) hiddenLc.value = '';
+  compraFiscalVinculada = null;
   const banner = document.getElementById('banner-entrada-vinculada-lc');
   if (banner) banner.style.display = 'none';
+  calculateEntryTotals(true);
   showToast('Vinculación cancelada.', 'info');
 }
 
@@ -2108,6 +2337,8 @@ function calculateEntryTotals(skipInputSync = false) {
   if (elBase) elBase.textContent = `Bs. ${fmtBsLocal(totBaseBs)} ($${totBaseUsd.toFixed(2)})`;
   if (elIva) elIva.textContent = `Bs. ${fmtBsLocal(totIvaBs)} ($${totIvaUsd.toFixed(2)})`;
   if (elTot) elTot.textContent = `Bs. ${fmtBsLocal(totTotalBs)} ($${totTotalUsd.toFixed(2)})`;
+
+  evaluarBloqueoCuadreEntrada(totTotalBs, totTotalUsd, totBaseBs);
 }
 
 // 7. Dynamic Form Rows: SALIDA (VENTAS) — Validación en Tiempo Real Kardex + Doble Expresión
@@ -2278,6 +2509,8 @@ function calculateExitTotals(skipInputSync = false) {
   const elTot = document.getElementById('total-salida-total');
   if (elBase) elBase.textContent = `Bs. ${fmtBsLocal(totBaseBs)} ($${totBaseUsd.toFixed(2)})`;
   if (elTot) elTot.textContent = `Bs. ${fmtBsLocal(totTotalBs)} ($${totTotalUsd.toFixed(2)})`;
+
+  evaluarBloqueoCuadreSalida(totTotalBs, totTotalUsd);
 }
 
 function removeRow(rowId, callback) {
@@ -2307,12 +2540,61 @@ async function handleMovementSubmit(event, tipo) {
   const obs = document.getElementById(isEntrada ? 'ent-obs' : 'sal-obs').value.trim();
   const provId = isEntrada ? document.getElementById('ent-proveedor').value : null;
 
-  if (!doc || !nroControl || !usuarioResp) {
-    showToast('Complete el N° de Documento, N° Control y Responsable antes de guardar.', 'error');
+  const subtipoUp = String(subtipo || '').toUpperCase();
+  const esCompraFiscalUI = isEntrada && !subtipoUp.includes('AJUSTE');
+  const esVentaFiscalUI = !isEntrada && subtipoUp === 'VENTA';
+
+  // CAMPOS OBLIGATORIOS PARA OPERACIONES PRE-LIBRO (antes de llegar a Libro de Compras / Ventas)
+  if (!fecha) {
+    showToast('Campo obligatorio: seleccione la fecha del movimiento.', 'error');
+    document.getElementById(isEntrada ? 'ent-fecha' : 'sal-fecha')?.focus();
     return;
   }
+  if (!doc) {
+    showToast('Campo obligatorio: ingrese el N° de Factura o Documento.', 'error');
+    document.getElementById(isEntrada ? 'ent-factura' : 'sal-factura')?.focus();
+    return;
+  }
+  if (!usuarioResp) {
+    showToast('Campo obligatorio: indique el Responsable del registro.', 'error');
+    document.getElementById(isEntrada ? 'ent-usuario' : 'sal-usuario')?.focus();
+    return;
+  }
+  if (!(tasaBcv > 0) || !fechaTasaBcv) {
+    showToast('Campo obligatorio: indique una Tasa BCV válida mayor a 0 y su fecha.', 'error');
+    document.getElementById(isEntrada ? 'ent-tasa' : 'sal-tasa')?.focus();
+    return;
+  }
+  if (esCompraFiscalUI) {
+    if (!provId) {
+      showToast('Campo obligatorio: seleccione el Proveedor Fiscal antes de registrar la entrada.', 'error');
+      document.getElementById('ent-proveedor')?.focus();
+      return;
+    }
+    if (!fechaFactura) {
+      showToast('Campo obligatorio: seleccione la Fecha de Emisión de la Factura.', 'error');
+      document.getElementById('ent-fecha-factura')?.focus();
+      return;
+    }
+    if (subtipoUp === 'COMPRA_NACIONAL' && !isControlFiscalValidoUI(nroControl)) {
+      showToast('Campo obligatorio: ingrese el N° de Control Fiscal SENIAT completo (no dejar vacío ni solo "00-").', 'error');
+      document.getElementById('ent-control')?.focus();
+      return;
+    }
+  }
+  if (esVentaFiscalUI) {
+    if (!nroControl || nroControl.length < 3) {
+      showToast('Campo obligatorio: indique el Serial de Máquina Fiscal o N° de Control.', 'error');
+      document.getElementById('sal-control')?.focus();
+      return;
+    }
+    if (!obs || obs.length < 3) {
+      showToast('Campo obligatorio: indique el Cliente o Motivo de Salida (mínimo 3 caracteres).', 'error');
+      document.getElementById('sal-obs')?.focus();
+      return;
+    }
+  }
 
-  const subtipoUp = String(subtipo || '').toUpperCase();
   const esMovGravado = isEntrada
     ? !subtipoUp.includes('AJUSTE')
     : (subtipoUp === 'VENTA' || subtipoUp.includes('RETIRO'));
@@ -2375,8 +2657,28 @@ async function handleMovementSubmit(event, tipo) {
     return;
   }
 
-  if (esMovGravado && hayPrecioCero) {
-    if (!confirm('Uno o más artículos tienen costo/precio en 0,00. ¿Desea registrar el movimiento de todas formas?')) {
+  if ((esCompraFiscalUI && subtipoUp !== 'NOTA_RECEPCION' && hayPrecioCero) || (esVentaFiscalUI && hayPrecioCero)) {
+    showToast('Campo obligatorio: todos los artículos de una factura fiscal deben tener costo/precio unitario mayor a 0,00.', 'error');
+    return;
+  }
+
+  // BLOQUEO ESTRICTO DE CONTINUACIÓN CONTRA LIBRO DE COMPRAS / LIBRO DE VENTAS (tolerancia <= Bs. 0,99)
+  const sumaTotalBsMov = Number(items.reduce((acc, it) => acc + Number(it.total_linea_bs || 0), 0).toFixed(2));
+  const sumaTotalUsdMov = Number(items.reduce((acc, it) => acc + Number(it.total_linea_divisa || 0), 0).toFixed(2));
+  const sumaBaseBsMov = Number(items.reduce((acc, it) => acc + Number(it.base_imponible_bs || 0), 0).toFixed(2));
+  if (isEntrada && compraFiscalVinculada) {
+    const checkEnt = evaluarBloqueoCuadreEntrada(sumaTotalBsMov, sumaTotalUsdMov, sumaBaseBsMov);
+    if (checkEnt.bloqueado) {
+      document.getElementById('cuadre-fiscal-entrada-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`⛔ Bloqueado por descuadre contra Libro de Compras (Diferencia: ${checkEnt.diffBs > 0 ? '+' : '-'}Bs. ${Math.abs(checkEnt.diffBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}). Debe cuadrar dentro de ±Bs. 0,99.`, 'error');
+      return;
+    }
+  }
+  if (!isEntrada && esVentaFiscalUI && ventaFiscalVinculada) {
+    const checkSal = evaluarBloqueoCuadreSalida(sumaTotalBsMov, sumaTotalUsdMov);
+    if (checkSal.bloqueado) {
+      document.getElementById('cuadre-fiscal-salida-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`⛔ Bloqueado por descuadre contra Libro de Ventas (Diferencia: ${checkSal.diffBs > 0 ? '+' : '-'}Bs. ${Math.abs(checkSal.diffBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}). Cuadre dentro de ±Bs. 0,99.`, 'error');
       return;
     }
   }
@@ -2450,8 +2752,9 @@ async function handleMovementSubmit(event, tipo) {
     showToast(err.message, 'error');
   } finally {
     if (submitBtn) {
-      submitBtn.disabled = false;
       submitBtn.innerHTML = submitOriginalHtml || (isEntrada ? 'Registrar Entrada en Almacén' : 'Registrar Venta / Salida');
+      if (isEntrada) calculateEntryTotals(true);
+      else calculateExitTotals(true);
     }
   }
 }
@@ -2471,6 +2774,7 @@ function resetForm(formId, addInitialRow = true) {
   if (formId === 'form-entrada') {
     const hiddenLc = document.getElementById('ent-libro-compra-id');
     if (hiddenLc) hiddenLc.value = '';
+    compraFiscalVinculada = null;
     const bannerLc = document.getElementById('banner-entrada-vinculada-lc');
     if (bannerLc) bannerLc.style.display = 'none';
     const selProv = document.getElementById('ent-proveedor');
@@ -2502,6 +2806,7 @@ function resetForm(formId, addInitialRow = true) {
   } else if (formId === 'form-salida') {
     const hiddenZ = document.getElementById('sal-libro-ventas-id');
     if (hiddenZ) hiddenZ.value = '';
+    ventaFiscalVinculada = null;
     const bannerZ = document.getElementById('banner-salida-vinculada-z');
     if (bannerZ) bannerZ.style.display = 'none';
 
@@ -4879,13 +5184,30 @@ async function verificarEntradaAlmacenDuplicadaUI() {
         inputDoc.style.borderColor = '';
         inputDoc.style.backgroundColor = '';
       }
-      if (submitBtn) {
+      if (submitBtn && submitBtn.dataset.bloqueoCuadre !== '1') {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
         submitBtn.style.opacity = '1';
         submitBtn.style.cursor = 'pointer';
       }
       return;
+    }
+
+    // Auto-vincular si el N° de Factura digitado corresponde a una factura pendiente en Libro de Compras
+    if (!compraFiscalVinculada && cruceComprasCache && Array.isArray(cruceComprasCache.facturas_pendientes_almacen)) {
+      const normNum = s => { const m = String(s || '').match(/(\d+)(?!.*\d)/); return m ? parseInt(m[1], 10) : null; };
+      const docNumTyped = normNum(doc);
+      const selProvObj = (state.suppliers || []).find(s => String(s.id) === String(provId));
+      const provRifClean = String(selProvObj?.rif || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const pendMatch = cruceComprasCache.facturas_pendientes_almacen.find(c => {
+        const sameNum = (docNumTyped && normNum(c.nro_factura) === docNumTyped) || (String(c.nro_factura || '').trim().toUpperCase() === doc.toUpperCase());
+        if (!sameNum) return false;
+        if (!provRifClean || !c.rif) return true;
+        return String(c.rif).toLowerCase().replace(/[^a-z0-9]/g, '') === provRifClean;
+      });
+      if (pendMatch) {
+        seleccionarFacturaCompraParaDetallar(pendMatch.libro_compra_id);
+        return;
+      }
     }
 
     try {
@@ -4914,12 +5236,10 @@ async function verificarEntradaAlmacenDuplicadaUI() {
           inputDoc.style.borderColor = '#10b981';
           inputDoc.style.backgroundColor = '#f0fdf4';
         }
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Guardar Entrada con Trazabilidad SENIAT';
-          submitBtn.style.opacity = '1';
-          submitBtn.style.cursor = 'pointer';
+        if (submitBtn && submitBtn.textContent.includes('Duplicada')) {
+          submitBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Registrar Entrada en Almacén`;
         }
+        calculateEntryTotals(true);
       }
     } catch (e) {
       console.warn('Error verificando duplicado entrada:', e);
@@ -6420,6 +6740,20 @@ function seleccionarFacturaZParaDetallarSalida(reporteZId, numeroFactura, fecha,
   const fTasa = document.getElementById('sal-tasa');
   const fZId = document.getElementById('sal-libro-ventas-id');
 
+  const pendList = cruceSalidasDataCache?.facturas_pendientes_salida || [];
+  const pendMatch = pendList.find(p => Number(p.reporte_z_id) === Number(reporteZId) && String(p.factura_numero).replace(/^0+/, '') === String(numeroFactura).replace(/^0+/, ''))
+    || pendList.find(p => Number(p.reporte_z_id) === Number(reporteZId));
+  ventaFiscalVinculada = pendMatch ? {
+    reporte_z_id: Number(reporteZId),
+    numero_reporte_z: numReporteZ || pendMatch.numero_reporte_z || ('Z-' + reporteZId),
+    factura_numero: numeroFactura,
+    total_z_bs: Number(pendMatch.total_z_bs || 0),
+    total_cargado_bs: Number(pendMatch.total_cargado_bs || 0),
+    saldo_restante_z_bs: Number(pendMatch.saldo_restante_z_bs ?? pendMatch.total_z_bs ?? 0),
+    facturas_pendientes_en_z: Number(pendMatch.facturas_pendientes_en_z || 1),
+    tasa_bcv: Number(tasaBcv || pendMatch.tasa_bcv || 889.58)
+  } : null;
+
   if (fFecha) fFecha.value = fecha;
   if (fFechaTasa) fFechaTasa.value = fecha;
   if (fFact) fFact.value = `FACT ${numeroFactura}`;
@@ -6432,7 +6766,10 @@ function seleccionarFacturaZParaDetallarSalida(reporteZId, numeroFactura, fecha,
   const txt = document.getElementById('banner-salida-vinculada-texto');
   if (banner && txt) {
     banner.style.display = 'flex';
-    txt.innerHTML = `Factura Fiscal <strong>#${numeroFactura}</strong> vinculada al Reporte Z <strong>${numReporteZ}</strong> (${fecha})`;
+    const metaZ = ventaFiscalVinculada && ventaFiscalVinculada.total_z_bs > 0
+      ? ` • Saldo Libro Ventas: Bs. ${fmtBs(ventaFiscalVinculada.saldo_restante_z_bs)}`
+      : '';
+    txt.innerHTML = `Factura Fiscal <strong>#${numeroFactura}</strong> vinculada al Reporte Z <strong>${numReporteZ}</strong> (${fecha})${metaZ}`;
   }
 
   document.getElementById('form-salida')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6440,14 +6777,16 @@ function seleccionarFacturaZParaDetallarSalida(reporteZId, numeroFactura, fecha,
   const primerProd = document.querySelector('.sal-prod-select');
   if (primerProd) primerProd.focus();
 
-  showToast(`Factura #${numeroFactura} vinculada. Agrega los repuestos despachados para descargar el inventario.`, 'info');
+  showToast(`Factura #${numeroFactura} vinculada. Cuadre el monto contra el Libro de Ventas (±Bs. 0,99) para registrar.`, 'info');
 }
 
 function desvincularSalidaLibroVentas() {
   const fZId = document.getElementById('sal-libro-ventas-id');
   if (fZId) fZId.value = '';
+  ventaFiscalVinculada = null;
   const banner = document.getElementById('banner-salida-vinculada-z');
   if (banner) banner.style.display = 'none';
+  calculateExitTotals(true);
   showToast('Desvinculado del Reporte Z', 'info');
 }
 

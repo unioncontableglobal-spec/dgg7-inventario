@@ -1282,12 +1282,12 @@
                 </div>
               </div>
 
-              <!-- Regla Espejo de Factura (Cero Diferencias) -->
-              <div style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 10px 14px; margin: 14px 0 8px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.80rem; color: #78350f; line-height: 1.45;">
-                <span style="font-size: 1.15rem; line-height: 1;">⚖️</span>
-                <div>
+              <!-- Control Dinámico de Cuadre Espejo contra Libro de Compras (Bloqueo con tolerancia de céntimos) -->
+              <div id="cuadre-fiscal-entrada-box" style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 10px 14px; margin: 14px 0 8px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.80rem; color: #78350f; line-height: 1.45;">
+                <span id="cuadre-fiscal-entrada-icon" style="font-size: 1.15rem; line-height: 1;">⚖️</span>
+                <div id="cuadre-fiscal-entrada-msg" style="flex: 1;">
                   <strong style="color: #92400e;">Control Espejo de Factura (Cero Diferencias):</strong>
-                  Antes de guardar, confirme que los artículos, la Base Imponible, el IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física de compra</strong>. No debe existir ninguna diferencia entre el documento físico y el sistema.
+                  Antes de guardar, confirme que los artículos, la Base Imponible, el IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física de compra</strong>. Si la factura ya está en Libro de Compras, el sistema bloqueará el registro si la diferencia supera <strong>Bs. 0,99</strong> (tolerancia de céntimos).
                 </div>
               </div>
 
@@ -1457,12 +1457,12 @@
                 </div>
               </div>
 
-              <!-- Regla Espejo de Factura (Cero Diferencias) -->
-              <div style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 10px 14px; margin: 14px 0 8px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.80rem; color: #78350f; line-height: 1.45;">
-                <span style="font-size: 1.15rem; line-height: 1;">⚖️</span>
-                <div>
+              <!-- Control Dinámico de Cuadre Espejo contra Libro de Ventas (Bloqueo con tolerancia de céntimos) -->
+              <div id="cuadre-fiscal-salida-box" style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 10px 14px; margin: 14px 0 8px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.80rem; color: #78350f; line-height: 1.45;">
+                <span id="cuadre-fiscal-salida-icon" style="font-size: 1.15rem; line-height: 1;">⚖️</span>
+                <div id="cuadre-fiscal-salida-msg" style="flex: 1;">
                   <strong style="color: #92400e;">Control Espejo de Factura (Cero Diferencias):</strong>
-                  En toda venta facturada, verifique antes de guardar que las cantidades, Base Imponible, IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física / ticket fiscal emitido</strong>. No debe existir ninguna diferencia.
+                  En toda venta facturada, verifique antes de guardar que las cantidades, Base Imponible, IVA y el <strong>Total en Bs. / $ USD</strong> sean un <strong>espejo exacto de la factura física / ticket fiscal emitido</strong>. Si está vinculada al Libro de Ventas, el sistema bloqueará el registro si la diferencia supera <strong>Bs. 0,99</strong> (tolerancia de céntimos).
                 </div>
               </div>
 
@@ -6223,7 +6223,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="extractor-compras.js?v=20261126_v3"></script>
-  <script src="app.js?v=20261126_v3"></script>
+  <script src="app.js?v=20261127_v2"></script>
 </body>
 
 </html>

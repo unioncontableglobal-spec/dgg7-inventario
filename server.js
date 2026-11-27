@@ -1205,7 +1205,73 @@ app.post('/api/movimientos', async (req, res) => {
     }
 
     const subtipoNorm = subtipo || (tipo === 'ENTRADA_COMPRA' ? 'COMPRA_NACIONAL' : (tipo === 'SALIDA_VENTA' ? 'VENTA' : 'AJUSTE'));
-    const usuarioNorm = (usuario_responsable && String(usuario_responsable).trim()) || 'ASISTENTE_TIENDA_AUTORIZADO';
+    const subUpperNodePre = String(subtipoNorm || '').toUpperCase();
+    const usuarioNorm = String(usuario_responsable || '').trim();
+    const obsCleanNode = String(observaciones || '').trim();
+    const ctrlRawNode = String(nro_control || '').trim();
+    const docCleanNode = String(numero_documento).trim();
+    const TOLERANCIA_CUADRE_BS = 0.99;
+    const isControlRealNode = (val) => {
+      const cleaned = String(val || '').trim().toUpperCase().replace(/^00-/, '').replace(/S\/CTRL|N\/A|SIN\s*CONTROL/g, '').replace(/[^A-Z0-9]/g, '');
+      return cleaned.length >= 2;
+    };
+
+    const esCompraFiscalNode = (tipo === 'ENTRADA_COMPRA' && !subUpperNodePre.includes('AJUSTE'));
+    const esVentaFiscalNodePre = (tipo === 'SALIDA_VENTA' && subUpperNodePre === 'VENTA');
+    if (esCompraFiscalNode) {
+      if (!proveedor_id || !parseInt(proveedor_id, 10)) {
+        return res.status(400).json({ error: 'Campo obligatorio: seleccione el Proveedor Fiscal antes de registrar la entrada.' });
+      }
+      if (!req.body.fecha_factura || !/^\d{4}-\d{2}-\d{2}$/.test(String(req.body.fecha_factura))) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique la Fecha de Emisión de la Factura Fiscal.' });
+      }
+      if (subUpperNodePre === 'COMPRA_NACIONAL' && !isControlRealNode(ctrlRawNode)) {
+        return res.status(400).json({ error: 'Campo obligatorio: ingrese el N° de Control Fiscal SENIAT completo (no dejar vacío ni solo "00-").' });
+      }
+      if (!(Number(req.body.tasa_bcv_factura || tasa_bcv) > 0)) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique una Tasa BCV válida mayor a 0.' });
+      }
+      if (!req.body.fecha_tasa_bcv) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique la Fecha de la Tasa BCV.' });
+      }
+      if (!usuarioNorm) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique el Responsable de la recepción.' });
+      }
+      if (subUpperNodePre !== 'NOTA_RECEPCION') {
+        for (const it of items) {
+          const cuU = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
+          const cuB = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
+          if (!(cuU > 0 || cuB > 0)) {
+            return res.status(400).json({ error: 'Campo obligatorio: todos los artículos de una compra fiscal deben tener costo unitario mayor a 0,00.' });
+          }
+        }
+      }
+    }
+    if (esVentaFiscalNodePre) {
+      if (!ctrlRawNode || ctrlRawNode.length < 3) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique el Serial de Máquina Fiscal o N° de Control.' });
+      }
+      if (!(Number(tasa_bcv) > 0)) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique una Tasa BCV válida mayor a 0.' });
+      }
+      if (!req.body.fecha_tasa_bcv) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique la Fecha de la Tasa BCV.' });
+      }
+      if (!usuarioNorm) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique el Responsable del despacho.' });
+      }
+      if (obsCleanNode.length < 3) {
+        return res.status(400).json({ error: 'Campo obligatorio: indique el Cliente o Motivo de Salida (mínimo 3 caracteres).' });
+      }
+      for (const it of items) {
+        const puU = parseFloat(it.precio_unitario_divisa || 0);
+        const puB = parseFloat(it.precio_unitario_bs || 0);
+        if (!(puU > 0 || puB > 0)) {
+          return res.status(400).json({ error: 'Campo obligatorio: todos los artículos de una factura de venta deben tener precio unitario mayor a 0,00.' });
+        }
+      }
+    }
+
     const periodoMov = String(fecha).slice(0, 7);
 
     // Obtener tasa BCV oficial del período y método de valoración (CPP o PEPS)
@@ -1259,6 +1325,95 @@ app.post('/api/movimientos', async (req, res) => {
           duplicado: true,
           detalle: dupEnt
         });
+      }
+    }
+
+    // VALIDACIÓN ESTRICTA DE CUADRE ESPEJO CONTRA LIBROS FISCALES (tolerancia máxima Bs. 0,99 por céntimos)
+    const aplicaIvaPreNode = (tipo === 'ENTRADA_COMPRA' && !subUpperNodePre.includes('AJUSTE')) ||
+                             (tipo === 'SALIDA_VENTA' && (subUpperNodePre === 'VENTA' || subUpperNodePre.includes('RETIRO')));
+    const pctIvaPreNode = aplicaIvaPreNode ? 0.16 : 0;
+    let calcTotalBsNode = 0;
+    for (const it of items) {
+      const qty = parseFloat(it.cantidad) || 0;
+      const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
+      let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
+      let cBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
+      if (cDivisa <= 0 && cBs > 0) cDivisa = Number((cBs / tasaItem).toFixed(2));
+      if (cBs <= 0 && cDivisa > 0) cBs = Number((cDivisa * tasaItem).toFixed(2));
+      const pBs = parseFloat(it.precio_unitario_bs || cBs || Number((parseFloat(it.precio_unitario_divisa || 0) * tasaItem).toFixed(2)));
+      const bBs = Number((qty * pBs).toFixed(2));
+      calcTotalBsNode += Number((bBs + Number((bBs * pctIvaPreNode).toFixed(2))).toFixed(2));
+    }
+    calcTotalBsNode = Number(calcTotalBsNode.toFixed(2));
+    const fmtBsNodeErr = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const normFactNode = (v) => { const m = String(v || '').match(/(\d+)(?!.*\d)/); return m ? parseInt(m[1], 10) : null; };
+    const docNumNode = normFactNode(docCleanNode);
+
+    if (esCompraFiscalNode) {
+      let lcIdNode = req.body.libro_compras_id ? parseInt(req.body.libro_compras_id, 10) : null;
+      if (!lcIdNode && docNumNode) {
+        let sqlM = `SELECT id FROM libro_compras WHERE aplica_inventario = 1 AND (movimiento_id IS NULL OR movimiento_id = 0) AND (UPPER(TRIM(nro_factura)) = UPPER(?) OR CAST(LTRIM(REPLACE(nro_factura, '-', ''), '0') AS INTEGER) = ?)`;
+        const argsM = [docCleanNode, docNumNode];
+        if (proveedor_id) { sqlM += ' AND proveedor_id = ?'; argsM.push(parseInt(proveedor_id, 10)); }
+        const mRes = await db.execute({ sql: sqlM + ' LIMIT 1', args: argsM });
+        if (mRes.rows.length > 0) lcIdNode = Number(mRes.rows[0].id);
+      }
+      if (lcIdNode) {
+        const lcRes = await db.execute({ sql: "SELECT id, nro_factura, total_bs FROM libro_compras WHERE id = ? LIMIT 1", args: [lcIdNode] });
+        const targetBs = Number(lcRes.rows[0]?.total_bs || 0);
+        if (targetBs > 0 && Math.abs(calcTotalBsNode - targetBs) > TOLERANCIA_CUADRE_BS) {
+          const diff = Number((calcTotalBsNode - targetBs).toFixed(2));
+          return res.status(400).json({
+            error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Compras): La Entrada (Bs. ${fmtBsNodeErr(calcTotalBsNode)}) no cuadra con la Factura #${lcRes.rows[0].nro_factura} en Libro de Compras (Bs. ${fmtBsNodeErr(targetBs)}). Diferencia: ${diff > 0 ? '+' : '-'}Bs. ${fmtBsNodeErr(Math.abs(diff))} (tolerancia máxima: Bs. 0,99 por céntimos).`,
+            bloqueo_cuadre: true,
+            total_libro_bs: targetBs,
+            total_movimiento_bs: calcTotalBsNode,
+            diferencia_bs: diff,
+            tolerancia_bs: TOLERANCIA_CUADRE_BS
+          });
+        }
+      }
+    }
+
+    if (esVentaFiscalNodePre) {
+      let lvIdNode = req.body.libro_ventas_id ? parseInt(req.body.libro_ventas_id, 10) : null;
+      if (!lvIdNode && docNumNode) {
+        const zCands = await db.execute("SELECT id, factura_desde, factura_hasta, facturas_faltantes FROM libro_ventas WHERE estatus_conciliacion != 'CONCILIADO'");
+        for (const zc of (zCands.rows || [])) {
+          const fl = String(zc.facturas_faltantes || '').split(',').map(normFactNode).filter(Boolean);
+          const fD = normFactNode(zc.factura_desde);
+          const fH = normFactNode(zc.factura_hasta);
+          if (fl.includes(docNumNode) || (fD && fH && docNumNode >= fD && docNumNode <= fH)) { lvIdNode = Number(zc.id); break; }
+        }
+      }
+      if (lvIdNode) {
+        const [lvR, ldR] = await Promise.all([
+          db.execute({ sql: "SELECT id, numero_reporte_z, cantidad_comprobantes, facturas_faltantes, total_bs FROM libro_ventas WHERE id = ? LIMIT 1", args: [lvIdNode] }),
+          db.execute({ sql: "SELECT COUNT(DISTINCT m.id) AS cnt, COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs * 1.16), 0) AS cargado_bs FROM movimientos m LEFT JOIN movimiento_detalles md ON md.movimiento_id = m.id WHERE m.libro_ventas_id = ? AND m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'", args: [lvIdNode] })
+        ]);
+        if (lvR.rows.length > 0) {
+          const lvRow = lvR.rows[0];
+          const targetZ = Number(lvRow.total_bs || 0);
+          const yaC = Number(ldR.rows[0]?.cargado_bs || 0);
+          const restZ = Number((targetZ - yaC).toFixed(2));
+          const fArr = String(lvRow.facturas_faltantes || '').split(',').map(s => s.trim()).filter(Boolean);
+          const pendZ = fArr.length > 0 ? fArr.length : Math.max(1, Number(lvRow.cantidad_comprobantes || 1) - Number(ldR.rows[0]?.cnt || 0));
+          if (targetZ > 0) {
+            if (pendZ <= 1 && Math.abs(calcTotalBsNode - restZ) > TOLERANCIA_CUADRE_BS) {
+              const diff = Number((calcTotalBsNode - restZ).toFixed(2));
+              return res.status(400).json({
+                error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Ventas): Con esta salida el Reporte Z #${lvRow.numero_reporte_z || lvRow.id} sumaría Bs. ${fmtBsNodeErr(yaC + calcTotalBsNode)}, pero el Libro de Ventas refleja Bs. ${fmtBsNodeErr(targetZ)}. Diferencia: ${diff > 0 ? '+' : '-'}Bs. ${fmtBsNodeErr(Math.abs(diff))} (tolerancia máxima: Bs. 0,99 por céntimos).`,
+                bloqueo_cuadre: true, total_libro_bs: targetZ, saldo_restante_bs: restZ, total_movimiento_bs: calcTotalBsNode, diferencia_bs: diff, tolerancia_bs: TOLERANCIA_CUADRE_BS
+              });
+            }
+            if (pendZ > 1 && calcTotalBsNode > (restZ + TOLERANCIA_CUADRE_BS)) {
+              return res.status(400).json({
+                error: `⛔ BLOQUEO DE CUADRE FISCAL (Libro de Ventas): Esta salida (Bs. ${fmtBsNodeErr(calcTotalBsNode)}) excede el saldo pendiente del Reporte Z #${lvRow.numero_reporte_z || lvRow.id} (Bs. ${fmtBsNodeErr(restZ)}).`,
+                bloqueo_cuadre: true, total_libro_bs: targetZ, saldo_restante_bs: restZ, total_movimiento_bs: calcTotalBsNode, tolerancia_bs: TOLERANCIA_CUADRE_BS
+              });
+            }
+          }
+        }
       }
     }
 
