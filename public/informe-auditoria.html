@@ -30,6 +30,7 @@
       font-size: 13px;
       -webkit-text-size-adjust: 100%;
       text-size-adjust: 100%;
+      visibility: hidden;
     }
     .container { max-width: 1280px; margin: 0 auto; }
     .action-bar {
@@ -419,25 +420,35 @@
   </div>
   <script>
     (function () {
-      const token = sessionStorage.getItem('dg67_token') || localStorage.getItem('dg67_token') || '';
-      const rawUser = sessionStorage.getItem('dg67_user') || localStorage.getItem('dg67_user') || '';
+      let sess = null;
       try {
-        const u = rawUser ? JSON.parse(rawUser) : null;
-        const r = String(u?.rol || '').toUpperCase();
-        if (r === 'OPERADOR' || r === 'VENDEDOR') {
+        const raw = sessionStorage.getItem('dg67_auth_session');
+        if (raw) sess = JSON.parse(raw);
+      } catch (_) {}
+
+      const localRol = String(sess?.usuario?.rol || '').toUpperCase();
+      if (localRol === 'OPERADOR' || localRol === 'VENDEDOR') {
+        window.location.replace('/');
+        return;
+      }
+
+      const headers = {};
+      if (sess?.token) headers['Authorization'] = 'Bearer ' + sess.token;
+      if (localRol) headers['X-Suma-Role'] = localRol;
+
+      fetch('/api/auth/verify', {
+        headers,
+        credentials: 'same-origin'
+      }).then(r => r.json()).then(d => {
+        const rol = String(d?.usuario?.rol || '').toUpperCase();
+        if (!d?.active || !d?.usuario || rol === 'OPERADOR' || rol === 'VENDEDOR') {
           window.location.replace('/');
           return;
         }
-      } catch (_) {}
-      fetch('/api/auth/verify', {
-        headers: token ? { Authorization: 'Bearer ' + token } : {},
-        credentials: 'same-origin'
-      }).then(r => r.json()).then(d => {
-        const rol = String(d?.user?.rol || '').toUpperCase();
-        if (!d?.ok || rol === 'OPERADOR' || rol === 'VENDEDOR') {
-          window.location.replace('/');
-        }
-      }).catch(() => {});
+        document.body.style.visibility = 'visible';
+      }).catch(() => {
+        window.location.replace('/');
+      });
     })();
   </script>
 </body>

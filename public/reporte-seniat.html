@@ -1397,19 +1397,26 @@
     document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('lbl-fecha-emision').textContent = 'Emisión: ' + new Date().toLocaleDateString('es-VE');
 
-      // Verificar rol de sesión (bloquear acceso fiscal a Operador) y estatus de Toma Física
+      // Verificar sesión y rol (bloquear acceso fiscal a visitantes sin sesión o rol Operador)
       try {
         const [authRes, tfRes] = await Promise.all([
-          fetch('/api/auth/verify', { headers: obtenerHeadersAuth() }).then(r => r.json()).catch(() => null),
-          fetch('/api/auditoria/toma-fisica/estatus?periodo=2026-10', { headers: obtenerHeadersAuth() }).then(r => r.json()).catch(() => null)
+          fetch('/api/auth/verify', { headers: obtenerHeadersAuth(), credentials: 'same-origin' }).then(r => r.json()).catch(() => null),
+          fetch('/api/auditoria/toma-fisica/estatus?periodo=2026-10', { headers: obtenerHeadersAuth(), credentials: 'same-origin' }).then(r => r.json()).catch(() => null)
         ]);
         const rolVerif = String(authRes?.usuario?.rol || obtenerSesionActiva()?.usuario?.rol || '').toUpperCase();
+        if (!authRes?.active || !authRes?.usuario) {
+          window.location.replace('/');
+          return;
+        }
         if (rolVerif === 'OPERADOR' || rolVerif === 'VENDEDOR') {
           document.body.innerHTML = '<div style="max-width:520px;margin:80px auto;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:28px;text-align:center;font-family:sans-serif;"><h2 style="color:#0f172a;margin-bottom:8px;">Acceso Fiscal Restringido</h2><p style="color:#475569;font-size:14px;margin-bottom:16px;">El Libro Oficial SENIAT Art. 177 pertenece exclusivamente a Administración y Contabilidad.</p><a href="/" style="display:inline-block;padding:10px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Volver a Gestión de Inventarios</a></div>';
           return;
         }
         if (tfRes && tfRes.estatus) tomaFisicaEstatusActual = tfRes.estatus;
-      } catch (e) {}
+      } catch (e) {
+        window.location.replace('/');
+        return;
+      }
 
       const urlParams = new URLSearchParams(window.location.search);
       const fechaCorte = urlParams.get('fecha_corte');
