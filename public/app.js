@@ -10151,13 +10151,17 @@ function renderizarTablaAuditoriaEnVivo() {
     if (isAuditado) trClass = 'fila-auditada';
     if (isInactive) trClass = 'fila-inactiva';
 
-    // Badge diferencia
-    let diffBadge = `<span style="color:#64748b; font-size:0.75rem;">0.00 (Exacto)</span>`;
+    // Badge de ajuste aplicado (clarifica que el stock ya fue conciliado al conteo físico real)
+    let diffBadge = `<span style="color:#64748b; font-size:0.75rem;">0.00 (Sin Ajuste)</span>`;
     if (p.diferencia > 0) {
-      diffBadge = `<span style="background:#dcfce7; color:#15803d; font-weight:800; font-size:0.72rem; padding:2px 6px; border-radius:4px;">+${p.diferencia} (Sobrante)</span>`;
+      diffBadge = `<span style="background:#dcfce7; color:#15803d; font-weight:800; font-size:0.71rem; padding:2px 7px; border-radius:4px; white-space:nowrap;" title="Ajuste positivo ya aplicado en Kardex">✓ +${p.diferencia} (Sobrante)</span>`;
     } else if (p.diferencia < 0) {
-      diffBadge = `<span style="background:#fee2e2; color:#b91c1c; font-weight:800; font-size:0.72rem; padding:2px 6px; border-radius:4px;">${p.diferencia} (Faltante)</span>`;
+      diffBadge = `<span style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:800; font-size:0.71rem; padding:2px 7px; border-radius:4px; white-space:nowrap;" title="Ajuste negativo ya aplicado en Kardex; el Stock Actual ya refleja el conteo físico real">✓ ${p.diferencia} (Faltante)</span>`;
     }
+
+    const stockTeoricoMostrar = (p.stock_teorico_pre_ajuste !== undefined && p.stock_teorico_pre_ajuste !== null)
+      ? Number(p.stock_teorico_pre_ajuste)
+      : Number(p.stock_actual || 0);
 
     const checkClass = isAuditado ? 'checked' : '';
     const checkIcon = isAuditado ? '✓' : '';
@@ -10184,11 +10188,11 @@ function renderizarTablaAuditoriaEnVivo() {
           <div style="color:#0B2447; font-weight:700;">${p.almacen}</div>
           <div style="color:#64748b;">${p.categoria}</div>
         </td>
-        <td style="text-align:right; font-family:monospace; font-weight:700; color:#334155;">
-          ${Number(p.stock_actual).toFixed(2)}
+        <td style="text-align:right; font-family:monospace; font-weight:600; color:#64748b;" title="Existencia teórica antes de la Toma Física">
+          ${stockTeoricoMostrar.toFixed(2)}
         </td>
-        <td style="text-align:right; font-family:monospace; font-weight:800; color:#0369a1;">
-          ${Number(p.stock_fisico).toFixed(2)}
+        <td style="text-align:right; font-family:monospace; font-weight:800; color:#0369a1;" title="Existencia actual real en sistema (igual al conteo físico)">
+          ${Number(p.stock_actual).toFixed(2)}
         </td>
         <td style="text-align:center;">
           ${diffBadge}

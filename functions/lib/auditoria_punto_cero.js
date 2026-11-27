@@ -87,6 +87,7 @@ export async function getListadoAuditoriaEnVivo(db) {
       : stockActual;
 
     const ajusteActa = ajustesMap.get(Number(r.producto_id)) || 0;
+    const stockTeoricoPreAjuste = Number((stockActual - ajusteActa).toFixed(2));
     const diffPendiente = Number((stockFisico - stockActual).toFixed(2));
     const diff = diffPendiente !== 0 ? diffPendiente : ajusteActa;
     if (diff !== 0 && isAuditado) conDiferencia++;
@@ -106,8 +107,10 @@ export async function getListadoAuditoriaEnVivo(db) {
       unidad_medida: r.unidad_medida,
       almacen: r.almacen,
       categoria: r.categoria,
+      stock_teorico_pre_ajuste: stockTeoricoPreAjuste,
       stock_actual: stockActual,
       stock_fisico: stockFisico,
+      ajuste_aplicado: ajusteActa,
       diferencia: diff,
       costo_s_iva_usd: costoSIVA,
       costo_iva_usd: costoIVA,
@@ -529,8 +532,10 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
       unidad_medida: nuevaUnidad,
       categoria: nuevaCatNombre,
       almacen: nuevoAlmNombre,
+      stock_teorico_pre_ajuste: stockBaseSinAjuste,
       stock_actual: cantReal,
       stock_fisico: cantReal,
+      ajuste_aplicado: diff,
       diferencia: diff,
       costo_s_iva_usd: nuevoCosto,
       costo_iva_usd: Number((nuevoCosto * 0.16).toFixed(2)),

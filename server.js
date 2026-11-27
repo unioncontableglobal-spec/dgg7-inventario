@@ -2821,6 +2821,7 @@ app.post('/api/fiscal/libro-compras/batch', async (req, res) => {
     let duplicadas = 0;
     let errores = 0;
 
+    const periodosAfectadosLote = new Set();
     for (const f of facturas) {
       try {
         const { periodo, fecha, rif, razon_social, nro_factura, nro_control } = f;
@@ -2904,6 +2905,7 @@ app.post('/api/fiscal/libro-compras/batch', async (req, res) => {
 
         const lcId = Number(insResult.rows[0]?.id || insResult.lastInsertRowid);
         insertadas++;
+        periodosAfectadosLote.add(periodo);
         resultados.push({
           id: lcId,
           nro_factura,
@@ -2915,6 +2917,10 @@ app.post('/api/fiscal/libro-compras/batch', async (req, res) => {
         errores++;
         resultados.push({ nro_factura: f.nro_factura || 'S/N', success: false, error: err.message });
       }
+    }
+
+    for (const perRecalc of periodosAfectadosLote) {
+      await recalculateDeclaracionIva(perRecalc);
     }
 
     res.json({
@@ -3656,7 +3662,7 @@ app.post('/api/auditoria/toma-fisica/cerrar', async (req, res) => {
       fecha_cierre = new Date().toISOString(),
       auditor_tienda = 'Personal de Almacén DG 67',
       gerente_dg67 = 'Gerencia General Inversiones DG 67, C.A.',
-      contador_ucg = 'Lcda. Liliana Chacón • CPC (Unión Contable Global)',
+      contador_ucg = 'Contador Público Colegiado (C.P.C.)',
       tasa_bcv = 889.58
     } = req.body || {};
 

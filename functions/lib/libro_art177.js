@@ -40,7 +40,7 @@ export function esMovimientoEntrada(tipo, subtipo) {
     if (sub.includes('NEGATIVO') || sub.includes('SALIDA') || sub.includes('MERMA') || sub.includes('DANO') || sub.includes('DAÑO') || sub.includes('FALTANTE') || sub.includes('OBSOLESCENCIA') || sub.includes('AUTOCONSUMO') || sub === 'AJUSTE_INVENTARIO') {
       return false;
     }
-    return sub.includes('POSITIVO') || sub.includes('ENTRADA') || sub.includes('SOBRANTE') || sub.includes('OMISION') || sub.includes('RECLASIF') || sub.includes('SINCERACION');
+    return sub.includes('POSITIVO') || sub.includes('ENTRADA') || sub.includes('SOBRANTE') || sub.includes('OMISION') || sub.includes('RECLASIF') || sub.includes('DEVOLUCION') || sub.includes('SINCERACION');
   }
   return false;
 }
