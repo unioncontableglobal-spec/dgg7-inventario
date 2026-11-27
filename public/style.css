@@ -5145,17 +5145,18 @@ div[style*="border-top: 4px solid"] {
   font-size: 0.85rem !important;
 }
 
-/* Botón Guía Operativa en Topbar (SUMA+ Educación) */
+/* Botón Manual Operativo en Topbar y Menú Lateral (SUMA+ Educación) */
 .btn-action-manual {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   background: #eff6ff;
   color: #0369a1;
-  border: 1px solid #bae6fd;
-  padding: 6px 11px;
+  border: 1px solid #7dd3fc;
+  padding: 5px 11px;
+  height: 30px;
   border-radius: 7px;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
@@ -5165,6 +5166,61 @@ div[style*="border-top: 4px solid"] {
   background: #0284c7;
   color: #ffffff;
   border-color: #0284c7;
+}
+
+.nav-link-manual {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(2, 132, 199, 0.14);
+  color: #e0f2fe;
+  font-size: 0.81rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.nav-link-manual svg {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+.nav-link-manual:hover {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+.nav-link-manual:hover svg {
+  color: #ffffff;
+}
+.nav-manual-pill {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.nav-link-manual:hover .nav-manual-pill {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 640px) {
+  .btn-action-manual span {
+    display: none;
+  }
+  .btn-action-manual {
+    padding: 6px 9px;
+  }
 }
 
 .kpi-rich-val:not(#kpi-dash-alertas) {

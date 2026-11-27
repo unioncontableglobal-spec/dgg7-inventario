@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261126_v3">
+  <link rel="stylesheet" href="style.css?v=20261127_v1">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -340,6 +340,16 @@
           <span>Toma Física & Ajuste de Stock</span>
         </button>
 
+        <a href="/manual-operativo.html" target="_blank" rel="noopener" class="nav-link-manual" id="btn-sidebar-manual"
+          title="Abrir Manual Operativo de Entradas, Salidas, Ajustes y Toma Física (con clave y descarga PDF)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span>Manual Operativo</span>
+          <span class="nav-manual-pill">PDF</span>
+        </a>
+
         <div class="nav-section-title">CONTROL FISCAL & SENIAT</div>
 
         <button class="nav-tab" data-tab="tab-libro-compras" id="btn-tab-libro-compras">
@@ -508,7 +518,7 @@
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
-            <span>Guía Operativa</span>
+            <span>Manual Operativo</span>
           </a>
 
           <a href="javascript:void(0)" onclick="exportarInventarioExcel(event)" class="btn btn-action-excel" id="btn-export-excel"
