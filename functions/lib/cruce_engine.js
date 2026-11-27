@@ -25,13 +25,14 @@ export async function conciliarReporteZ(reporteZId, db) {
     esperados.push(n);
   }
 
-  // Buscar salidas cargadas por DG67 estrictamente para la fecha fiscal del Reporte Z
+  // Buscar salidas de VENTA cargadas por DG67 estrictamente para la fecha fiscal del Reporte Z
   const movsRes = await db.execute({
     sql: `SELECT m.id, m.numero_documento, m.numero_factura_numerico, m.fecha,
                  COALESCE(SUM(NULLIF(md.total_linea_bs, 0)), SUM(md.cantidad * md.precio_unitario_bs), 0) AS total_bs
           FROM movimientos m
           LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-          WHERE m.tipo = 'SALIDA_VENTA' 
+          WHERE m.tipo = 'SALIDA_VENTA'
+            AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
             AND m.fecha = ?
           GROUP BY m.id`,
     args: [z.fecha]
@@ -114,12 +115,11 @@ export async function conciliarReporteZ(reporteZId, db) {
   // Actualizar movimientos vinculados estrictamente a este Reporte Z
   if (movIds.length > 0) {
     const movEstatus = estatus === 'CONCILIADO' ? 'CONCILIADO' : 'PARCIAL';
-    for (const id of movIds) {
-      await db.execute({
-        sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = ? WHERE id = ?",
-        args: [z.id, movEstatus, id]
-      });
-    }
+    const placeholders = movIds.map(() => '?').join(',');
+    await db.execute({
+      sql: `UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = ? WHERE id IN (${placeholders})`,
+      args: [z.id, movEstatus, ...movIds]
+    });
   }
 
   return {
@@ -158,15 +158,22 @@ export async function conciliarTodosReportesZ(periodo, db) {
 
 export async function conciliarVentaIndividual(movimientoId, db) {
   const movRes = await db.execute({
-    sql: "SELECT id, fecha, numero_documento, numero_factura_numerico FROM movimientos WHERE id = ? AND tipo = 'SALIDA_VENTA'",
+    sql: "SELECT id, fecha, subtipo, numero_documento, numero_factura_numerico FROM movimientos WHERE id = ? AND tipo = 'SALIDA_VENTA'",
     args: [movimientoId]
   });
   if (movRes.rows.length === 0) return null;
   const mov = movRes.rows[0];
+  if (String(mov.subtipo || 'VENTA').toUpperCase() !== 'VENTA') {
+    await db.execute({
+      sql: "UPDATE movimientos SET libro_ventas_id = NULL, estatus_conciliacion = 'NO_APLICA_INTERNO' WHERE id = ?",
+      args: [mov.id]
+    }).catch(() => {});
+    return { movimiento_id: mov.id, estatus: 'NO_APLICA_INTERNO', mensaje: 'Salida interna no sujeta a Reporte Z' };
+  }
 
   let num = mov.numero_factura_numerico;
   if (!num && mov.numero_documento) {
-    const match = String(mov.numero_documento).match(/(\d+)/);
+    const match = String(mov.numero_documento).match(/(\d+)(?!.*\d)/);
     if (match) {
       num = parseInt(match[1], 10);
       await db.execute({
@@ -254,7 +261,7 @@ export async function getResumenCruceDobleVia(periodo, db) {
       COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) AS total_usd
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-    WHERE m.tipo = 'SALIDA_VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
   `;
   const movOrfArgs = [];
   if (periodo && periodo !== 'TODOS') {
@@ -372,8 +379,8 @@ export async function verificarDuplicadoLibroCompras(rif, nroFactura, nroControl
   if (!rif || !nroFactura) return { duplicado: false };
   const cleanRif = String(rif).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const cleanFactura = String(nroFactura).trim();
-  const matchNum = cleanFactura.match(/\d+/);
-  const numInt = matchNum ? parseInt(matchNum[0], 10) : null;
+  const matchNum = cleanFactura.match(/(\d+)(?!.*\d)/);
+  const numInt = matchNum ? parseInt(matchNum[1], 10) : null;
   const exclude = excludeId ? Number(excludeId) : 0;
 
   // 1. Verificación por RIF del Proveedor y Número de Factura (exacto o correlativo numérico)
@@ -441,8 +448,8 @@ export async function verificarDuplicadoEntradaAlmacen(proveedorId, nroDocumento
   if (!proveedorId || !nroDocumento) return { duplicado: false };
   const provId = parseInt(proveedorId, 10);
   const cleanDoc = String(nroDocumento).trim();
-  const matchNum = cleanDoc.match(/\d+/);
-  const numInt = matchNum ? parseInt(matchNum[0], 10) : null;
+  const matchNum = cleanDoc.match(/(\d+)(?!.*\d)/);
+  const numInt = matchNum ? parseInt(matchNum[1], 10) : null;
   const exclude = excludeId ? Number(excludeId) : 0;
 
   if (/^(control|inventario|ajuste|s\/n|s\/d)/i.test(cleanDoc)) {
@@ -512,7 +519,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
   if (prevZ.rows.length > 0) {
     ultimaFacturaHasta = prevZ.rows[0].factura_hasta;
     ultimaFecha = prevZ.rows[0].fecha;
-    const match = String(ultimaFacturaHasta).match(/(\d+)/);
+    const match = String(ultimaFacturaHasta).match(/(\d+)(?!.*\d)/);
     if (match) {
       proxFactNum = parseInt(match[1], 10) + 1;
     }
@@ -531,7 +538,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
     if (prevPer.rows.length > 0) {
       ultimaFacturaHasta = prevPer.rows[0].factura_hasta;
       ultimaFecha = prevPer.rows[0].fecha;
-      const match = String(ultimaFacturaHasta).match(/(\d+)/);
+      const match = String(ultimaFacturaHasta).match(/(\d+)(?!.*\d)/);
       if (match) {
         proxFactNum = parseInt(match[1], 10) + 1;
       }
@@ -540,7 +547,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
 
   const proximaFacturaStr = String(proxFactNum).padStart(8, '0');
 
-  // 2. Verificar si DG67 ya tiene salidas registradas en esta fecha
+  // 2. Verificar si DG67 ya tiene salidas de VENTA registradas en esta fecha
   const movsDia = await db.execute({
     sql: `
       SELECT m.id, m.numero_documento, m.observaciones,
@@ -548,7 +555,7 @@ export async function getProximaFacturaZ(periodo, fecha, db) {
              COALESCE(SUM(md.cantidad), 0) AS total_unds
       FROM movimientos m
       LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-      WHERE m.tipo = 'SALIDA_VENTA' AND m.fecha = ?
+      WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND m.fecha = ?
       GROUP BY m.id
       ORDER BY m.id ASC
     `,
@@ -740,7 +747,7 @@ export async function getCruceVentasSalidas(periodo, db) {
       COALESCE(SUM(NULLIF(md.total_linea_divisa, 0)), SUM(md.cantidad * md.precio_unitario_divisa), 0) AS total_usd
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
-    WHERE m.tipo = 'SALIDA_VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA' AND (m.libro_ventas_id IS NULL OR m.estatus_conciliacion = 'PENDIENTE_UCG')
   `;
   const movOrfArgs = [];
   if (targetPeriodo !== 'TODOS') {
@@ -788,7 +795,7 @@ export async function getSalidasTiendaAgrupadas(periodo, fecha, q, db) {
     FROM movimientos m
     LEFT JOIN movimiento_detalles md ON m.id = md.movimiento_id
     LEFT JOIN productos p ON md.producto_id = p.id
-    WHERE m.tipo = 'SALIDA_VENTA'
+    WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
   `;
   const args = [];
   if (periodo && periodo !== 'TODOS') {

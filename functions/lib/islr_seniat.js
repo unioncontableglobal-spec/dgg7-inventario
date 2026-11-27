@@ -179,12 +179,13 @@ export async function syncCatalogoConceptosISLR(db) {
     )
   `).catch(() => {});
 
-  for (const c of CATALOGO_CONCEPTOS_ISLR) {
-    await db.execute({
+  if (CATALOGO_CONCEPTOS_ISLR.length > 0) {
+    const stmts = CATALOGO_CONCEPTOS_ISLR.map(c => ({
       sql: `INSERT OR REPLACE INTO conceptos_islr_seniat (codigo, descripcion, tipo_persona, pct_base, pct_tarifa, aplica_sustraendo, literal_decreto)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [c.codigo, c.descripcion, c.tipo_persona, c.pct_base, c.pct_tarifa, c.aplica_sustraendo, c.literal_decreto]
-    }).catch(() => {});
+    }));
+    await db.batch(stmts).catch(() => {});
   }
 }
 

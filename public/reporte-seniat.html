@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#0B2447">
+  <meta name="theme-color" content="#0f172a">
   <title>LIBRO OFICIAL DE INVENTARIOS SENIAT (ART. 177 RISLR & ART. 32-35 CÓDIGO DE COMERCIO) - INVERSIONES DG 67, C.A.</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230B2447'/><text x='50%' y='56%' font-family='sans-serif' font-weight='900' font-size='22' fill='%23ffffff' text-anchor='middle'>DG67</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230f172a'/><text x='50%' y='56%' font-family='sans-serif' font-weight='900' font-size='22' fill='%23ffffff' text-anchor='middle'>DG67</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --rep-navy: #000080;
-      --rep-blue: #0A5CF5;
+      --rep-navy: #0f172a;
+      --rep-blue: #0284c7;
       --text-dark: #0f172a;
       --text-muted: #475569;
       --border-color: #94a3b8;
@@ -308,6 +308,12 @@
       background: var(--rep-navy);
       color: #ffffff;
       font-size: 7.2px;
+    }
+
+    .report-table td.font-mono,
+    .report-table td.text-right {
+      white-space: nowrap;
+    }
       letter-spacing: 0.02em;
       padding: 4px 5px;
     }
@@ -492,10 +498,11 @@
         </select>
       </div>
 
-      <div style="display: flex; gap: 6px;">
-        <button class="btn btn-back" onclick="window.close()">Volver</button>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button class="btn btn-back" onclick="volverAlSistema()">Volver</button>
         <a href="javascript:void(0)" onclick="exportarLibroArt177Excel(event)" id="btn-export-xlsx" class="btn btn-excel">📥 Exportar Excel (.xlsx)</a>
-        <a href="/api/export/libro-art177?formato=csv" id="btn-export-csv" class="btn btn-csv">📄 Exportar CSV Auditable</a>
+        <a href="javascript:void(0)" onclick="exportarLibroArt177Txt(event)" id="btn-export-txt" class="btn btn-csv" style="background:#f8fafc; border-color:#94a3b8; color:#0f172a;">📝 Exportar TXT</a>
+        <a href="/api/export/libro-art177?formato=csv" id="btn-export-csv" class="btn btn-csv">📄 Exportar CSV</a>
         <button class="btn btn-print" onclick="window.print()">
           🖨️ Imprimir / Guardar PDF Oficial
         </button>
@@ -685,6 +692,36 @@
 
   <script>
     let datosLibroActual = null;
+    let tomaFisicaEstatusActual = 'ABIERTA';
+
+    function obtenerSesionActiva() {
+      try {
+        const raw = sessionStorage.getItem('dg67_auth_session');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return (parsed && parsed.token) ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function obtenerHeadersAuth(extra = {}) {
+      const sess = obtenerSesionActiva();
+      const hdrs = Object.assign({}, extra);
+      if (sess?.token) hdrs['Authorization'] = 'Bearer ' + sess.token;
+      if (sess?.usuario?.rol) hdrs['X-Suma-Role'] = String(sess.usuario.rol).toUpperCase();
+      return hdrs;
+    }
+
+    function volverAlSistema() {
+      if (window.opener && !window.opener.closed) {
+        window.close();
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = '/';
+      }
+    }
 
     function fmtBs(val) {
       return Number(val || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -741,32 +778,44 @@
       tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="padding:18px;">Calculando Costo Promedio Ponderado y Movimientos Art. 177 RISLR...</td></tr>`;
 
       try {
-        const res = await fetch(`/api/reportes/libro-inventario-seniat${query}`);
+        const res = await fetch(`/api/reportes/libro-inventario-seniat${query}`, { headers: obtenerHeadersAuth() });
         const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Acceso restringido al Libro Oficial SENIAT.');
         datosLibroActual = data;
         renderTablaActual();
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="color:#dc2626; padding:18px;">Error al cargar Libro Oficial: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="18" class="text-center" style="color:#dc2626; padding:18px;">${err.message}</td></tr>`;
       }
     }
 
-    async function actualizarConteoFisico(prodId, inputEl) {
+    async function actualizarConteoFisico(prodId, inputEl, valorPrevio) {
+      const sess = obtenerSesionActiva();
+      if (!sess || tomaFisicaEstatusActual === 'CERRADA') {
+        alert('El conteo físico no admite edición en este momento.');
+        inputEl.value = valorPrevio;
+        return;
+      }
       const nuevoFisico = parseFloat(inputEl.value || 0);
       try {
         const res = await fetch('/api/inventario/toma-fisica', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: obtenerHeadersAuth({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             producto_id: prodId,
             conteo_fisico: nuevoFisico,
             observacion_auditoria: 'Actualizado en Libro de Inventarios y Balances'
           })
         });
+        const respData = await res.json().catch(() => ({}));
         if (res.ok) {
           cargarLibroInventarioSeniat();
+        } else {
+          alert(respData.error || 'No se pudo actualizar el conteo físico.');
+          inputEl.value = valorPrevio;
         }
       } catch (e) {
-        console.error(e);
+        alert('Error de conexión al actualizar el conteo físico.');
+        inputEl.value = valorPrevio;
       }
     }
 
@@ -844,21 +893,40 @@
       const tfoot = document.getElementById('report-tfoot');
 
       if (vista === 'CIERRE_ANUAL') {
-        // Actualizar Asiento Contable de Cierre (Art. 32-35 Código de Comercio)
+        // Actualizar Asiento Contable de Cierre CUADRADO (Debe === Haber, Art. 32-35 Código de Comercio)
+        const diffAjusteVes = Number((tVesFis - tVesFin).toFixed(2));
+        const diffAjusteUsd = Number((tUsdFis - tUsdFin).toFixed(2));
+        const faltanteVes = diffAjusteVes < 0 ? Math.abs(diffAjusteVes) : 0;
+        const faltanteUsd = diffAjusteUsd < 0 ? Math.abs(diffAjusteUsd) : 0;
+        const sobranteVes = diffAjusteVes > 0 ? diffAjusteVes : 0;
+        const sobranteUsd = diffAjusteUsd > 0 ? diffAjusteUsd : 0;
+        const totalDebeVes = Number((tVesFis + tVesSal + faltanteVes).toFixed(2));
+        const totalDebeUsd = Number((tUsdFis + tUsdSal + faltanteUsd).toFixed(2));
+        const totalHaberVes = Number((tVesIni + tVesEnt + sobranteVes).toFixed(2));
+        const totalHaberUsd = Number((tUsdIni + tUsdEnt + sobranteUsd).toFixed(2));
+        const puedeEditarFisico = Boolean(obtenerSesionActiva()) && tomaFisicaEstatusActual !== 'CERRADA';
+
         const tbodyAsiento = document.getElementById('tbody-asiento-cierre');
         tbodyAsiento.innerHTML = `
           <tr>
             <td class="text-center font-mono font-bold">1105-01</td>
-            <td class="font-bold">INVENTARIO FINAL DE MERCANCÍAS (AL CIERRE DEL EJERCICIO)</td>
-            <td class="text-right font-mono font-bold" style="color:#000080;">${dualCell(tVesFis, tUsdFis)}</td>
+            <td class="font-bold">INVENTARIO FINAL DE MERCANCÍAS (TOMA FÍSICA AL CIERRE)</td>
+            <td class="text-right font-mono font-bold" style="color:var(--rep-navy);">${dualCell(tVesFis, tUsdFis)}</td>
             <td class="text-right font-mono">-</td>
           </tr>
           <tr>
             <td class="text-center font-mono font-bold">5101-01</td>
-            <td class="font-bold">COSTO DE VENTAS DETERMINADO (INV. INICIAL + COMPRAS - INV. FINAL)</td>
+            <td class="font-bold">COSTO DE VENTAS SEGÚN KARDEX (CPP)</td>
             <td class="text-right font-mono font-bold" style="color:#9f1239;">${dualCell(tVesSal, tUsdSal)}</td>
             <td class="text-right font-mono">-</td>
           </tr>
+          ${faltanteVes > 0.005 ? `
+          <tr>
+            <td class="text-center font-mono font-bold">5103-01</td>
+            <td class="font-bold" style="color:#9f1239;">FALTANTE / MERMA DE INVENTARIO SEGÚN TOMA FÍSICA</td>
+            <td class="text-right font-mono font-bold" style="color:#9f1239;">${dualCell(faltanteVes, faltanteUsd)}</td>
+            <td class="text-right font-mono">-</td>
+          </tr>` : ''}
           <tr>
             <td class="text-center font-mono font-bold">1105-00</td>
             <td style="padding-left:20px;">A: INVENTARIO INICIAL DE MERCANCÍAS</td>
@@ -870,6 +938,18 @@
             <td style="padding-left:20px;">A: COMPRAS NETAS DE MERCANCÍAS DEL EJERCICIO</td>
             <td class="text-right font-mono">-</td>
             <td class="text-right font-mono font-bold">${dualCell(tVesEnt, tUsdEnt)}</td>
+          </tr>
+          ${sobranteVes > 0.005 ? `
+          <tr>
+            <td class="text-center font-mono font-bold">4205-01</td>
+            <td style="padding-left:20px; color:#065f46; font-weight:700;">A: SOBRANTE DE INVENTARIO SEGÚN TOMA FÍSICA</td>
+            <td class="text-right font-mono">-</td>
+            <td class="text-right font-mono font-bold" style="color:#065f46;">${dualCell(sobranteVes, sobranteUsd)}</td>
+          </tr>` : ''}
+          <tr style="background:#f1f5f9; border-top:2px solid var(--rep-navy); font-weight:900;">
+            <td colspan="2" class="text-right">TOTALES DEL ASIENTO DE CIERRE (PARTIDA DOBLE):</td>
+            <td class="text-right font-mono font-bold" style="color:var(--rep-navy);">${dualCell(totalDebeVes, totalDebeUsd)}</td>
+            <td class="text-right font-mono font-bold" style="color:var(--rep-navy);">${dualCell(totalHaberVes, totalHaberUsd)}</td>
           </tr>
         `;
 
@@ -909,8 +989,9 @@
               <td class="text-right font-mono font-bold">${p.cant_final}</td>
               <td class="text-right font-mono">${dualCell(p.monto_final_ves, p.monto_final_usd)}</td>
               <td class="text-right font-mono font-bold" style="background:#f0fdf4;">
-                <input type="number" step="1" value="${p.conteo_fisico}" class="no-print" style="width:58px; text-align:right; font-family:monospace; font-weight:700; border:1px solid #86efac; border-radius:4px; padding:1px 3px;" onchange="actualizarConteoFisico(${p.producto_id}, this)">
-                <span style="display:none;" class="only-print">${p.conteo_fisico}</span>
+                ${puedeEditarFisico
+                  ? `<input type="number" step="1" value="${p.conteo_fisico}" class="no-print" style="width:58px; text-align:right; font-family:monospace; font-weight:700; border:1px solid #86efac; border-radius:4px; padding:1px 3px;" onchange="actualizarConteoFisico(${p.producto_id}, this, ${p.conteo_fisico})"><span style="display:none;" class="only-print">${p.conteo_fisico}</span>`
+                  : `<span>${p.conteo_fisico}</span>`}
               </td>
               <td class="text-right font-mono font-bold" style="color:#065f46;">${dualCell(p.valor_fisico_ves, p.valor_fisico_usd)}</td>
               <td class="text-right font-mono font-bold" style="color:${p.diferencia_unidades === 0 ? '#64748b' : '#dc2626'};">${p.diferencia_unidades}</td>
@@ -1132,7 +1213,12 @@
       if (periodo === 'RANGO' && desde && hasta) query += `&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
 
       if (typeof XLSX === 'undefined') {
-        window.open(`/api/export/libro-art177${query}&formato=csv`, '_blank');
+        const a = document.createElement('a');
+        a.href = `/api/export/libro-art177${query}&formato=csv`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 1000);
         return;
       }
 
@@ -1198,11 +1284,132 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalleRows), 'DETALLE_ART_177');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidadoRows), 'CONSOLIDADO_ENE_DIC');
-      XLSX.writeFile(wb, `LIBRO_ART177_DG67_${periodo}_${almacen}.xlsx`);
+      const fileName = `LIBRO_ART177_DG67_${periodo}_${almacen}.xlsx`;
+      try {
+        const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
+      } catch (err) {
+        XLSX.writeFile(wb, fileName);
+      }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function _padR(s, n) { const t = String(s ?? '').replace(/\r?\n/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t.padEnd(n, ' '); }
+    function _padL(s, n) { const t = String(s ?? '').replace(/\r?\n/g, ' ').trim(); return t.length > n ? t.slice(0, n) : t.padStart(n, ' '); }
+
+    async function exportarLibroArt177Txt(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!datosLibroActual) await cargarLibroInventarioSeniat();
+      if (!datosLibroActual) return;
+
+      const periodo = document.getElementById('sel-periodo')?.value || 'ANUAL_2026';
+      const almacen = document.getElementById('sel-almacen')?.value || 'TODOS';
+      const vista = document.getElementById('sel-vista')?.value || 'ART_177';
+      const filtroMov = document.getElementById('sel-filtro-mov')?.value || 'TODOS';
+      const titulo = document.getElementById('doc-main-title')?.textContent || 'LIBRO OFICIAL DE INVENTARIOS ART. 177 RISLR';
+
+      let items = Array.isArray(datosLibroActual.items) ? datosLibroActual.items : [];
+      if (filtroMov === 'CON_MOVIMIENTO') items = items.filter(it => (it.cant_entradas > 0 || it.cant_salidas > 0));
+      else if (filtroMov === 'CON_EXISTENCIA') items = items.filter(it => it.cant_final > 0);
+
+      const sep = '='.repeat(134);
+      const lines = [
+        sep,
+        'INVERSIONES DG 67, C.A.  |  RIF: J-50700865-7',
+        'Av. Sur 11 entre Esq. Bolivar y Miranda, Casa N° 112, Local S/N, San Agustin del Norte, Caracas ZP 1010',
+        sep,
+        titulo,
+        `Periodo: ${datosLibroActual.etiquetaPeriodo || periodo} (${datosLibroActual.fechaInicio} al ${datosLibroActual.fechaFin})  |  Almacen: ${almacen}  |  Emision: ${new Date().toLocaleDateString('es-VE')}`,
+        '-'.repeat(134)
+      ];
+
+      if (vista === 'CONSOLIDADO_MENSUAL') {
+        lines.push([_padR('PERIODO', 9), _padR('MES', 18), _padL('TASA BCV', 10), _padL('INICIAL BS', 16), _padL('ENTRADAS BS', 16), _padL('SALIDAS BS', 16), _padL('FINAL UND', 10), _padL('FINAL BS', 16), _padL('FINAL USD', 11)].join(' | '));
+        lines.push('-'.repeat(134));
+        for (const m of (datosLibroActual.resumen_mensual || [])) {
+          lines.push([
+            _padR(m.periodo, 9), _padR(m.nombre, 18), _padL(fmtBs(m.tasa_bcv), 10),
+            _padL(fmtBs(m.saldo_inicial_ves), 16), _padL(fmtBs(m.entradas_ves), 16),
+            _padL(fmtBs(m.salidas_ves), 16), _padL(Number(m.saldo_final_und || 0).toFixed(2), 10),
+            _padL(fmtBs(m.saldo_final_ves), 16), _padL(fmtUsd(m.saldo_final_usd), 11)
+          ].join(' | '));
+        }
+      } else if (vista === 'CIERRE_ANUAL') {
+        lines.push([_padR('CODIGO', 12), _padR('DESCRIPCION', 36), _padR('UND', 4), _padL('TEORICO', 9), _padL('VAL.TEOR BS', 15), _padL('FISICO', 9), _padL('VAL.FIS BS', 15), _padL('DIF.UND', 8), _padL('AJUSTE BS', 14)].join(' | '));
+        lines.push('-'.repeat(134));
+        let sTeo = 0, sFis = 0, sDif = 0;
+        for (const p of items) {
+          sTeo += Number(p.monto_final_ves || 0);
+          sFis += Number(p.valor_fisico_ves || 0);
+          sDif += Number(p.diferencia_ves || 0);
+          lines.push([
+            _padR(p.codigo, 12), _padR(p.descripcion, 36), _padR(p.unidad_medida || 'UND', 4),
+            _padL(p.cant_final, 9), _padL(fmtBs(p.monto_final_ves), 15),
+            _padL(p.conteo_fisico, 9), _padL(fmtBs(p.valor_fisico_ves), 15),
+            _padL(p.diferencia_unidades, 8), _padL(fmtBs(p.diferencia_ves), 14)
+          ].join(' | '));
+        }
+        lines.push('-'.repeat(134));
+        lines.push(`TOTALES  |  TEORICO: Bs. ${fmtBs(sTeo)}  |  FISICO: Bs. ${fmtBs(sFis)}  |  DIFERENCIA NETA: Bs. ${fmtBs(sDif)}`);
+      } else {
+        lines.push([_padR('CODIGO', 12), _padR('DESCRIPCION', 34), _padR('UND', 4), _padL('INI.BS', 14), _padL('ENT.UND', 8), _padL('ENT.BS', 14), _padL('SAL.UND', 8), _padL('SAL.BS', 14), _padL('FIN.UND', 8), _padL('FIN.BS', 14)].join(' | '));
+        lines.push('-'.repeat(134));
+        let tIni = 0, tEnt = 0, tSal = 0, tFin = 0, tFinUsd = 0;
+        for (const p of items) {
+          tIni += Number(p.monto_inicial_ves || 0);
+          tEnt += Number(p.monto_entradas_ves || 0);
+          tSal += Number(p.monto_salidas_ves || 0);
+          tFin += Number(p.monto_final_ves || 0);
+          tFinUsd += Number(p.monto_final_usd || 0);
+          lines.push([
+            _padR(p.codigo, 12), _padR(p.descripcion, 34), _padR(p.unidad_medida || 'UND', 4),
+            _padL(fmtBs(p.monto_inicial_ves), 14), _padL(p.cant_entradas, 8), _padL(fmtBs(p.monto_entradas_ves), 14),
+            _padL(p.cant_salidas, 8), _padL(fmtBs(p.monto_salidas_ves), 14),
+            _padL(p.cant_final, 8), _padL(fmtBs(p.monto_final_ves), 14)
+          ].join(' | '));
+        }
+        lines.push('-'.repeat(134));
+        lines.push(`TOTALES ART. 177  |  INI: Bs. ${fmtBs(tIni)}  |  ENT: Bs. ${fmtBs(tEnt)}  |  SAL: Bs. ${fmtBs(tSal)}  |  FINAL: Bs. ${fmtBs(tFin)} (${fmtUsd(tFinUsd)} USD)`);
+      }
+
+      lines.push('');
+      lines.push('Almacen/Tienda: ______________________   Contador Publico (C.P.C.): ______________________   INVERSIONES DG 67, C.A.: ______________________');
+      lines.push(sep);
+
+      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `LIBRO_INVENTARIO_ART177_DG67_${periodo}_${almacen}.txt`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('lbl-fecha-emision').textContent = 'Emisión: ' + new Date().toLocaleDateString('es-VE');
+
+      // Verificar rol de sesión (bloquear acceso fiscal a Operador) y estatus de Toma Física
+      try {
+        const [authRes, tfRes] = await Promise.all([
+          fetch('/api/auth/verify', { headers: obtenerHeadersAuth() }).then(r => r.json()).catch(() => null),
+          fetch('/api/auditoria/toma-fisica/estatus?periodo=2026-10', { headers: obtenerHeadersAuth() }).then(r => r.json()).catch(() => null)
+        ]);
+        const rolVerif = String(authRes?.usuario?.rol || obtenerSesionActiva()?.usuario?.rol || '').toUpperCase();
+        if (rolVerif === 'OPERADOR' || rolVerif === 'VENDEDOR') {
+          document.body.innerHTML = '<div style="max-width:520px;margin:80px auto;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:28px;text-align:center;font-family:sans-serif;"><h2 style="color:#0f172a;margin-bottom:8px;">Acceso Fiscal Restringido</h2><p style="color:#475569;font-size:14px;margin-bottom:16px;">El Libro Oficial SENIAT Art. 177 pertenece exclusivamente a Administración y Contabilidad.</p><a href="/" style="display:inline-block;padding:10px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Volver a Gestión de Inventarios</a></div>';
+          return;
+        }
+        if (tfRes && tfRes.estatus) tomaFisicaEstatusActual = tfRes.estatus;
+      } catch (e) {}
 
       const urlParams = new URLSearchParams(window.location.search);
       const fechaCorte = urlParams.get('fecha_corte');

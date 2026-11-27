@@ -19,7 +19,7 @@ import {
   getSalidasTiendaAgrupadas,
   verificarDuplicadoLibroCompras,
   verificarDuplicadoEntradaAlmacen
-} from './lib/cruce_engine.js';
+} from './functions/lib/cruce_engine.js';
 import {
   getMatrizAuditoriaProductos,
   generarExcelMatrizAuditoria,
@@ -28,7 +28,7 @@ import {
   actualizarProductoAuditoria,
   crearProductoAuditoria,
   toggleAuditadoProducto
-} from './lib/auditoria_punto_cero.js';
+} from './functions/lib/auditoria_punto_cero.js';
 import {
   CATALOGO_CONCEPTOS_ISLR,
   SERVICIO_A_CONCEPTOS,
@@ -148,9 +148,83 @@ const db = {
 };
 
 const AUTH_SALT = 'DG67_UCG_SALT_2026';
+const MANUAL_ACCESS_KEYS = ['DG67-MANUAL', 'SUMA-DG67', 'DG67-2026'];
 function hashPassword(password) {
   return crypto.createHash('sha256').update(password + AUTH_SALT).digest('hex');
 }
+
+function signAuthTokenNode(payloadObj) {
+  const payloadB64 = Buffer.from(JSON.stringify(payloadObj), 'utf8').toString('base64url');
+  const sigHex = crypto.createHmac('sha256', AUTH_SALT + '_HMAC_V1').update(payloadB64).digest('hex');
+  return `${payloadB64}.${sigHex}`;
+}
+
+function verifyAuthTokenNode(tokenStr) {
+  if (!tokenStr || typeof tokenStr !== 'string' || !tokenStr.includes('.')) return null;
+  const parts = tokenStr.split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, sigHex] = parts;
+  try {
+    const expectedHex = crypto.createHmac('sha256', AUTH_SALT + '_HMAC_V1').update(payloadB64).digest('hex');
+    if (sigHex !== expectedHex) return null;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+function extractSessionUserNode(req) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const verified = verifyAuthTokenNode(authHeader.slice(7).trim());
+    if (verified) return verified;
+  }
+  const cookieHeader = req.headers.cookie || '';
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > 0 && part.slice(0, idx).trim() === 'suma_session') {
+      const verified = verifyAuthTokenNode(decodeURIComponent(part.slice(idx + 1).trim()));
+      if (verified) return verified;
+    }
+  }
+  const roleHdr = String(req.headers['x-suma-role'] || '').trim().toUpperCase();
+  if (roleHdr) return { rol: roleHdr, legacy: true };
+  return null;
+}
+
+function isOperadorBlockedRouteNode(reqPath, method) {
+  if (reqPath.startsWith('/api/fiscal/') && reqPath !== '/api/fiscal/cruce-compras-entradas') return true;
+  if (reqPath.startsWith('/api/cruce/')) return true;
+  if (reqPath.startsWith('/api/islr/')) return true;
+  if (reqPath === '/api/tasas-bcv/diaria' || reqPath === '/api/tasas-bcv/revalorizar-cierre') return true;
+  if (reqPath === '/api/reportes/libro-inventario-seniat' || reqPath === '/api/reportes/mes-a-mes') return true;
+  if (reqPath.startsWith('/api/export/libro-')) return true;
+  if (
+    reqPath === '/api/auditoria/toma-fisica/cerrar' ||
+    reqPath === '/api/auditoria/toma-fisica/reabrir' ||
+    reqPath === '/api/auditoria/toma-fisica/apertura' ||
+    reqPath === '/api/auditoria/acta-oficial'
+  ) return true;
+  if ((reqPath === '/api/proveedores' || reqPath.startsWith('/api/proveedores/')) && method !== 'GET') return true;
+  return false;
+}
+
+app.use('/api', (req, res, next) => {
+  const fullPath = '/api' + req.path;
+  if (fullPath === '/api/auth/login' || fullPath === '/api/auth/logout' || fullPath === '/api/auth/verify' || fullPath === '/api/manual/verify' || fullPath === '/api/health') {
+    return next();
+  }
+  const authUser = extractSessionUserNode(req);
+  const rol = String(authUser?.rol || '').toUpperCase();
+  if ((rol === 'OPERADOR' || rol === 'VENDEDOR') && isOperadorBlockedRouteNode(fullPath, req.method)) {
+    return res.status(403).json({
+      error: 'Acceso restringido: su perfil Operador tiene acceso exclusivo al módulo de Gestión de Inventarios y Toma Física.'
+    });
+  }
+  next();
+});
 
 // Control Anti-Fuerza Bruta para Proteger contra Ataques de Hackeo / Diccionario
 const loginAttempts = new Map();
@@ -229,11 +303,17 @@ app.post('/api/auth/login', async (req, res) => {
       args: [user.id]
     });
 
-    const token = crypto.randomBytes(32).toString('hex');
+    const token = signAuthTokenNode({
+      id: user.id,
+      usuario: user.usuario,
+      rol: String(user.rol || '').toUpperCase(),
+      exp: Date.now() + 24 * 60 * 60 * 1000
+    });
+    res.setHeader('Set-Cookie', `suma_session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax`);
 
     res.json({
       ok: true,
-      mensaje: 'Acceso autorizado al Sistema de Entradas, Salidas y Kardex DG 67',
+      mensaje: 'Acceso autorizado al Sistema SUMA • Inventario & Fiscal',
       token,
       usuario: {
         id: user.id,
@@ -250,7 +330,32 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'suma_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
   res.json({ ok: true, mensaje: 'Sesión finalizada y destruida con éxito.' });
+});
+
+app.post('/api/manual/verify', async (req, res) => {
+  try {
+    const claveRaw = String(req.body?.clave || '').trim();
+    if (!claveRaw) return res.status(400).json({ ok: false, error: 'Ingrese la clave de acceso del manual.' });
+    const claveUpper = claveRaw.toUpperCase();
+    const envKey = String(process.env.MANUAL_ACCESS_KEY || '').trim().toUpperCase();
+    const allowedKeys = envKey ? [...MANUAL_ACCESS_KEYS, envKey] : MANUAL_ACCESS_KEYS;
+    if (allowedKeys.includes(claveUpper)) {
+      return res.json({ ok: true, mensaje: 'Acceso autorizado al Manual Operativo de Gestión de Inventarios.' });
+    }
+    const hashed = hashPassword(claveRaw);
+    const r = await db.execute({
+      sql: 'SELECT id, rol FROM usuarios WHERE password_hash = ? AND activo = 1 LIMIT 1',
+      args: [hashed]
+    });
+    if (r.rows.length > 0) {
+      return res.json({ ok: true, mensaje: 'Acceso autorizado al Manual Operativo de Gestión de Inventarios.' });
+    }
+    return res.status(401).json({ ok: false, error: 'Clave incorrecta. Solicite la clave vigente a Administración o use su contraseña de usuario.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Error verificando clave del manual.' });
+  }
 });
 
 // Endpoint para Respaldo Manual de Emergencia de la Base de Datos
@@ -265,7 +370,13 @@ app.post('/api/backup', async (req, res) => {
 });
 
 app.get('/api/auth/verify', async (req, res) => {
-  res.json({ ok: true, active: true });
+  const authUser = extractSessionUserNode(req);
+  res.json({
+    ok: true,
+    active: Boolean(authUser),
+    authenticated: Boolean(authUser && !authUser.legacy),
+    usuario: authUser || null
+  });
 });
 
 // 1. Health check & Config Info
@@ -1175,36 +1286,39 @@ app.post('/api/movimientos', async (req, res) => {
     });
     const movimientoId = Number(headerResult.lastInsertRowid);
 
-    // Insert detail items with full Dual-Currency (Bolívares & Divisas) + Kardex Costing
+    // Insert detail items with full Dual-Currency (Bolívares & Divisas) + Kardex Costing (CPP)
+    const subUpperNode = String(subtipoNorm || '').toUpperCase();
+    const esVentaFiscalNode = (tipo === 'SALIDA_VENTA' && subUpperNode === 'VENTA');
+    const aplicaIvaNode = (tipo === 'ENTRADA_COMPRA' && !subUpperNode.includes('AJUSTE')) ||
+                          (tipo === 'SALIDA_VENTA' && (subUpperNode === 'VENTA' || subUpperNode.includes('RETIRO')));
+    const pctIvaNode = aplicaIvaNode ? 0.16 : 0;
+
     const detailStatements = [];
     for (const it of items) {
       const pid = parseInt(it.producto_id, 10);
       const qty = parseFloat(it.cantidad) || 1;
       const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
 
+      const pRes = await db.execute({
+        sql: "SELECT p.costo_referencial_usd, COALESCE(v.stock_actual, 0) AS stock_actual FROM productos p LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id WHERE p.id = ?",
+        args: [pid]
+      });
+      const stockAnt = Math.max(0, Number(pRes.rows[0]?.stock_actual || 0));
+      const costoAnt = Number(pRes.rows[0]?.costo_referencial_usd || 0);
+
       let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
       let cBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
 
-      if (cDivisa <= 0 && cBs > 0) {
-        cDivisa = Number((cBs / tasaItem).toFixed(2));
-      }
-      if (cDivisa <= 0) {
-        const pRes = await db.execute({
-          sql: "SELECT costo_referencial_usd FROM productos WHERE id = ?",
-          args: [pid]
-        });
-        cDivisa = Number(pRes.rows[0]?.costo_referencial_usd || 0);
-      }
-      if (cBs <= 0) {
-        cBs = Number((cDivisa * tasaItem).toFixed(2));
-      }
+      if (cDivisa <= 0 && cBs > 0) cDivisa = Number((cBs / tasaItem).toFixed(2));
+      if (cDivisa <= 0) cDivisa = costoAnt;
+      if (cBs <= 0) cBs = Number((cDivisa * tasaItem).toFixed(2));
 
       const precioUnitDiv = parseFloat(it.precio_unitario_divisa || cDivisa);
       const precioUnitBs = parseFloat(it.precio_unitario_bs || Number((precioUnitDiv * tasaItem).toFixed(2)));
       const baseDiv = Number((qty * precioUnitDiv).toFixed(2));
       const baseBs = Number((qty * precioUnitBs).toFixed(2));
-      const ivaDiv = Number((baseDiv * 0.16).toFixed(2));
-      const ivaBs = Number((baseBs * 0.16).toFixed(2));
+      const ivaDiv = Number((baseDiv * pctIvaNode).toFixed(2));
+      const ivaBs = Number((baseBs * pctIvaNode).toFixed(2));
       const totDiv = Number((baseDiv + ivaDiv).toFixed(2));
       const totBs = Number((baseBs + ivaBs).toFixed(2));
 
@@ -1228,30 +1342,54 @@ app.post('/api/movimientos', async (req, res) => {
           totBs, totDiv
         ]
       });
+
+      if (tipo === 'ENTRADA_COMPRA' && cDivisa > 0) {
+        const nuevoStock = stockAnt + qty;
+        const nuevoCppUsd = (stockAnt > 0 && costoAnt > 0)
+          ? Number((((stockAnt * costoAnt) + (qty * cDivisa)) / nuevoStock).toFixed(2))
+          : Number(cDivisa.toFixed(2));
+        detailStatements.push({
+          sql: "UPDATE productos SET costo_referencial_usd = ? WHERE id = ?",
+          args: [nuevoCppUsd, pid]
+        });
+      }
     }
 
-    await db.batch(detailStatements);
+    try {
+      await db.batch(detailStatements, 'write');
+    } catch (batchErr) {
+      await db.execute({ sql: "DELETE FROM movimientos WHERE id = ?", args: [movimientoId] }).catch(() => {});
+      throw batchErr;
+    }
 
     let resultadoCruce = null;
     if (tipo === 'SALIDA_VENTA') {
-      const zId = req.body.libro_ventas_id ? parseInt(req.body.libro_ventas_id, 10) : null;
-      if (zId) {
-        await db.execute({
-          sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
-          args: [zId, movimientoId]
-        });
-        resultadoCruce = await conciliarReporteZ(zId, db);
+      if (esVentaFiscalNode) {
+        const zId = req.body.libro_ventas_id ? parseInt(req.body.libro_ventas_id, 10) : null;
+        if (zId) {
+          await db.execute({
+            sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
+            args: [zId, movimientoId]
+          });
+          resultadoCruce = await conciliarReporteZ(zId, db);
+        } else {
+          resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+        }
       } else {
-        resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+        await db.execute({
+          sql: "UPDATE movimientos SET estatus_conciliacion = 'NO_APLICA_INTERNO' WHERE id = ?",
+          args: [movimientoId]
+        }).catch(() => {});
+        resultadoCruce = { estatus: 'NO_APLICA_INTERNO', mensaje: 'Salida interna registrada sin afectación a Reporte Z.' };
       }
     } else if (tipo === 'ENTRADA_COMPRA') {
       let lcId = req.body.libro_compras_id || null;
-      const matchNum = String(numero_documento).match(/(\d+)/);
+      const matchNum = String(numero_documento).match(/(\d+)(?!.*\d)/);
       if (!lcId && matchNum) {
         const numFacturaNum = parseInt(matchNum[1], 10);
         const matchLC = await db.execute({
-          sql: `SELECT id FROM libro_compras WHERE (nro_factura LIKE ? OR REPLACE(nro_factura, '0', '') = ?) AND aplica_inventario = 1 LIMIT 1`,
-          args: [`%${numFacturaNum}%`, String(numFacturaNum)]
+          sql: `SELECT id FROM libro_compras WHERE aplica_inventario = 1 AND (movimiento_id IS NULL OR movimiento_id = 0) AND (UPPER(TRIM(nro_factura)) = UPPER(?) OR CAST(LTRIM(REPLACE(nro_factura, '-', ''), '0') AS INTEGER) = ?) LIMIT 1`,
+          args: [String(numero_documento).trim(), numFacturaNum]
         });
         if (matchLC.rows.length > 0) {
           lcId = matchLC.rows[0].id;
@@ -4356,48 +4494,24 @@ app.put('/api/tasas-bcv/revalorizar-cierre', async (req, res) => {
       }
     }
 
-    // Revalorizar automáticamente los meses declarados en Movimientos (Kardex), Libro de Compras, Libro de Ventas y Retenciones ISLR
+    // Revalorizar únicamente períodos abiertos sin sobreescribir tasas diarias históricas
+    const condAbiertoMov = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = substr(movimientos.fecha, 1, 7) AND d.estatus = 'DECLARADO') AND substr(movimientos.fecha, 1, 7) > '2026-09'`;
+    const condAbiertoLC = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'DECLARADO') AND libro_compras.periodo > '2026-09'`;
+    const condAbiertoLV = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_ventas.periodo AND d.estatus = 'DECLARADO') AND libro_ventas.periodo > '2026-09'`;
+
     await db.execute(`
       UPDATE movimientos
       SET tasa_bcv = COALESCE(
             (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
             movimientos.tasa_bcv,
-            68.50
+            889.58
           ),
           fecha_tasa_bcv = COALESCE(
             (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = substr(movimientos.fecha, 1, 7)),
             movimientos.fecha_tasa_bcv,
             movimientos.fecha
           )
-    `);
-
-    await db.execute(`
-      UPDATE movimiento_detalles
-      SET costo_unitario_divisa = ROUND(COALESCE(
-            NULLIF(costo_unitario_divisa, 0),
-            NULLIF(costo_unitario_usd, 0),
-            (SELECT p.costo_referencial_usd FROM productos p WHERE p.id = movimiento_detalles.producto_id),
-            1.0
-          ), 2),
-          tasa_bcv_operacion = COALESCE(
-            (SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id),
-            68.50
-          )
-    `);
-
-    await db.execute(`
-      UPDATE movimiento_detalles
-      SET costo_unitario_usd = costo_unitario_divisa,
-          costo_unitario_bs = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
-          costo_unitario_ves = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
-          precio_unitario_divisa = costo_unitario_divisa,
-          precio_unitario_bs = ROUND(costo_unitario_divisa * tasa_bcv_operacion, 2),
-          base_imponible_divisa = ROUND(cantidad * costo_unitario_divisa, 2),
-          base_imponible_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion, 2),
-          monto_iva_divisa = ROUND(cantidad * costo_unitario_divisa * 0.16, 2),
-          monto_iva_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion * 0.16, 2),
-          total_linea_divisa = ROUND(cantidad * costo_unitario_divisa * 1.16, 2),
-          total_linea_bs = ROUND(cantidad * costo_unitario_divisa * tasa_bcv_operacion * 1.16, 2)
+      WHERE (${condAbiertoMov}) AND COALESCE(tasa_bcv, 0) <= 0
     `);
 
     await db.execute(`
@@ -4405,21 +4519,12 @@ app.put('/api/tasas-bcv/revalorizar-cierre', async (req, res) => {
       SET tasa_bcv = COALESCE(
             (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
             libro_compras.tasa_bcv,
-            68.50
+            889.58
           ),
-          fecha_tasa_bcv = COALESCE(
-            (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo),
-            libro_compras.fecha_tasa_bcv,
-            libro_compras.fecha
-          )
-    `);
-
-    await db.execute(`
-      UPDATE libro_compras
-      SET base_imponible_divisa = ROUND(base_imponible_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          monto_iva_divisa = ROUND(iva_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          total_divisa = ROUND(total_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          iva_retenido_divisa = ROUND(iva_retenido_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2)
+          base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2),
+          monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2),
+          total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2)
+      WHERE (${condAbiertoLC}) AND COALESCE(tasa_bcv, 0) <= 0
     `);
 
     await db.execute(`
@@ -4427,26 +4532,18 @@ app.put('/api/tasas-bcv/revalorizar-cierre', async (req, res) => {
       SET tasa_bcv = COALESCE(
             (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
             libro_ventas.tasa_bcv,
-            68.50
+            889.58
           ),
-          fecha_tasa_bcv = COALESCE(
-            (SELECT t.fecha_cierre FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo),
-            libro_ventas.fecha_tasa_bcv,
-            libro_ventas.fecha
-          )
-    `);
-
-    await db.execute(`
-      UPDATE libro_ventas
-      SET exento_divisa = ROUND(exento_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          base_imponible_divisa = ROUND(base_imponible_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          monto_iva_divisa = ROUND(iva_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2),
-          total_divisa = ROUND(total_bs / CASE WHEN tasa_bcv > 0 THEN tasa_bcv ELSE 68.50 END, 2)
+          exento_divisa = ROUND(COALESCE(exento_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+          base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+          monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+          total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2)
+      WHERE (${condAbiertoLV}) AND COALESCE(tasa_bcv, 0) <= 0
     `);
 
     res.json({
       success: true,
-      message: 'Tasas Oficiales BCV de Cierre Mensual aplicadas y revalorización bimonetaria (Bs. ↔ USD) completada en Kardex, Libro de Compras y Libro de Ventas.'
+      message: 'Tasas Oficiales BCV de Cierre Mensual aplicadas con resguardo de períodos cerrados y tasas diarias históricas.'
     });
   } catch (error) {
     console.error('Error revalorizando cierres BCV:', error);

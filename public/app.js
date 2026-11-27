@@ -4,6 +4,7 @@
 
 const state = {
   products: [],
+  catalogProducts: [],
   suppliers: [],
   categories: [],
   warehouses: [],
@@ -81,6 +82,52 @@ function exportarWorkbookSeguro(wb, fileName) {
   }
 }
 
+// Descarga segura de reportes planos .TXT exclusivos del contribuyente INVERSIONES DG 67, C.A.
+function descargarTxtOficialDG67(fileName, lines) {
+  const contenido = '\uFEFF' + (Array.isArray(lines) ? lines.join('\r\n') : String(lines || ''));
+  const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 10000);
+}
+window.descargarTxtOficialDG67 = descargarTxtOficialDG67;
+
+function _padR(str, len) {
+  const s = String(str ?? '').replace(/\r?\n/g, ' ').trim();
+  return s.length > len ? s.slice(0, Math.max(1, len - 1)) + '…' : s.padEnd(len, ' ');
+}
+function _padL(str, len) {
+  const s = String(str ?? '').replace(/\r?\n/g, ' ').trim();
+  return s.length > len ? s.slice(0, len) : s.padStart(len, ' ');
+}
+
+// Matriz centralizada de permisos por rol (Punto 7)
+function getRolUsuarioActual() {
+  return String(state.currentUser?.rol || '').toUpperCase();
+}
+function isOperadorTiendaRol() {
+  const rol = getRolUsuarioActual();
+  return rol === 'OPERADOR' || rol === 'VENDEDOR';
+}
+function puedeEditarTomaFisica() {
+  const rol = getRolUsuarioActual();
+  return ['TOMA_FISICA', 'OPERADOR', 'VENDEDOR', 'ADMIN', 'ADMINISTRADOR', 'AUDITOR', 'AUDITOR_MASTER'].includes(rol);
+}
+function puedeGestionarActaFormalTomaFisica() {
+  const rol = getRolUsuarioActual();
+  return ['TOMA_FISICA', 'ADMIN', 'ADMINISTRADOR', 'AUDITOR', 'AUDITOR_MASTER'].includes(rol);
+}
+window.puedeEditarTomaFisica = puedeEditarTomaFisica;
+window.puedeGestionarActaFormalTomaFisica = puedeGestionarActaFormalTomaFisica;
+
 // --------------------------------------------------------------------------
 // FORMATEO MONETARIO GLOBAL BIMONETARIO (Bs. / USD)
 // --------------------------------------------------------------------------
@@ -123,6 +170,34 @@ window.debouncedFiltrarEntradasPendientes = debouncedFiltrarEntradasPendientes;
 // CONTROL DE ACCESO CORPORATIVO Y AUTENTICACIÓN (UNIÓN CONTABLE GLOBAL)
 // --------------------------------------------------------------------------
 const AUTH_STORAGE_KEY = 'dg67_auth_session';
+
+// Interceptor global de fetch para adjuntar automáticamente token HMAC y rol en peticiones /api/*
+(function installAuthFetchInterceptor() {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    try {
+      const reqUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+      const isApiReq = reqUrl.startsWith('/api/') || reqUrl.startsWith(window.location.origin + '/api/');
+      if (isApiReq) {
+        const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
+        if (raw) {
+          const sess = JSON.parse(raw);
+          const nextInit = Object.assign({}, init || {});
+          const hdrs = new Headers(nextInit.headers || (input instanceof Request ? input.headers : undefined));
+          if (sess?.token && !hdrs.has('Authorization')) {
+            hdrs.set('Authorization', 'Bearer ' + sess.token);
+          }
+          if (sess?.usuario?.rol && !hdrs.has('X-Suma-Role')) {
+            hdrs.set('X-Suma-Role', String(sess.usuario.rol).toUpperCase());
+          }
+          nextInit.headers = hdrs;
+          return nativeFetch(input, nextInit);
+        }
+      }
+    } catch (e) { }
+    return nativeFetch(input, init);
+  };
+})();
 
 // --------------------------------------------------------------------------
 // SISTEMA DE SEGURIDAD: CIERRE AUTOMÁTICO DE SESIÓN POR INACTIVIDAD (15 MIN)
@@ -401,15 +476,15 @@ function showApp(user) {
   if (user) {
     actualizarIdentidadUsuarioVisual(user);
 
-    // Restricción de Navegación por Rol:
-    // - TOMA_FISICA: Solo Toma Física y Ajuste de Inventario
-    // - OPERADOR (Vendedores/Tienda): Inicio, Inventario, Entradas, Salidas, Kardex, Movimientos y Toma Física (Solo consulta)
+    // Restricción de Navegación por Rol (Punto 7):
+    // - TOMA_FISICA: Solo Toma Física y Ajuste de Stock
+    // - OPERADOR (Tienda/Almacén): Exclusivamente Gestión de Inventarios (Dashboard, Inventario, Entradas, Salidas, Kardex, Toma Física habilitada para edición). CERO acceso fiscal.
     const rolActual = String(user.rol || '').toUpperCase();
     const isAuditorTomaFisica = (rolActual === 'TOMA_FISICA');
     const isOperadorTienda = (rolActual === 'OPERADOR' || rolActual === 'VENDEDOR');
     const tabsOperadorPermitidas = new Set([
       'tab-dashboard', 'tab-inventario', 'tab-entrada', 'tab-salida',
-      'tab-kardex', 'tab-movimientos', 'tab-punto-cero'
+      'tab-kardex', 'tab-punto-cero'
     ]);
 
     document.querySelectorAll('#main-nav .nav-tab').forEach(tab => {
@@ -428,25 +503,56 @@ function showApp(user) {
         sec.style.display = 'none';
       } else if (isOperadorTienda) {
         const txt = (sec.textContent || '').toUpperCase();
-        sec.style.display = (txt.includes('FISCAL') || txt.includes('SISTEMA')) ? 'none' : 'block';
+        const esSeccionOculta = txt.includes('FISCAL') || txt.includes('SENIAT') || txt.includes('ADMINISTRACI') || txt.includes('CONFIGURACI') || txt.includes('SISTEMA');
+        sec.style.display = esSeccionOculta ? 'none' : 'block';
       } else {
         sec.style.display = 'block';
       }
     });
 
-    const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
-    if (bannerAuditor) {
-      bannerAuditor.style.display = isAuditorTomaFisica ? 'flex' : 'none';
+    // Etiqueta dinámica de especialidad en Topbar y Sidebar
+    const crumbSuma = document.querySelector('.crumb-suma');
+    if (crumbSuma) {
+      crumbSuma.textContent = isOperadorTienda ? 'SUMA • Gestión de Inventarios' : 'SUMA • Inventario & Fiscal';
     }
 
-    const canAccessConfig = !isAuditorTomaFisica && !isOperadorTienda;
+    const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
+    if (bannerAuditor) {
+      bannerAuditor.style.display = (isAuditorTomaFisica || isOperadorTienda) ? 'flex' : 'none';
+    }
+
+    const canAccessFiscal = !isAuditorTomaFisica && !isOperadorTienda;
     const btnTopExcel = document.getElementById('btn-export-excel');
     const btnTopPdf = document.getElementById('btn-export-pdf');
+    const btnTabPdf = document.getElementById('btn-tab-export-pdf');
+    const btnTabReportesMensuales = document.getElementById('btn-tab-reportes-mensuales');
+    const panelConcSalidas = document.getElementById('panel-conciliacion-salidas');
+    const formDailyBcv = document.getElementById('form-daily-bcv');
+    const dailyBcvLeft = document.querySelector('.daily-bcv-left');
+
     if (btnTopExcel) btnTopExcel.style.display = isAuditorTomaFisica ? 'none' : '';
-    if (btnTopPdf) btnTopPdf.style.display = isAuditorTomaFisica ? 'none' : '';
-    document.querySelectorAll('[onclick*="tab-configuracion"]').forEach(el => {
-      el.style.display = canAccessConfig ? '' : 'none';
+    if (btnTopPdf) btnTopPdf.style.display = canAccessFiscal ? '' : 'none';
+    if (btnTabPdf) btnTabPdf.style.display = canAccessFiscal ? '' : 'none';
+    if (btnTabReportesMensuales) btnTabReportesMensuales.style.display = canAccessFiscal ? '' : 'none';
+    if (panelConcSalidas) panelConcSalidas.style.display = canAccessFiscal ? '' : 'none';
+    if (formDailyBcv) formDailyBcv.style.display = canAccessFiscal ? '' : 'none';
+    if (dailyBcvLeft) {
+      if (canAccessFiscal) {
+        dailyBcvLeft.style.cursor = 'pointer';
+        dailyBcvLeft.setAttribute('onclick', 'abrirModalTasaBcvDia()');
+      } else {
+        dailyBcvLeft.style.cursor = 'default';
+        dailyBcvLeft.removeAttribute('onclick');
+      }
+    }
+
+    document.querySelectorAll('[onclick*="tab-configuracion"], [onclick*="tab-movimientos"]').forEach(el => {
+      el.style.display = canAccessFiscal ? '' : 'none';
     });
+
+    // En Entradas, ocultar pestañas de auditoría fiscal para Operador (manteniendo Facturas Pendientes por Dar Entrada)
+    const tabBtnSinFiscal = document.getElementById('tab-btn-cruce-sin-fiscal');
+    if (tabBtnSinFiscal) tabBtnSinFiscal.style.display = canAccessFiscal ? '' : 'none';
   }
 }
 
@@ -645,14 +751,17 @@ async function initApp() {
   if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
   if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
 
-  // Carga inicial modular (evita cargar dashboard/catálogo innecesario en rol TOMA_FISICA)
-  const isTomaFisicaRole = (state.currentUser?.rol === 'TOMA_FISICA');
+  // Carga inicial modular (evita cargar módulos fiscales en roles TOMA_FISICA / OPERADOR)
+  const isTomaFisicaRole = (getRolUsuarioActual() === 'TOMA_FISICA');
+  const isOperadorRole = isOperadorTiendaRol();
   const initialLoads = [
     checkHealth(),
     loadTasasBcvPeriodo(),
-    loadDeclaracionesCache(),
     loadCatalogs()
   ];
+  if (!isTomaFisicaRole && !isOperadorRole) {
+    initialLoads.push(loadDeclaracionesCache());
+  }
   if (!isTomaFisicaRole) {
     initialLoads.push(loadProducts(), loadDashboard());
   }
@@ -665,7 +774,9 @@ async function initApp() {
   } else {
     const targetInitialTab = (hashTab && document.getElementById(hashTab)?.classList.contains('tab-pane')) ? hashTab : 'tab-dashboard';
     switchTab(targetInitialTab, { replaceHistory: true });
-    verificarAperturaModalTasaBcvDia();
+    if (!isOperadorRole) {
+      verificarAperturaModalTasaBcvDia();
+    }
   }
 
   // Inicializar filas limpias en Entradas y Salidas
@@ -859,7 +970,7 @@ function switchTab(tabId, opts = {}) {
     showToast('Acceso restringido exclusivamente a Toma Física.', 'warning');
     tabId = 'tab-punto-cero';
   }
-  const tabsOp = new Set(['tab-dashboard', 'tab-inventario', 'tab-entrada', 'tab-salida', 'tab-kardex', 'tab-movimientos', 'tab-punto-cero']);
+  const tabsOp = new Set(['tab-dashboard', 'tab-inventario', 'tab-entrada', 'tab-salida', 'tab-kardex', 'tab-punto-cero']);
   if ((rolAct === 'OPERADOR' || rolAct === 'VENDEDOR') && !tabsOp.has(tabId)) {
     showToast('Este módulo fiscal está reservado para Administración / Contabilidad.', 'warning');
     tabId = 'tab-dashboard';
@@ -924,20 +1035,26 @@ function switchTab(tabId, opts = {}) {
   if (tabId === 'tab-dashboard') loadDashboard();
   if (tabId === 'tab-inventario') loadProducts();
   if (tabId === 'tab-entrada') {
-    if (!state.products || state.products.length === 0) {
-      loadProducts().then(() => {
+    if (!state.catalogProducts || state.catalogProducts.length === 0) {
+      ensureCatalogProducts().then(() => {
         if (document.querySelectorAll('#tbody-items-entrada tr').length === 0) addEntryRow();
       });
+    } else if (document.querySelectorAll('#tbody-items-entrada tr').length === 0) {
+      addEntryRow();
     }
     cargarPanelCruceEntradas();
   }
   if (tabId === 'tab-salida') {
-    if (!state.products || state.products.length === 0) {
-      loadProducts().then(() => {
+    if (!state.catalogProducts || state.catalogProducts.length === 0) {
+      ensureCatalogProducts().then(() => {
         if (document.querySelectorAll('#tbody-items-salida tr').length === 0) addExitRow();
       });
+    } else if (document.querySelectorAll('#tbody-items-salida tr').length === 0) {
+      addExitRow();
     }
-    cargarPanelCruceSalidas();
+    if (!isOperadorTiendaRol()) {
+      cargarPanelCruceSalidas();
+    }
   }
   if (tabId === 'tab-mensual') loadMonthlyReport();
   if (tabId === 'tab-movimientos') loadMovements();
@@ -952,25 +1069,32 @@ function switchTab(tabId, opts = {}) {
     if (typeof cargarEstatusTomaFisica === 'function') cargarEstatusTomaFisica('2026-10');
     if (typeof actualizarBannerActaActiva === 'function') actualizarBannerActaActiva();
 
-    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+    const canEdit = puedeEditarTomaFisica();
+    const canManageActa = puedeGestionarActaFormalTomaFisica();
     const bannerConsulta = document.getElementById('pzero-banner-modo-consulta');
     const bannerAuditor = document.getElementById('pzero-banner-auditor-rol');
-    if (bannerConsulta) bannerConsulta.style.display = isAuditor ? 'none' : 'flex';
-    if (bannerAuditor) bannerAuditor.style.display = isAuditor ? 'flex' : 'none';
+    if (bannerConsulta) bannerConsulta.style.display = canEdit ? 'none' : 'flex';
+    if (bannerAuditor) bannerAuditor.style.display = canEdit ? 'flex' : 'none';
 
     const btnApertura = document.getElementById('btn-abrir-apertura-acta');
     const btnRapida = document.getElementById('btn-modo-rapido-auditoria') || document.getElementById('btn-modo-auditoria-rapida');
+    const btnVerActaCard = document.getElementById('btn-generar-acta-oficial');
     const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
     const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
     const btnConfigActa = document.getElementById('btn-configurar-acta-banner');
+    const btnVerActaBanner = document.getElementById('btn-ver-acta-banner');
     const btnConcluirConteo = document.getElementById('btn-concluir-conteo-auditor');
+    const btnCrearTop = document.getElementById('btn-crear-repuesto-top');
 
-    if (btnApertura) btnApertura.style.display = isAuditor ? 'flex' : 'none';
-    if (btnRapida) btnRapida.style.display = isAuditor ? 'flex' : 'none';
-    if (btnCerrar) btnCerrar.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
-    if (btnReabrir) btnReabrir.style.display = (isAuditor && state.tomaFisicaEstatus === 'CERRADA') ? 'flex' : 'none';
-    if (btnConfigActa) btnConfigActa.style.display = isAuditor ? 'inline-block' : 'none';
-    if (btnConcluirConteo) btnConcluirConteo.style.display = (isAuditor && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-block' : 'none';
+    if (btnApertura) btnApertura.style.display = canManageActa ? 'flex' : 'none';
+    if (btnRapida) btnRapida.style.display = (canEdit && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
+    if (btnVerActaCard) btnVerActaCard.style.display = canManageActa ? 'flex' : 'none';
+    if (btnCerrar) btnCerrar.style.display = (canManageActa && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
+    if (btnReabrir) btnReabrir.style.display = (canManageActa && state.tomaFisicaEstatus === 'CERRADA') ? 'flex' : 'none';
+    if (btnConfigActa) btnConfigActa.style.display = canManageActa ? 'inline-block' : 'none';
+    if (btnVerActaBanner) btnVerActaBanner.style.display = canManageActa ? 'inline-block' : 'none';
+    if (btnConcluirConteo) btnConcluirConteo.style.display = (canManageActa && state.tomaFisicaEstatus !== 'CERRADA') ? 'inline-block' : 'none';
+    if (btnCrearTop) btnCrearTop.style.display = (canEdit && state.tomaFisicaEstatus !== 'CERRADA') ? 'flex' : 'none';
   }
   if (tabId === 'tab-configuracion') loadConfiguracionTab();
 }
@@ -1292,7 +1416,38 @@ async function loadDashboard() {
   }
 }
 
-// 5. Products & Inventory Table
+// 5. Products & Inventory Table (Catálogo completo separado de vistas filtradas)
+async function ensureCatalogProducts(forceRefresh = false) {
+  if (!forceRefresh && Array.isArray(state.catalogProducts) && state.catalogProducts.length > 0) {
+    return state.catalogProducts;
+  }
+  try {
+    const res = await fetch('/api/productos');
+    const data = await res.json();
+    if (res.ok && Array.isArray(data)) {
+      state.catalogProducts = data;
+    }
+  } catch (e) {
+    console.warn('Error cargando catálogo completo:', e);
+  }
+  return state.catalogProducts || [];
+}
+
+async function editarProductoDesdeInventario(productoId) {
+  if (!puedeEditarTomaFisica()) {
+    showToast('No tiene permisos para editar artículos del catálogo.', 'warning');
+    return;
+  }
+  switchTab('tab-punto-cero');
+  if (!Array.isArray(pzeroProductos) || pzeroProductos.length === 0) {
+    await cargarAuditoriaEnVivo();
+  }
+  setTimeout(() => {
+    abrirDrawerAuditoriaPorId(Number(productoId));
+  }, 150);
+}
+window.editarProductoDesdeInventario = editarProductoDesdeInventario;
+
 async function loadProducts() {
   try {
     const q = document.getElementById('inv-search')?.value.trim() || '';
@@ -1300,6 +1455,7 @@ async function loadProducts() {
     const alm = document.getElementById('inv-filter-alm')?.value || 'TODOS';
     const estado = document.getElementById('inv-filter-estado')?.value || 'TODOS';
     const fechaCorte = document.getElementById('inv-periodo-corte')?.value || '';
+    const sinFiltros = !q && cat === 'TODAS' && alm === 'TODOS' && estado === 'TODOS' && !fechaCorte;
 
     const params = new URLSearchParams();
     if (q) params.append('q', q);
@@ -1315,7 +1471,6 @@ async function loadProducts() {
     const tabExportPdfBtn = document.getElementById('btn-tab-export-pdf');
 
     const periodoPdf = fechaCorte ? (fechaCorte === '2025-12-31' ? '2025-12' : fechaCorte.slice(0, 7)) : 'ANUAL_2026';
-    const excelUrl = `/api/export/excel${fechaCorte ? `?fecha_corte=${encodeURIComponent(fechaCorte)}` : ''}`;
     const pdfUrl = `/reporte-seniat.html?periodo=${encodeURIComponent(periodoPdf)}`;
 
     if (exportExcelBtn) {
@@ -1336,6 +1491,11 @@ async function loadProducts() {
     }
     const products = data;
     state.products = products;
+    if (sinFiltros) {
+      state.catalogProducts = products;
+    } else if (!state.catalogProducts || state.catalogProducts.length === 0) {
+      ensureCatalogProducts();
+    }
 
     // Update Counter & Title Badge
     const countBadge = document.getElementById('inv-count-badge');
@@ -1388,9 +1548,11 @@ async function loadProducts() {
     if (!tbody) return;
 
     if (products.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="13" class="text-center">No se encontraron productos coincidentes</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" class="text-center">No se encontraron productos coincidentes</td></tr>`;
       return;
     }
+
+    const canEditCatalogo = puedeEditarTomaFisica() && state.tomaFisicaEstatus !== 'CERRADA';
 
     tbody.innerHTML = products.map(p => {
       const isLow = p.estado_stock === 'SOLICITAR MATERIAL';
@@ -1398,7 +1560,7 @@ async function loadProducts() {
         ? `<span class="badge-status badge-solicitar">⚠️ Solicitar</span>`
         : `<span class="badge-status badge-suficiente">✅ Suficiente</span>`;
 
-      const stockColor = isLow ? 'color: #fb7185; font-weight: 800;' : 'font-weight: 700;';
+      const stockColor = isLow ? 'color: #be123c; font-weight: 800;' : 'color: #0f172a; font-weight: 700;';
       const costoUsd = Number(p.costo_referencial_usd || 0);
       const valUsd = Number(p.valor_total_usd || 0);
       const tasaProd = Number(p.tasa_bcv_aplicada || tasaAplicada);
@@ -1407,22 +1569,29 @@ async function loadProducts() {
 
       return `
         <tr>
-          <td><span class="badge-code">${p.codigo}</span></td>
-          <td class="font-bold">${p.descripcion}</td>
-          <td>${p.unidad_medida}</td>
-          <td><span class="meta-tag">${p.categoria}</span></td>
-          <td><span class="meta-tag">${p.almacen}</span></td>
+          <td><span class="badge-code">${escapeHtml(p.codigo)}</span></td>
+          <td class="font-bold">${escapeHtml(p.descripcion)}</td>
+          <td>${escapeHtml(p.unidad_medida)}</td>
+          <td><span class="meta-tag">${escapeHtml(p.categoria)}</span></td>
+          <td><span class="meta-tag">${escapeHtml(p.almacen)}</span></td>
           <td class="text-right font-mono">${p.stock_minimo}</td>
           <td class="text-right font-mono font-bold" style="${stockColor}">${p.stock_actual}</td>
-          <td class="text-right font-mono font-bold" style="color:#0B2447;">Bs. ${costoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-          <td class="text-right font-mono" style="color:#0369a1;">$${costoUsd.toFixed(2)}</td>
-          <td class="text-right font-mono font-bold" style="color:#059669;">Bs. ${valBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
-          <td class="text-right font-mono" style="color:#0369a1;">$${valUsd.toFixed(2)}</td>
+          <td class="text-right font-mono" style="white-space:nowrap;">
+            <div style="font-weight:700; color:#0f172a;">Bs. ${costoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+            <div class="sub-ref-usd" style="font-size:0.7rem; color:#0284c7;">$${costoUsd.toFixed(2)} USD</div>
+          </td>
+          <td class="text-right font-mono" style="white-space:nowrap;">
+            <div style="font-weight:800; color:#059669;">Bs. ${valBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+            <div class="sub-ref-usd" style="font-size:0.7rem; color:#64748b;">$${valUsd.toFixed(2)} USD</div>
+          </td>
           <td class="text-center">${statusBadge}</td>
-          <td class="text-center">
-            <button class="btn btn-sm btn-secondary" onclick="viewKardex('${p.codigo}')" title="Ver Historial Kardex">
-              Kardex
-            </button>
+          <td class="text-center" style="white-space:nowrap;">
+            <div style="display:inline-flex; gap:4px; align-items:center;">
+              <button class="btn btn-sm btn-secondary" onclick="viewKardex('${escapeHtml(p.codigo)}')" title="Ver Historial Kardex">
+                Kardex
+              </button>
+              ${canEditCatalogo ? `<button class="btn btn-sm btn-secondary" onclick="editarProductoDesdeInventario(${p.producto_id})" title="Editar datos, stock o precio en Toma Física" style="padding:4px 7px;">✏️</button>` : ''}
+            </div>
           </td>
         </tr>
       `;
@@ -1506,8 +1675,9 @@ function addEntryRow() {
   const tr = document.createElement('tr');
   tr.id = rowId;
 
-  const productOptions = state.products.map(p =>
-    `<option value="${p.producto_id}" data-cost="${p.costo_referencial_usd}" data-desc="${p.descripcion}">${p.codigo} - ${p.descripcion}</option>`
+  const catalogo = (state.catalogProducts && state.catalogProducts.length > 0) ? state.catalogProducts : state.products;
+  const productOptions = catalogo.map(p =>
+    `<option value="${p.producto_id}" data-cost="${p.costo_referencial_usd}" data-desc="${escapeHtml(p.descripcion)}">${escapeHtml(p.codigo)} - ${escapeHtml(p.descripcion)}</option>`
   ).join('');
 
   tr.innerHTML = `
@@ -1625,7 +1795,7 @@ function cambiarTabCruceEntradas(tabName) {
       name: 'PENDIENTES', 
       btnIds: ['tab-btn-cruce-pendientes', 'tab-cruce-ent-btn-pendientes'], 
       viewIds: ['vista-cruce-pendientes', 'tab-cruce-ent-view-pendientes'],
-      activeBg: '#ea580c'
+      activeBg: '#0f172a'
     },
     { 
       name: 'CONCILIADAS', 
@@ -1844,10 +2014,25 @@ function seleccionarFacturaCompraParaDetallar(compraId) {
   if (title) title.innerHTML = `🔗 Vinculando Entrada con Factura #${compra.nro_factura} de ${compra.razon_social}`;
   if (sub) sub.innerHTML = `Monto Factura: <strong>Bs. ${fmtBs(totBs)} ($${totUsd.toFixed(2)} USD)</strong> • RIF: ${compra.rif}. Agregue los repuestos recibidos abajo:`;
 
-  // 5. Scroll suave al formulario
+  // 5. Recalcular totales, verificar duplicados y hacer scroll suave al formulario
+  calculateEntryTotals();
+  if (typeof verificarEntradaAlmacenDuplicadaUI === 'function') {
+    verificarEntradaAlmacenDuplicadaUI();
+  }
   document.getElementById('form-entrada')?.scrollIntoView({ behavior: 'smooth' });
   showToast(`Factura #${compra.nro_factura} vinculada. Agregue los artículos recibidos.`, 'info');
 }
+
+function onCambioSubtipoEntrada() {
+  const subtipo = String(document.getElementById('ent-subtipo')?.value || 'COMPRA_NACIONAL').toUpperCase();
+  const selProv = document.getElementById('ent-proveedor');
+  if (selProv) {
+    const provOpcional = subtipo.includes('AJUSTE') || subtipo.includes('DEVOLUCION');
+    selProv.required = !provOpcional;
+  }
+  calculateEntryTotals();
+}
+window.onCambioSubtipoEntrada = onCambioSubtipoEntrada;
 
 function desvincularEntradaLibroCompra() {
   const hiddenLc = document.getElementById('ent-libro-compra-id');
@@ -1894,8 +2079,10 @@ function calculateEntryTotals(skipInputSync = false) {
 
     const baseUsd = Number((qty * unitUsd).toFixed(2));
     const baseBs = Number((qty * unitBs).toFixed(2));
-    const ivaUsd = Number((baseUsd * 0.16).toFixed(2));
-    const ivaBs = Number((baseBs * 0.16).toFixed(2));
+    const subtipoEnt = String(document.getElementById('ent-subtipo')?.value || 'COMPRA_NACIONAL').toUpperCase();
+    const pctIvaEnt = subtipoEnt.includes('AJUSTE') ? 0 : 0.16;
+    const ivaUsd = Number((baseUsd * pctIvaEnt).toFixed(2));
+    const ivaBs = Number((baseBs * pctIvaEnt).toFixed(2));
     const totalUsd = Number((baseUsd + ivaUsd).toFixed(2));
     const totalBs = Number((baseBs + ivaBs).toFixed(2));
 
@@ -1932,9 +2119,10 @@ function addExitRow() {
   const tr = document.createElement('tr');
   tr.id = rowId;
 
-  const productOptions = state.products.map(p => {
+  const catalogo = (state.catalogProducts && state.catalogProducts.length > 0) ? state.catalogProducts : state.products;
+  const productOptions = catalogo.map(p => {
     const pVenta = Number(p.precio_venta_usd || (p.costo_referencial_usd ? p.costo_referencial_usd * 1.30 : 0));
-    return `<option value="${p.producto_id}" data-stock="${p.stock_actual}" data-cost="${p.costo_referencial_usd}" data-precio="${pVenta}" data-desc="${p.descripcion}">${p.codigo} - ${p.descripcion} (Stock: ${p.stock_actual})</option>`;
+    return `<option value="${p.producto_id}" data-stock="${p.stock_actual}" data-cost="${p.costo_referencial_usd}" data-precio="${pVenta}" data-desc="${escapeHtml(p.descripcion)}">${escapeHtml(p.codigo)} - ${escapeHtml(p.descripcion)} (Stock: ${p.stock_actual})</option>`;
   }).join('');
 
   tr.innerHTML = `
@@ -2068,8 +2256,8 @@ function calculateExitTotals(skipInputSync = false) {
 
     const baseUsd = Number((qty * unitUsd).toFixed(2));
     const baseBs = Number((qty * unitBs).toFixed(2));
-    const subtipoSal = document.getElementById('sal-subtipo')?.value || 'VENTA';
-    const pctIvaSal = subtipoSal === 'VENTA' ? 0.16 : 0;
+    const subtipoSal = String(document.getElementById('sal-subtipo')?.value || 'VENTA').toUpperCase();
+    const pctIvaSal = (subtipoSal === 'VENTA' || subtipoSal.includes('RETIRO')) ? 0.16 : 0;
     const ivaUsd = Number((baseUsd * pctIvaSal).toFixed(2));
     const ivaBs = Number((baseBs * pctIvaSal).toFixed(2));
     const totalUsd = Number((baseUsd + ivaUsd).toFixed(2));
@@ -2113,7 +2301,9 @@ async function handleMovementSubmit(event, tipo) {
   const tasaAlmacen = getTasaBcvPorFechaOPeriodo(fecha);
   const tasaBcv = isEntrada ? tasaFactura : (parseFloat(document.getElementById('sal-tasa')?.value || '') || getTasaBcvPorFechaOPeriodo(fecha));
   const fechaTasaBcv = document.getElementById(isEntrada ? 'ent-fecha-tasa' : 'sal-fecha-tasa')?.value || fechaFactura;
-  const metodoVal = state.metodoValoracionKardex || 'CPP';
+  const metodoVal = !isEntrada
+    ? (document.getElementById('sal-metodo-val')?.value || state.metodoValoracionKardex || 'CPP')
+    : (state.metodoValoracionKardex || 'CPP');
   const obs = document.getElementById(isEntrada ? 'ent-obs' : 'sal-obs').value.trim();
   const provId = isEntrada ? document.getElementById('ent-proveedor').value : null;
 
@@ -2122,7 +2312,10 @@ async function handleMovementSubmit(event, tipo) {
     return;
   }
 
-  const esMovGravado = !subtipo.includes('AJUSTE') && !subtipo.includes('MERMA') && !subtipo.includes('AUTOCONSUMO') && !subtipo.includes('MUESTRA');
+  const subtipoUp = String(subtipo || '').toUpperCase();
+  const esMovGravado = isEntrada
+    ? !subtipoUp.includes('AJUSTE')
+    : (subtipoUp === 'VENTA' || subtipoUp.includes('RETIRO'));
   const pctIva = esMovGravado ? 0.16 : 0;
 
   // Gather items & validate stock in real time for Salidas
@@ -2197,7 +2390,7 @@ async function handleMovementSubmit(event, tipo) {
     subtipo,
     fecha,
     fecha_factura: fechaFactura,
-    tasa_bcv: isEntrada ? tasaAlmacen : tasaBcv,
+    tasa_bcv: isEntrada ? tasaFactura : tasaBcv,
     tasa_bcv_factura: tasaFactura,
     fecha_tasa_bcv: fechaTasaBcv,
     numero_documento: doc,
@@ -2213,8 +2406,11 @@ async function handleMovementSubmit(event, tipo) {
   };
 
   const submitBtn = document.getElementById(isEntrada ? 'btn-submit-entrada' : 'btn-submit-salida');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando...';
+  const submitOriginalHtml = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+  }
 
   try {
     const res = await fetch('/api/movimientos', {
@@ -2238,28 +2434,29 @@ async function handleMovementSubmit(event, tipo) {
       showToast(data.message || 'Movimiento registrado con éxito.', 'success');
     }
 
-    // Reset Form para permitir carga continua en tienda
-    resetForm(isEntrada ? 'form-entrada' : 'form-salida');
-    if (!isEntrada && typeof desvincularSalidaLibroVentas === 'function') desvincularSalidaLibroVentas();
-    if (isEntrada) addEntryRow();
-    else addExitRow();
+    // Refresh Live Data en segundo plano (incluyendo catálogo completo actualizado)
+    await ensureCatalogProducts(true);
 
-    // Refresh Live Data en segundo plano
+    // Reset Form para permitir carga continua en tienda (1 sola fila limpia)
+    resetForm(isEntrada ? 'form-entrada' : 'form-salida', true);
+
     await Promise.all([
       loadDashboard(),
       loadProducts(),
-      typeof loadCruceDobleVia === 'function' ? loadCruceDobleVia(cruceActivoPeriodo) : Promise.resolve(),
-      isEntrada ? cargarPanelCruceEntradas() : cargarPanelCruceSalidas()
+      (!isOperadorTiendaRol() && typeof loadCruceDobleVia === 'function') ? loadCruceDobleVia(cruceActivoPeriodo) : Promise.resolve(),
+      isEntrada ? cargarPanelCruceEntradas() : (!isOperadorTiendaRol() ? cargarPanelCruceSalidas() : Promise.resolve())
     ]);
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = isEntrada ? 'Registrar Entrada en Almacén' : 'Registrar Venta / Salida';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = submitOriginalHtml || (isEntrada ? 'Registrar Entrada en Almacén' : 'Registrar Venta / Salida');
+    }
   }
 }
 
-function resetForm(formId) {
+function resetForm(formId, addInitialRow = true) {
   const form = document.getElementById(formId);
   if (!form) return;
   form.reset();
@@ -2276,6 +2473,8 @@ function resetForm(formId) {
     if (hiddenLc) hiddenLc.value = '';
     const bannerLc = document.getElementById('banner-entrada-vinculada-lc');
     if (bannerLc) bannerLc.style.display = 'none';
+    const selProv = document.getElementById('ent-proveedor');
+    if (selProv) selProv.required = true;
 
     document.getElementById('tbody-items-entrada').innerHTML = '';
     const alertEnt = document.getElementById('alerta-duplicado-entrada');
@@ -2288,7 +2487,6 @@ function resetForm(formId) {
     const submitBtn = document.getElementById('btn-submit-entrada');
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Registrar Entrada en Almacén';
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
     }
@@ -2299,8 +2497,14 @@ function resetForm(formId) {
     if (document.getElementById('ent-tasa')) document.getElementById('ent-tasa').value = currentRateStr;
     if (document.getElementById('ent-modo-moneda')) document.getElementById('ent-modo-moneda').value = 'BS';
     if (document.getElementById('ent-usuario')) document.getElementById('ent-usuario').value = respUsuario;
-    calculateEntryTotals();
+    if (addInitialRow) addEntryRow();
+    else calculateEntryTotals();
   } else if (formId === 'form-salida') {
+    const hiddenZ = document.getElementById('sal-libro-ventas-id');
+    if (hiddenZ) hiddenZ.value = '';
+    const bannerZ = document.getElementById('banner-salida-vinculada-z');
+    if (bannerZ) bannerZ.style.display = 'none';
+
     document.getElementById('tbody-items-salida').innerHTML = '';
     if (document.getElementById('sal-control')) document.getElementById('sal-control').value = 'Z0A0000176';
     if (document.getElementById('sal-fecha')) document.getElementById('sal-fecha').value = today;
@@ -2308,7 +2512,8 @@ function resetForm(formId) {
     if (document.getElementById('sal-tasa')) document.getElementById('sal-tasa').value = currentRateStr;
     if (document.getElementById('sal-modo-moneda')) document.getElementById('sal-modo-moneda').value = 'BS';
     if (document.getElementById('sal-usuario')) document.getElementById('sal-usuario').value = respUsuario;
-    calculateExitTotals();
+    if (addInitialRow) addExitRow();
+    else calculateExitTotals();
   }
 }
 
@@ -2328,7 +2533,7 @@ function formatSubtipoBadge(tipo, subtipo) {
   if (sub.includes('POSITIVO')) return `<span class="badge-status badge-suficiente">⚖️ Ajuste Sobrante</span>`;
   if (sub === 'VENTA') return `<span class="badge-status badge-solicitar">📤 Venta Fiscal</span>`;
   if (sub.includes('AUTOCONSUMO')) return `<span class="badge-status" style="background:#fef3c7;color:#92400e;">🔧 Autoconsumo</span>`;
-  if (sub.includes('RETIRO')) return `<span class="badge-status" style="background:#f3e8ff;color:#6b21a8;">👤 Retiro Socios</span>`;
+  if (sub.includes('RETIRO')) return `<span class="badge-status" style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;">👤 Retiro Socios</span>`;
   if (sub.includes('MUESTRA')) return `<span class="badge-status" style="background:#e0f2fe;color:#0369a1;">🎁 Muestra</span>`;
   if (sub.includes('MERMA') || sub.includes('DANO')) return `<span class="badge-status badge-solicitar">⚠️ Merma / Daño</span>`;
   return `<span class="badge-status badge-solicitar">⚖️ ${sub.replace(/_/g, ' ')}</span>`;
@@ -2338,12 +2543,13 @@ async function executeKardexSearch(codeOverride) {
   let rawQuery = (codeOverride || document.getElementById('kardex-search-input')?.value || '').trim();
   if (!rawQuery) return;
 
-  // Búsqueda inteligente: si no coincide exacto por código, buscar por coincidencia en código o descripción
-  if (Array.isArray(state.products) && state.products.length > 0) {
-    const exactMatch = state.products.find(p => String(p.codigo || '').toUpperCase() === rawQuery.toUpperCase());
+  // Búsqueda inteligente sobre catálogo completo: si no coincide exacto por código, buscar por coincidencia en código o descripción
+  const catKardex = (Array.isArray(state.catalogProducts) && state.catalogProducts.length > 0) ? state.catalogProducts : state.products;
+  if (Array.isArray(catKardex) && catKardex.length > 0) {
+    const exactMatch = catKardex.find(p => String(p.codigo || '').toUpperCase() === rawQuery.toUpperCase());
     if (!exactMatch) {
       const qLow = rawQuery.toLowerCase();
-      const byDesc = state.products.find(p =>
+      const byDesc = catKardex.find(p =>
         String(p.codigo || '').toLowerCase().includes(qLow) ||
         String(p.descripcion || '').toLowerCase().includes(qLow)
       );
@@ -2440,8 +2646,11 @@ function imprimirKardexProducto() {
 
   const p = currentKardexData.producto;
   const hist = currentKardexData.historial || [];
+  const tasaActual = Number(getTasaBcvPorFechaOPeriodo() || 889.58);
   const cppUsd = Number(p.cpp_actual_usd || p.costo_referencial_usd || 0);
-  const cppVes = Number(p.cpp_actual_ves || (cppUsd * 68.50));
+  const cppVes = Number(p.cpp_actual_ves || (cppUsd * tasaActual));
+  const valorTotalVes = Number(p.valor_total_ves ?? p.valor_total_bs ?? (Number(p.stock_actual || 0) * cppVes));
+  const valorTotalUsd = Number(p.valor_total_usd ?? (Number(p.stock_actual || 0) * cppUsd));
   const metodoLabel = p.metodo_valoracion === 'PEPS' ? 'PEPS / FIFO (PRIMERAS ENTRADAS, PRIMERAS SALIDAS)' : 'COSTO PROMEDIO PONDERADO (CPP)';
 
   const fmtBs = (v) => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -2450,7 +2659,7 @@ function imprimirKardexProducto() {
     const isEnt = h.entrada > 0;
     const isSal = h.salida > 0;
     const costoDiv = Number(h.costo_unitario_divisa || h.costo_unitario_usd || 0);
-    const tasaOp = Number(h.tasa_bcv_operacion || h.tasa_bcv || 68.50);
+    const tasaOp = Number(h.tasa_bcv_operacion || h.tasa_bcv || tasaActual);
     return `
       <tr>
         <td style="text-align:center;">${i + 1}</td>
@@ -2504,8 +2713,8 @@ function imprimirKardexProducto() {
         <tr>
           <td><strong>UNIDAD DE MEDIDA:</strong> ${p.unidad_medida}</td>
           <td><strong>COSTO UNITARIO ACTUAL:</strong> Bs. ${fmtBs(cppVes)} ($${cppUsd.toFixed(2)})</td>
-          <td><strong>EXISTENCIA ACTUAL:</strong> <strong style="color:#000080;">${p.stock_actual} ${p.unidad_medida}</strong></td>
-          <td><strong>VALOR TOTAL EN LIBROS:</strong> <strong style="color:#000080;">Bs. ${fmtBs(p.valor_total_ves)} ($${Number(p.valor_total_usd || 0).toFixed(2)})</strong></td>
+          <td><strong>EXISTENCIA ACTUAL:</strong> <strong style="color:#0f172a;">${p.stock_actual} ${p.unidad_medida}</strong></td>
+          <td><strong>VALOR TOTAL EN LIBROS:</strong> <strong style="color:#0f172a;">Bs. ${fmtBs(valorTotalVes)} ($${valorTotalUsd.toFixed(2)})</strong></td>
         </tr>
       </table>
 
@@ -2615,11 +2824,14 @@ async function loadMovements() {
   }
 }
 
+let currentMovDetailData = null;
+
 // 11. Movement Detail Modal (with Full Traceability & Dual Currency PA SNAT/2026/00093)
 async function viewMovementDetail(id) {
   const modal = document.getElementById('modal-mov-detail');
   const modalBody = document.getElementById('modal-mov-body');
   const modalTitle = document.getElementById('modal-mov-title');
+  currentMovDetailData = null;
 
   modal.style.display = 'flex';
   modalBody.innerHTML = `<div class="loading-spinner">Cargando comprobante bimonetario y soportes...</div>`;
@@ -2627,6 +2839,7 @@ async function viewMovementDetail(id) {
   try {
     const res = await fetch(`/api/movimientos/${id}`);
     const data = await res.json();
+    currentMovDetailData = data;
     const h = data.header;
 
     modalTitle.textContent = `Comprobante Bimonetario #${h.id} • ${h.numero_documento} (${h.fecha})`;
@@ -4972,7 +5185,7 @@ function imprimirLibroCompras() {
   const decl = (fiscalStateNew.declaraciones || []).find(d => d.periodo === periodo) || {};
 
   let rowsHtml = '';
-  let totBase = 0, totIva = 0, totTotal = 0, totRet = 0;
+  let totExento = 0, totBaseGravada = 0, totBase = 0, totIva = 0, totTotal = 0, totRet = 0;
 
   compras.forEach((c, idx) => {
     const base = Number(c.base_imponible_bs || 0);
@@ -4981,6 +5194,11 @@ function imprimirLibroCompras() {
     const ret = Number(c.iva_retenido_bs || 0);
     const aliNum = c.alicuota !== undefined && c.alicuota !== null ? Number(c.alicuota) : 0.16;
 
+    if (aliNum === 0) {
+      totExento += base;
+    } else {
+      totBaseGravada += base;
+    }
     totBase += base;
     totIva += iva;
     totTotal += total;
@@ -5039,10 +5257,9 @@ function imprimirLibroCompras() {
         </div>
 
         <div class="seniat-header-right">
-          <div style="font-weight: 800; color: #000080;">CONTRIBUYENTE ORDINARIO</div>
+          <div style="font-weight: 800; color: #0f172a;">CONTRIBUYENTE ORDINARIO</div>
           <div>Fecha Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
           <div>Total Operaciones: ${compras.length}</div>
-          <div>Folio: Pág. 1 de 1</div>
         </div>
       </div>
 
@@ -5078,13 +5295,13 @@ function imprimirLibroCompras() {
           ${rowsHtml || '<tr><td colspan="16" style="text-align:center; padding: 14px;">Sin operaciones de compra registradas para este período impositivo.</td></tr>'}
         </tbody>
         <tfoot>
-          <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #000080;">
-            <td colspan="11" style="text-align:right; font-size: 9px; color:#000080; white-space:nowrap;">TOTALES LIBRO DE COMPRAS DEL PERÍODO (${periodo}):</td>
+          <tr style="background:#f1f5f9; font-weight:900; border-top: 2px solid #0f172a;">
+            <td colspan="11" style="text-align:right; font-size: 9px; color:#0f172a; white-space:nowrap;">TOTALES LIBRO DE COMPRAS DEL PERÍODO (${periodo}):</td>
             <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totTotal)}</td>
-            <td style="text-align:right; font-family:monospace; white-space:nowrap;">0,00</td>
-            <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totBase)}</td>
+            <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(totExento)}</td>
+            <td style="text-align:right; font-family:monospace; color:#0f172a; white-space:nowrap;">Bs. ${fmtBs(totBaseGravada)}</td>
             <td style="text-align:center; white-space:nowrap;">16%</td>
-            <td style="text-align:right; font-family:monospace; color:#000080; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
+            <td style="text-align:right; font-family:monospace; color:#0f172a; white-space:nowrap;">Bs. ${fmtBs(totIva)}</td>
           </tr>
         </tfoot>
       </table>
@@ -5106,7 +5323,7 @@ function imprimirLibroCompras() {
               <tr>
                 <td style="text-align:center; font-weight:700;">30</td>
                 <td>Compras No Gravadas y/o Sin Derecho a Crédito Fiscal</td>
-                <td style="text-align:right; font-family:monospace;">0,00</td>
+                <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totExento)}</td>
                 <td style="text-align:right; font-family:monospace;">0,00</td>
               </tr>
               <tr>
@@ -5118,8 +5335,8 @@ function imprimirLibroCompras() {
               <tr>
                 <td style="text-align:center; font-weight:700;">33</td>
                 <td><strong>Compras Internas Gravadas sólo por Alícuota General (16%)</strong></td>
-                <td style="text-align:right; font-family:monospace; font-weight:800;">Bs. ${fmtBs(totBase)}</td>
-                <td style="text-align:right; font-family:monospace; font-weight:800; color:#000080;">Bs. ${fmtBs(totIva)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:800;">Bs. ${fmtBs(totBaseGravada)}</td>
+                <td style="text-align:right; font-family:monospace; font-weight:800; color:#0f172a;">Bs. ${fmtBs(totIva)}</td>
               </tr>
               <tr>
                 <td style="text-align:center; font-weight:700;">34 / 342</td>
@@ -5131,7 +5348,7 @@ function imprimirLibroCompras() {
                 <td style="text-align:center;">35 / 36</td>
                 <td>TOTAL COMPRAS Y CRÉDITOS FISCALES DEL PERÍODO</td>
                 <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(totBase)}</td>
-                <td style="text-align:right; font-family:monospace; color:#000080;">Bs. ${fmtBs(totIva)}</td>
+                <td style="text-align:right; font-family:monospace; color:#0f172a;">Bs. ${fmtBs(totIva)}</td>
               </tr>
               <tr>
                 <td style="text-align:center; font-weight:700;">38</td>
@@ -6197,16 +6414,19 @@ function cambiarTabCruceSalidas(tab) {
 
 function seleccionarFacturaZParaDetallarSalida(reporteZId, numeroFactura, fecha, tasaBcv, serialImpresora, numReporteZ) {
   const fFecha = document.getElementById('sal-fecha');
+  const fFechaTasa = document.getElementById('sal-fecha-tasa');
   const fFact = document.getElementById('sal-factura');
   const fCtrl = document.getElementById('sal-control');
   const fTasa = document.getElementById('sal-tasa');
   const fZId = document.getElementById('sal-libro-ventas-id');
 
   if (fFecha) fFecha.value = fecha;
+  if (fFechaTasa) fFechaTasa.value = fecha;
   if (fFact) fFact.value = `FACT ${numeroFactura}`;
   if (fCtrl) fCtrl.value = serialImpresora || 'Z0A0000176';
-  if (fTasa) fTasa.value = Number(tasaBcv || 889.58);
+  if (fTasa) fTasa.value = Number(tasaBcv || 889.58).toFixed(4);
   if (fZId) fZId.value = reporteZId;
+  calculateExitTotals();
 
   const banner = document.getElementById('banner-salida-vinculada-z');
   const txt = document.getElementById('banner-salida-vinculada-texto');
@@ -6374,11 +6594,10 @@ function imprimirLibroVentas() {
         </div>
 
         <div class="seniat-header-right">
-          <div style="font-weight: 800; color: #000080;">MÁQUINA FISCAL: Z0A0000176</div>
+          <div style="font-weight: 800; color: #0f172a;">MÁQUINA FISCAL: Z0A0000176</div>
           <div>Días Reportados: ${ventas.length}</div>
           <div>Comprobantes Emitidos: ${totCant}</div>
           <div>Fecha Emisión: ${new Date().toLocaleDateString('es-VE')}</div>
-          <div>Folio: Pág. 1 de 1</div>
         </div>
       </div>
 
@@ -8507,14 +8726,29 @@ function descargarArchivoXMLSeniat() {
     showToast(`No existen comprobantes de retención emitidos en ${periodo} para exportar el XML.`, 'error');
     return;
   }
+  let forzarDescarga = false;
   if (dataActual && (dataActual.errores_validacion || []).length > 0) {
     if (!confirm('Existen advertencias de formato XSD SENIAT en el período. ¿Deseas descargar el archivo XML de todas formas?')) {
       return;
     }
+    forzarDescarga = true;
+  }
+  const fileName = `XML_relacionRetencionesISLR_${String(periodo).replace('-', '')}.xml`;
+  if (dataActual && dataActual.xml) {
+    const blob = new Blob([dataActual.xml], { type: 'application/xml;charset=ISO-8859-1' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 10000);
+    return;
   }
   const link = document.createElement('a');
-  link.href = `/api/islr/export-xml?periodo=${encodeURIComponent(periodo)}`;
-  link.download = `XML_relacionRetencionesISLR_${String(periodo).replace('-', '')}.xml`;
+  link.href = `/api/islr/export-xml?periodo=${encodeURIComponent(periodo)}${forzarDescarga ? '&forzar=1' : ''}`;
+  link.download = fileName;
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
@@ -9565,9 +9799,9 @@ function renderizarTablaAuditoriaEnVivo() {
 
   const fmtBs = v => Number(v || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUsd = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
-  const actionBtnText = isAuditor ? '✏️ Auditar' : '👁️ Ver Ficha';
-  const actionBtnClass = isAuditor ? 'btn-navy' : 'btn-secondary';
+  const canEdit = puedeEditarTomaFisica() && state.tomaFisicaEstatus !== 'CERRADA';
+  const actionBtnText = canEdit ? '✏️ Auditar' : '👁️ Ver Ficha';
+  const actionBtnClass = canEdit ? 'btn-navy' : 'btn-secondary';
 
   const listaRender = pzeroFiltrados.slice(0, pzeroLimiteRender);
   const rowsHtml = listaRender.map((p, index) => {
@@ -9595,7 +9829,7 @@ function renderizarTablaAuditoriaEnVivo() {
     return `
       <tr class="${trClass}" style="cursor:pointer;" onclick="if (!event.target.closest('button, input')) abrirDrawerAuditoriaPorId(${p.producto_id})">
         <td style="text-align:center;">
-          <button type="button" class="pzero-check-btn ${checkClass}" style="${isAuditor ? '' : 'cursor:default; opacity:0.85;'}" title="${isAuditor ? (isAuditado ? 'Auditado' : 'Marcar como Auditado') : (isAuditado ? 'Auditado por Almacén' : 'Pendiente de Toma Física')}" onclick="event.stopPropagation(); ${isAuditor ? `toggleAuditadoDirecto(${p.producto_id}, event)` : ''}">
+          <button type="button" class="pzero-check-btn ${checkClass}" style="${canEdit ? '' : 'cursor:default; opacity:0.85;'}" title="${canEdit ? (isAuditado ? 'Auditado' : 'Marcar como Auditado') : (isAuditado ? 'Auditado por Almacén' : 'Pendiente de Toma Física')}" onclick="event.stopPropagation(); ${canEdit ? `toggleAuditadoDirecto(${p.producto_id}, event)` : ''}">
             ${checkIcon}
           </button>
         </td>
@@ -9690,7 +9924,7 @@ function verificarActaAperturada() {
 }
 
 function abrirModalAperturaActa(callback) {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
+  if (!puedeGestionarActaFormalTomaFisica()) {
     if (typeof callback === 'function') callback();
     return;
   }
@@ -9832,9 +10066,11 @@ function actualizarBannerActaActiva() {
     }
   }
 
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  const canManageActa = puedeGestionarActaFormalTomaFisica();
   const btnConfig = document.getElementById('btn-configurar-acta-banner');
-  if (btnConfig) btnConfig.style.display = isAuditor ? 'inline-block' : 'none';
+  const btnVerActaBanner = document.getElementById('btn-ver-acta-banner');
+  if (btnConfig) btnConfig.style.display = canManageActa ? 'inline-block' : 'none';
+  if (btnVerActaBanner) btnVerActaBanner.style.display = canManageActa ? 'inline-block' : 'none';
 
   actualizarChecklistFasesTomaFisica();
 }
@@ -9949,8 +10185,8 @@ function actualizarChecklistFasesTomaFisica() {
 }
 
 function marcarConteoFisicoConcluido() {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede modificar el estado de avance del conteo.', 'warning');
+  if (!puedeGestionarActaFormalTomaFisica()) {
+    showToast('⚠️ Solo Supervisión o el Auditor de Tienda puede modificar el estado formal de cierre del conteo.', 'warning');
     return;
   }
   const yaListo = localStorage.getItem('dg67_conteo_listo_202610') === 'true';
@@ -9973,16 +10209,23 @@ async function cargarEstatusTomaFisica(periodo = '2026-10') {
     state.tomaFisicaEstatus = data.estatus || 'ABIERTA';
     state.tomaFisicaInfo = data;
 
-    const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+    const canManageActa = puedeGestionarActaFormalTomaFisica();
+    const canEdit = puedeEditarTomaFisica();
     const btnCerrar = document.getElementById('btn-cerrar-toma-fisica');
     const btnReabrir = document.getElementById('btn-reabrir-toma-fisica');
+    const btnRapida = document.getElementById('btn-modo-rapido-auditoria') || document.getElementById('btn-modo-auditoria-rapida');
+    const btnCrearTop = document.getElementById('btn-crear-repuesto-top');
 
     if (state.tomaFisicaEstatus === 'CERRADA') {
       if (btnCerrar) btnCerrar.style.display = 'none';
-      if (btnReabrir) btnReabrir.style.display = isAuditor ? 'flex' : 'none';
+      if (btnReabrir) btnReabrir.style.display = canManageActa ? 'flex' : 'none';
+      if (btnRapida) btnRapida.style.display = 'none';
+      if (btnCrearTop) btnCrearTop.style.display = 'none';
     } else {
-      if (btnCerrar) btnCerrar.style.display = isAuditor ? 'flex' : 'none';
+      if (btnCerrar) btnCerrar.style.display = canManageActa ? 'flex' : 'none';
       if (btnReabrir) btnReabrir.style.display = 'none';
+      if (btnRapida) btnRapida.style.display = canEdit ? 'flex' : 'none';
+      if (btnCrearTop) btnCrearTop.style.display = canEdit ? 'flex' : 'none';
     }
 
     actualizarBannerActaActiva();
@@ -9992,8 +10235,8 @@ async function cargarEstatusTomaFisica(periodo = '2026-10') {
 }
 
 function abrirModalCierreTomaFisica() {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede cerrar y sellar formalmente la Toma Física.', 'warning');
+  if (!puedeGestionarActaFormalTomaFisica()) {
+    showToast('⚠️ Solo Supervisión o el Auditor de Tienda está autorizado para cerrar y sellar formalmente la Toma Física.', 'warning');
     return;
   }
 
@@ -10079,8 +10322,8 @@ async function confirmarCierreTomaFisica(e) {
 }
 
 async function reabrirTomaFisicaPeriodo() {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está autorizado para reabrir el expediente de Toma Física.', 'warning');
+  if (!puedeGestionarActaFormalTomaFisica()) {
+    showToast('⚠️ Solo Supervisión o el Auditor de Tienda está autorizado para reabrir el expediente de Toma Física.', 'warning');
     return;
   }
   if (!confirm('¿Está seguro de reabrir la Toma Física del período para realizar ajustes o rectificaciones físicas?')) {
@@ -10110,10 +10353,7 @@ function actualizarOpcionesDrawerActa(numeroActa) {
   const select = document.getElementById('drawer-acta-select');
   if (!select) return;
   const num = numeroActa || 'ACTA-INV-202610-01';
-  select.innerHTML = `
-    <option value="${num}" selected>${num} (Expediente Activo en Curso)</option>
-    <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
-  `;
+  select.innerHTML = `<option value="${escapeHtml(num)}" selected>${escapeHtml(num)} (Expediente Activo en Curso)</option>`;
 }
 
 // ----------------------------------------------------------------------------
@@ -10121,8 +10361,7 @@ function actualizarOpcionesDrawerActa(numeroActa) {
 // ----------------------------------------------------------------------------
 
 function abrirDrawerAuditoriaPorId(productoId) {
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
-  if (isAuditor && !verificarActaAperturada()) {
+  if (puedeGestionarActaFormalTomaFisica() && !verificarActaAperturada()) {
     abrirModalAperturaActa(() => {
       abrirDrawerAuditoriaPorIdDirecto(productoId);
     });
@@ -10194,10 +10433,7 @@ function abrirDrawerAuditoria(index) {
   const actaActiva = obtenerActaActiva();
   const numActa = actaActiva?.numero || 'ACTA-INV-202610-01';
   if (elActa) {
-    elActa.innerHTML = `
-      <option value="${numActa}" selected>${numActa} (Expediente Activo en Curso)</option>
-      <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
-    `;
+    elActa.innerHTML = `<option value="${escapeHtml(numActa)}" selected>${escapeHtml(numActa)} (Expediente Activo en Curso)</option>`;
     elActa.value = numActa;
   }
   const elJust = document.getElementById('drawer-justificacion-detalle');
@@ -10224,10 +10460,10 @@ function abrirDrawerAuditoria(index) {
   }
   calcularPreciosDrawer('BS_S_IVA');
 
-  // 5. Modo Solo Lectura si la Toma Física está Cerrada o si el usuario NO es Auditor
-  const isAuditor = (state.currentUser?.rol === 'TOMA_FISICA');
+  // 5. Modo Solo Lectura únicamente si la Toma Física está Cerrada o el rol no tiene autorización de edición
+  const canEdit = puedeEditarTomaFisica();
   const isCerrada = (state.tomaFisicaEstatus === 'CERRADA');
-  const isReadOnly = isCerrada || !isAuditor;
+  const isReadOnly = isCerrada || !canEdit;
 
   const elAlertaCerrada = document.getElementById('drawer-alerta-toma-cerrada');
   const elAlertaConsulta = document.getElementById('drawer-alerta-modo-consulta');
@@ -10235,7 +10471,7 @@ function abrirDrawerAuditoria(index) {
   const btnGuardarSig = document.getElementById('btn-drawer-guardar-sig');
 
   if (elAlertaCerrada) elAlertaCerrada.style.display = isCerrada ? 'block' : 'none';
-  if (elAlertaConsulta) elAlertaConsulta.style.display = (!isAuditor && !isCerrada) ? 'block' : 'none';
+  if (elAlertaConsulta) elAlertaConsulta.style.display = (!canEdit && !isCerrada) ? 'block' : 'none';
 
   ['drawer-edit-codigo', 'drawer-edit-descripcion', 'drawer-edit-unidad-medida', 'drawer-edit-categoria', 'drawer-edit-almacen', 'drawer-cant-fisica', 'drawer-costo-s-iva-bs', 'drawer-precio-s-iva-bs', 'drawer-motivo-select', 'drawer-acta-select', 'drawer-justificacion-detalle'].forEach(id => {
     const el = document.getElementById(id);
@@ -10277,6 +10513,22 @@ function cerrarDrawerAuditoria() {
 }
 
 function navegarProductoAuditoria(delta) {
+  const listaNav = (Array.isArray(pzeroFiltrados) && pzeroFiltrados.length > 0) ? pzeroFiltrados : pzeroProductos;
+  const prodActual = pzeroProductos[pzeroProductoActualIndex];
+  const posEnLista = prodActual ? listaNav.findIndex(item => item.producto_id === prodActual.producto_id) : -1;
+  if (posEnLista !== -1) {
+    const sigPos = posEnLista + delta;
+    if (sigPos >= 0 && sigPos < listaNav.length) {
+      const targetProd = listaNav[sigPos];
+      const idxGlobal = pzeroProductos.findIndex(item => item.producto_id === targetProd.producto_id);
+      if (idxGlobal !== -1) {
+        abrirDrawerAuditoria(idxGlobal);
+        return;
+      }
+    }
+    showToast('Llegaste al límite de los productos filtrados.', 'info');
+    return;
+  }
   const nuevoIndex = pzeroProductoActualIndex + delta;
   if (nuevoIndex >= 0 && nuevoIndex < pzeroProductos.length) {
     abrirDrawerAuditoria(nuevoIndex);
@@ -10287,11 +10539,15 @@ function navegarProductoAuditoria(delta) {
 
 // Iniciar Modo Auditoría Rápida (busca el primer pendiente)
 function iniciarModoAuditoriaRapida() {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede ejecutar la Auditoría Rápida.', 'warning');
+  if (!puedeEditarTomaFisica()) {
+    showToast('⚠️ Modo Consulta: Su perfil no tiene permisos de edición en Toma Física.', 'warning');
     return;
   }
-  if (!verificarActaAperturada()) {
+  if (state.tomaFisicaEstatus === 'CERRADA') {
+    showToast('🔒 La Toma Física está cerrada. Solicite reapertura para continuar.', 'warning');
+    return;
+  }
+  if (puedeGestionarActaFormalTomaFisica() && !verificarActaAperturada()) {
     abrirModalAperturaActa(() => {
       iniciarModoAuditoriaRapidaDirecto();
     });
@@ -10513,14 +10769,14 @@ function calcularMargenDrawer() {
 
 function onToggleInactivoDrawer(el) {
   if (el.checked) {
-    showToast('El producto será marcado como INACTIVO (Soft Delete sin borrar facturas).', 'info');
+    showToast('El producto será marcado como INACTIVO en el catálogo (se conserva su historial de movimientos).', 'info');
   }
 }
 
 // Guardar producto auditado (Bloques A, B y C)
 async function guardarProductoAuditoria(avanzarSiguiente = false) {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda está autorizado para asentar ajustes físicos de stock.', 'warning');
+  if (!puedeEditarTomaFisica()) {
+    showToast('⚠️ Modo Consulta: Su perfil no está autorizado para asentar ajustes físicos de stock.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -10530,12 +10786,23 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   if (pzeroProductoActualIndex < 0) return;
   const p = pzeroProductos[pzeroProductoActualIndex];
 
-  const nuevoCodigo = document.getElementById('drawer-edit-codigo')?.value?.trim();
+  const nuevoCodigo = document.getElementById('drawer-edit-codigo')?.value?.trim().toUpperCase();
   const nuevaDesc = document.getElementById('drawer-edit-descripcion')?.value?.trim();
   const nuevaUnidad = document.getElementById('drawer-edit-unidad-medida')?.value?.trim();
   const nuevaCat = document.getElementById('drawer-edit-categoria')?.value?.trim();
   const nuevoAlm = document.getElementById('drawer-edit-almacen')?.value?.trim();
 
+  if (!nuevoCodigo) {
+    showToast('El Código del repuesto es obligatorio.', 'warning');
+    document.getElementById('drawer-edit-codigo')?.focus();
+    return;
+  }
+  const codDuplicado = pzeroProductos.some(other => other.producto_id !== p.producto_id && String(other.codigo || '').toUpperCase() === nuevoCodigo);
+  if (codDuplicado) {
+    showToast(`El código "${nuevoCodigo}" ya pertenece a otro artículo del catálogo.`, 'error');
+    document.getElementById('drawer-edit-codigo')?.focus();
+    return;
+  }
   if (!nuevaDesc) {
     showToast('El Nombre / Descripción del repuesto no puede estar vacío.', 'warning');
     document.getElementById('drawer-edit-descripcion')?.focus();
@@ -10555,6 +10822,12 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
   if (isNaN(cantFisica) || cantFisica < 0) {
     showToast('Por favor introduce una Cantidad Física Real válida.', 'warning');
     document.getElementById('drawer-cant-fisica')?.focus();
+    return;
+  }
+  const diffLocal = Number((cantFisica - Number(p.stock_actual || 0)).toFixed(2));
+  if (diffLocal !== 0 && motivoAjuste === 'OTRO' && !justificacionDetalle) {
+    showToast('Especifique la justificación física del ajuste cuando selecciona "Otro Motivo".', 'warning');
+    document.getElementById('drawer-justificacion-detalle')?.focus();
     return;
   }
 
@@ -10608,11 +10881,12 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
     p.almacen = data.producto_actualizado?.almacen ?? (nuevoAlm || p.almacen);
     p.stock_actual = data.producto_actualizado?.stock_actual ?? cantFisica;
     p.stock_fisico = cantFisica;
-    p.diferencia = 0; // Ahora está cuadrado
+    p.diferencia = data.producto_actualizado?.diferencia ?? 0;
     p.costo_s_iva_usd = data.producto_actualizado?.costo_s_iva_usd ?? costoSIVAUsd;
     p.precio_venta_s_iva_usd = data.producto_actualizado?.precio_venta_s_iva_usd ?? precioSIVAUsd;
     p.auditado = 1;
     p.inactivo = inactivo;
+    ensureCatalogProducts(true);
 
     // Actualizar header del drawer
     const elCod = document.getElementById('drawer-codigo');
@@ -10643,8 +10917,8 @@ async function guardarProductoAuditoria(avanzarSiguiente = false) {
 
 // Toggle directo de checkbox en la tabla
 async function toggleAuditadoDirecto(productoId, event) {
-  if (state.currentUser?.rol !== 'TOMA_FISICA') {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda puede cambiar el estado de auditoría.', 'warning');
+  if (!puedeEditarTomaFisica()) {
+    showToast('⚠️ Modo Consulta: Su perfil no está autorizado para modificar el estado de Toma Física.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -10676,6 +10950,8 @@ async function toggleAuditadoDirecto(productoId, event) {
   } catch (err) {
     console.error('Error toggling auditado:', err);
     showToast(err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -10719,10 +10995,10 @@ async function descargarMatrizAuditoria() {
     ];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MATRIZ_PUNTO_CERO');
+    XLSX.utils.book_append_sheet(wb, ws, 'TOMA_FISICA_DG67');
 
-    const fileName = `MATRIZ_AUDITORIA_PUNTO_CERO_OCTUBRE_2026.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    const fileName = `TOMA_FISICA_INVENTARIO_DG67_${getHoyLocalISO()}.xlsx`;
+    exportarWorkbookSeguro(wb, fileName);
     showToast(`Matriz exportada exitosamente (${matriz.length} productos).`, 'success');
   } catch (err) {
     console.error('Error en descargarMatrizAuditoria:', err);
@@ -11002,10 +11278,8 @@ window.renderHistoricoTasasModal = renderHistoricoTasasModal;
 // ----------------------------------------------------------------------------
 
 function abrirModalCrearProductoTomaFisica() {
-  const rol = String(state.currentUser?.rol || '').toUpperCase();
-  const isAuthorized = (rol === 'TOMA_FISICA' || rol === 'ADMIN' || rol === 'ADMINISTRADOR' || rol === 'AUDITOR');
-  if (!isAuthorized) {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda o Administrador está facultado para incorporar nuevos repuestos en la Toma Física.', 'warning');
+  if (!puedeEditarTomaFisica()) {
+    showToast('⚠️ Modo Consulta: Su perfil no está autorizado para incorporar nuevos artículos al catálogo.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -11122,10 +11396,8 @@ function calcularMargenNuevoProd() {
 async function guardarNuevoProductoTomaFisica(event) {
   if (event) event.preventDefault();
 
-  const rol = String(state.currentUser?.rol || '').toUpperCase();
-  const isAuthorized = (rol === 'TOMA_FISICA' || rol === 'ADMIN' || rol === 'ADMINISTRADOR' || rol === 'AUDITOR');
-  if (!isAuthorized) {
-    showToast('⚠️ Modo Consulta: Solo el usuario Auditor de Tienda o Administrador puede crear repuestos.', 'warning');
+  if (!puedeEditarTomaFisica()) {
+    showToast('⚠️ Modo Consulta: Su perfil no está autorizado para crear artículos.', 'warning');
     return;
   }
   if (state.tomaFisicaEstatus === 'CERRADA') {
@@ -11226,8 +11498,10 @@ async function guardarNuevoProductoTomaFisica(event) {
     // Cerrar modal
     closeModal('modal-crear-producto-toma-fisica');
 
-    // Filtrar y renderizar datagrid
+    // Filtrar y renderizar datagrid y refrescar catálogo global
     filtrarAuditoriaEnVivo();
+    ensureCatalogProducts(true);
+    if (state.activeTab === 'tab-inventario') loadProducts();
 
   } catch (err) {
     console.error('Error creando nuevo producto en toma física:', err);
@@ -11717,6 +11991,419 @@ window.renderReporteMensualInventario = renderReporteMensualInventario;
 window.debouncedRenderReporteMensual = debouncedRenderReporteMensual;
 window.exportarReporteMensualInventarioExcel = exportarReporteMensualInventarioExcel;
 window.abrirPdfArt177DesdeModal = abrirPdfArt177DesdeModal;
+
+// ==========================================================================
+// 27. MOTOR DE EMISIÓN DE ARCHIVOS PLANOS (.TXT) Y COMPROBANTE PDF DE MOVIMIENTO
+// Titularidad Exclusiva: INVERSIONES DG 67, C.A. (RIF: J-50700865-7)
+// ==========================================================================
+
+function _encabezadoTxtDG67(titulo, subtitulo) {
+  const sep = '='.repeat(118);
+  const fechaEmision = new Date().toLocaleString('es-VE');
+  return [
+    sep,
+    'INVERSIONES DG 67, C.A.  |  RIF: J-50700865-7',
+    'Av. Sur 11 entre Esq. Bolivar y Miranda, Casa N° 112, Local S/N, San Agustin del Norte, Caracas D.C.',
+    sep,
+    titulo,
+    subtitulo ? `${subtitulo}  |  Emision: ${fechaEmision}` : `Fecha de Emision: ${fechaEmision}`,
+    '-'.repeat(118)
+  ];
+}
+
+function exportarInventarioTxt() {
+  const lista = Array.isArray(state.products) ? state.products : [];
+  if (lista.length === 0) {
+    showToast('No hay artículos visibles para exportar en formato TXT.', 'warning');
+    return;
+  }
+  const fechaCorte = document.getElementById('inv-periodo-corte')?.value || 'AL_DIA';
+  const tasa = Number(lista[0]?.tasa_bcv_aplicada || getTasaBcvPorFechaOPeriodo() || 889.58);
+  const lines = _encabezadoTxtDG67(
+    'REPORTE TABULAR DE EXISTENCIAS Y VALORACION DE INVENTARIO (ART. 177 RISLR)',
+    `Corte: ${fechaCorte}  |  Tasa Oficial BCV: Bs. ${fmtBs(tasa)} / USD  |  Articulos: ${lista.length}`
+  );
+  lines.push(
+    [_padR('CODIGO', 14), _padR('DESCRIPCION', 36), _padR('UND', 5), _padR('ALMACEN', 14), _padL('STOCK', 9), _padL('COSTO BS', 14), _padL('COSTO $', 10), _padL('VALOR BS', 16), _padL('VALOR $', 11)].join(' | ')
+  );
+  lines.push('-'.repeat(118));
+
+  let sumStock = 0, sumBs = 0, sumUsd = 0;
+  for (const p of lista) {
+    const stk = Number(p.stock_actual || 0);
+    const cUsd = Number(p.costo_referencial_usd || 0);
+    const cBs = Number(p.costo_unitario_bs !== undefined ? p.costo_unitario_bs : (cUsd * tasa));
+    const vUsd = Number(p.valor_total_usd || (stk * cUsd));
+    const vBs = Number(p.valor_total_bs !== undefined ? p.valor_total_bs : (vUsd * tasa));
+    if (stk > 0) {
+      sumStock += stk;
+      sumBs += vBs;
+      sumUsd += vUsd;
+    }
+    lines.push([
+      _padR(p.codigo, 14),
+      _padR(p.descripcion, 36),
+      _padR(p.unidad_medida || 'UND', 5),
+      _padR(p.almacen || 'PRINCIPAL', 14),
+      _padL(stk.toFixed(2), 9),
+      _padL(fmtBs(cBs), 14),
+      _padL(cUsd.toFixed(2), 10),
+      _padL(fmtBs(vBs), 16),
+      _padL(vUsd.toFixed(2), 11)
+    ].join(' | '));
+  }
+  lines.push('-'.repeat(118));
+  lines.push(`TOTAL EXISTENCIAS POSITIVAS: ${sumStock.toFixed(2)} unds  |  VALOR TOTAL: Bs. ${fmtBs(sumBs)}  (Ref: $${fmtUsd(sumUsd)} USD)`);
+  lines.push('='.repeat(118));
+
+  const fileName = `INVENTARIO_DG67_${fechaCorte}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Archivo TXT descargado: ${fileName}`, 'success');
+}
+window.exportarInventarioTxt = exportarInventarioTxt;
+
+function exportarKardexTxt() {
+  if (!currentKardexData || !currentKardexData.producto) {
+    showToast('Primero consulta un repuesto para exportar su Kardex en formato TXT.', 'warning');
+    return;
+  }
+  const p = currentKardexData.producto;
+  const hist = currentKardexData.historial || [];
+  const tasa = Number(getTasaBcvPorFechaOPeriodo() || 889.58);
+  const cppUsd = Number(p.cpp_actual_usd || p.costo_referencial_usd || 0);
+  const cppVes = Number(p.cpp_actual_ves || (cppUsd * tasa));
+  const valVes = Number(p.valor_total_ves ?? p.valor_total_bs ?? (Number(p.stock_actual || 0) * cppVes));
+  const valUsd = Number(p.valor_total_usd ?? (Number(p.stock_actual || 0) * cppUsd));
+
+  const lines = _encabezadoTxtDG67(
+    `TARJETA KARDEX AUXILIAR BIMONETARIA — [${p.codigo}] ${p.descripcion}`,
+    `Almacen: ${p.almacen || 'PRINCIPAL'}  |  Metodo: ${p.metodo_valoracion || 'CPP'}  |  Existencia: ${p.stock_actual} ${p.unidad_medida || 'UND'}  |  Valor: Bs. ${fmtBs(valVes)} ($${fmtUsd(valUsd)} USD)`
+  );
+  lines.push([
+    _padR('FECHA', 10), _padR('TIPIFICACION', 22), _padR('DOCUMENTO', 18), _padR('TERCERO', 20),
+    _padL('ENT.', 8), _padL('SAL.', 8), _padL('SALDO', 9), _padL('CPP BS', 13), _padL('VALOR SALDO BS', 16)
+  ].join(' | '));
+  lines.push('-'.repeat(118));
+  for (const h of hist) {
+    lines.push([
+      _padR(h.fecha, 10),
+      _padR((h.subtipo || h.tipo || '').replace(/_/g, ' '), 22),
+      _padR(h.numero_documento || '-', 18),
+      _padR(h.tercero || '-', 20),
+      _padL(h.entrada > 0 ? `+${h.entrada}` : '0', 8),
+      _padL(h.salida > 0 ? `-${h.salida}` : '0', 8),
+      _padL(Number(h.saldo || 0).toFixed(2), 9),
+      _padL(fmtBs(h.cpp_resultante_ves), 13),
+      _padL(fmtBs(h.valor_saldo_ves), 16)
+    ].join(' | '));
+  }
+  lines.push('='.repeat(118));
+  const fileName = `KARDEX_DG67_${String(p.codigo || 'ITEM').replace(/[^A-Za-z0-9_-]/g, '')}_${getHoyLocalISO()}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Kardex exportado en TXT: ${fileName}`, 'success');
+}
+window.exportarKardexTxt = exportarKardexTxt;
+
+function exportarTomaFisicaTxt() {
+  const lista = (Array.isArray(pzeroFiltrados) && pzeroFiltrados.length > 0) ? pzeroFiltrados : pzeroProductos;
+  if (!Array.isArray(lista) || lista.length === 0) {
+    showToast('No hay artículos cargados en Toma Física para exportar en TXT.', 'warning');
+    return;
+  }
+  const acta = obtenerActaActiva();
+  const tasa = Number(pzeroTasaBcv || 889.58);
+  const lines = _encabezadoTxtDG67(
+    `HOJA DE CONTROL DE TOMA FISICA DE INVENTARIO (${acta?.numero || 'ACTA-INV-202610-01'})`,
+    `Estatus: ${state.tomaFisicaEstatus || 'ABIERTA'}  |  Tasa BCV: Bs. ${fmtBs(tasa)} / USD  |  Articulos: ${lista.length}`
+  );
+  lines.push([
+    _padR('EST', 4), _padR('CODIGO', 14), _padR('DESCRIPCION', 34), _padR('ALMACEN', 14),
+    _padL('SISTEMA', 9), _padL('FISICO', 9), _padL('DIF.', 8), _padL('COSTO BS', 13), _padL('PRECIO BS', 13)
+  ].join(' | '));
+  lines.push('-'.repeat(118));
+  for (const p of lista) {
+    lines.push([
+      _padR(p.auditado === 1 ? 'OK' : 'PND', 4),
+      _padR(p.codigo, 14),
+      _padR(p.descripcion, 34),
+      _padR(p.almacen || 'PRINCIPAL', 14),
+      _padL(Number(p.stock_actual || 0).toFixed(2), 9),
+      _padL(Number(p.stock_fisico ?? p.stock_actual ?? 0).toFixed(2), 9),
+      _padL(Number(p.diferencia || 0).toFixed(2), 8),
+      _padL(fmtBs(Number(p.costo_s_iva_usd || 0) * tasa), 13),
+      _padL(fmtBs(Number(p.precio_venta_s_iva_usd || 0) * tasa), 13)
+    ].join(' | '));
+  }
+  lines.push('='.repeat(118));
+  const fileName = `TOMA_FISICA_DG67_${getHoyLocalISO()}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Toma Física exportada en TXT: ${fileName}`, 'success');
+}
+window.exportarTomaFisicaTxt = exportarTomaFisicaTxt;
+
+function exportarMovimientoComprobanteTxt() {
+  if (!currentMovDetailData || !currentMovDetailData.header) {
+    showToast('No hay comprobante cargado para exportar.', 'warning');
+    return;
+  }
+  const h = currentMovDetailData.header;
+  const items = Array.isArray(currentMovDetailData.items) ? currentMovDetailData.items : (currentMovDetailData.detalles || []);
+  const lines = _encabezadoTxtDG67(
+    `COMPROBANTE DE MOVIMIENTO DE ALMACEN #${h.id} — ${(h.subtipo || h.tipo || '').replace(/_/g, ' ')}`,
+    `Doc: ${h.numero_documento}  |  Control: ${h.nro_control || '-'}  |  Fecha: ${h.fecha}  |  Tasa BCV: Bs. ${fmtBs(h.tasa_bcv)}`
+  );
+  lines.push(`Tercero: ${h.proveedor_nombre || 'CLIENTE / GENERAL'} (${h.proveedor_rif || '-'})  |  Responsable: ${h.usuario_responsable || '-'}`);
+  lines.push(`Observaciones: ${h.observaciones || '-'}`);
+  lines.push('-'.repeat(118));
+  lines.push([_padR('CODIGO', 14), _padR('DESCRIPCION', 36), _padL('CANT.', 10), _padL('UNIT. BS', 14), _padL('BASE BS', 15), _padL('IVA BS', 13), _padL('TOTAL BS', 16)].join(' | '));
+  lines.push('-'.repeat(118));
+  let sBase = 0, sIva = 0, sTot = 0, sTotDiv = 0;
+  for (const it of items) {
+    const pBs = Number(it.precio_unitario_bs || it.costo_unitario_bs || it.costo_ves_efectivo || 0);
+    const bBs = Number(it.base_imponible_bs || it.subtotal_ves || (Number(it.cantidad || 0) * pBs));
+    const iBs = Number(it.monto_iva_bs || 0);
+    const tBs = Number(it.total_linea_bs || (bBs + iBs));
+    const tDiv = Number(it.total_linea_divisa || 0);
+    sBase += bBs; sIva += iBs; sTot += tBs; sTotDiv += tDiv;
+    lines.push([
+      _padR(it.codigo, 14), _padR(it.descripcion, 36),
+      _padL(`${it.cantidad} ${it.unidad_medida || ''}`.trim(), 10),
+      _padL(fmtBs(pBs), 14), _padL(fmtBs(bBs), 15), _padL(fmtBs(iBs), 13), _padL(fmtBs(tBs), 16)
+    ].join(' | '));
+  }
+  lines.push('-'.repeat(118));
+  lines.push(`TOTALES  |  BASE: Bs. ${fmtBs(sBase)}  |  IVA: Bs. ${fmtBs(sIva)}  |  TOTAL: Bs. ${fmtBs(sTot)}  (Ref: $${fmtUsd(sTotDiv)} USD)`);
+  lines.push('='.repeat(118));
+  const fileName = `COMPROBANTE_MOV_${h.id}_${String(h.numero_documento || '').replace(/[^A-Za-z0-9_-]/g, '')}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Comprobante TXT descargado: ${fileName}`, 'success');
+}
+window.exportarMovimientoComprobanteTxt = exportarMovimientoComprobanteTxt;
+
+function imprimirMovimientoComprobantePdf() {
+  if (!currentMovDetailData || !currentMovDetailData.header) {
+    showToast('No hay comprobante cargado para imprimir.', 'warning');
+    return;
+  }
+  const h = currentMovDetailData.header;
+  const items = Array.isArray(currentMovDetailData.items) ? currentMovDetailData.items : (currentMovDetailData.detalles || []);
+  let sBaseBs = 0, sBaseDiv = 0, sIvaBs = 0, sIvaDiv = 0, sTotBs = 0, sTotDiv = 0;
+  const rowsHtml = items.map((it, idx) => {
+    const pBs = Number(it.precio_unitario_bs || it.costo_unitario_bs || it.costo_ves_efectivo || 0);
+    const pDiv = Number(it.precio_unitario_divisa || it.costo_unitario_divisa || it.costo_unitario_usd || 0);
+    const bBs = Number(it.base_imponible_bs || it.subtotal_ves || (Number(it.cantidad || 0) * pBs));
+    const bDiv = Number(it.base_imponible_divisa || it.subtotal_usd || (Number(it.cantidad || 0) * pDiv));
+    const iBs = Number(it.monto_iva_bs || 0);
+    const iDiv = Number(it.monto_iva_divisa || 0);
+    const tBs = Number(it.total_linea_bs || (bBs + iBs));
+    const tDiv = Number(it.total_linea_divisa || (bDiv + iDiv));
+    sBaseBs += bBs; sBaseDiv += bDiv; sIvaBs += iBs; sIvaDiv += iDiv; sTotBs += tBs; sTotDiv += tDiv;
+    return `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td style="font-family:monospace; font-weight:700; white-space:nowrap;">${escapeHtml(it.codigo)}</td>
+        <td>${escapeHtml(it.descripcion)}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">${it.cantidad} ${escapeHtml(it.unidad_medida || 'UND')}</td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(pBs)}<br><span style="font-size:8px;color:#475569;">$${pDiv.toFixed(2)}</span></td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(bBs)}<br><span style="font-size:8px;color:#475569;">$${bDiv.toFixed(2)}</span></td>
+        <td style="text-align:right; font-family:monospace; white-space:nowrap;">Bs. ${fmtBs(iBs)}<br><span style="font-size:8px;color:#475569;">$${iDiv.toFixed(2)}</span></td>
+        <td style="text-align:right; font-family:monospace; font-weight:800; white-space:nowrap;">Bs. ${fmtBs(tBs)}<br><span style="font-size:8px;color:#059669;">$${tDiv.toFixed(2)}</span></td>
+      </tr>`;
+  }).join('');
+
+  const printHtml = `
+    <div class="print-preview-container seniat-official-doc">
+      <div class="print-preview-header seniat-official-header">
+        <div style="border-right:1px solid #cbd5e1; padding-right:10px; font-size:8.5px;">
+          <div style="font-weight:900; color:#0f172a; white-space:nowrap;">INVERSIONES DG 67, C.A.</div>
+          <div style="font-family:monospace; color:#334155;">RIF: J-50700865-7</div>
+          <div style="color:#64748b;">Comprobante Auxiliar de Almacén</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:13px; font-weight:900; color:#0f172a;">COMPROBANTE DE MOVIMIENTO DE INVENTARIO #${h.id}</div>
+          <div style="font-size:9px; font-weight:700; color:#334155;">${escapeHtml((h.subtipo || h.tipo || '').replace(/_/g, ' '))} • DOBLE EXPRESIÓN MONETARIA (ART. 177 RISLR)</div>
+        </div>
+        <div style="text-align:right; font-size:8.5px; border-left:1px solid #cbd5e1; padding-left:10px;">
+          <div style="font-weight:800; color:#0f172a;">DOC: ${escapeHtml(h.numero_documento)}</div>
+          <div>Control: ${escapeHtml(h.nro_control || '-')}</div>
+          <div>Fecha: ${escapeHtml(h.fecha)}</div>
+        </div>
+      </div>
+      <table class="seniat-f30-header-grid">
+        <tr>
+          <td><strong>TERCERO:</strong> ${escapeHtml(h.proveedor_nombre || 'CLIENTE / GENERAL')} (${escapeHtml(h.proveedor_rif || '-')})</td>
+          <td><strong>RESPONSABLE:</strong> ${escapeHtml(h.usuario_responsable || '-')}</td>
+          <td><strong>TASA BCV:</strong> Bs. ${fmtBs(h.tasa_bcv)} / ${escapeHtml(h.moneda_operacion || 'USD')}</td>
+          <td><strong>MÉTODO:</strong> ${escapeHtml(h.metodo_valoracion || 'CPP')}</td>
+        </tr>
+        <tr><td colspan="4"><strong>OBSERVACIONES:</strong> ${escapeHtml(h.observaciones || 'Registro verificado en almacén')}</td></tr>
+      </table>
+      <table class="print-preview-table seniat-grid-table">
+        <thead>
+          <tr><th>#</th><th>CÓDIGO</th><th>DESCRIPCIÓN</th><th>CANTIDAD</th><th>UNIT. (BS/$)</th><th>BASE (BS/$)</th><th>IVA (BS/$)</th><th>TOTAL (BS/$)</th></tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot>
+          <tr style="background:#f1f5f9; font-weight:900;">
+            <td colspan="5" style="text-align:right;">TOTALES DEL COMPROBANTE:</td>
+            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(sBaseBs)}<br>($${sBaseDiv.toFixed(2)})</td>
+            <td style="text-align:right; font-family:monospace;">Bs. ${fmtBs(sIvaBs)}<br>($${sIvaDiv.toFixed(2)})</td>
+            <td style="text-align:right; font-family:monospace; color:#0f172a;">Bs. ${fmtBs(sTotBs)}<br>($${sTotDiv.toFixed(2)})</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="print-footer-signatures seniat-3-signatures">
+        <div><div class="sig-line">ENTREGADO / RECIBIDO POR</div><div style="font-size:8px; color:#475569;">Departamento de Almacén</div></div>
+        <div><div class="sig-line">VERIFICADO POR</div><div style="font-size:8px; color:#475569;">Administración / Control Interno</div></div>
+        <div><div class="sig-line">INVERSIONES DG 67, C.A.</div><div style="font-size:8px; color:#475569;">RIF: J-50700865-7</div></div>
+      </div>
+    </div>`;
+  closeModal('modal-mov-detail');
+  abrirModalImpresionFiscal(`Comprobante de Inventario #${h.id} — ${h.numero_documento}`, printHtml);
+}
+window.imprimirMovimientoComprobantePdf = imprimirMovimientoComprobantePdf;
+
+async function exportarReporteMensualInventarioTxt() {
+  if (!invReporteMensualData) await cargarReporteMensualInventario();
+  const data = invReporteMensualData;
+  if (!data) return;
+  const per = document.getElementById('inv-rep-periodo')?.value || 'ANUAL_2026';
+  const alm = document.getElementById('inv-rep-almacen')?.value || 'TODOS';
+  const lines = _encabezadoTxtDG67(
+    `REPORTE MENSUAL Y CONSOLIDADO DE INVENTARIO (ART. 177 RISLR) — ${data.etiquetaPeriodo || per}`,
+    `Almacen: ${alm}  |  Rango: ${data.fechaInicio} al ${data.fechaFin}  |  Tasa BCV Corte: Bs. ${fmtBs(data.tasaBcvCorte)}`
+  );
+  if (invReporteVistaActiva === 'CONSOLIDADO') {
+    lines.push([_padR('PERIODO', 8), _padR('MES', 18), _padL('TASA BCV', 10), _padL('INI. BS', 16), _padL('ENT. BS', 16), _padL('SAL. BS', 16), _padL('FINAL UND', 10), _padL('FINAL BS', 16)].join(' | '));
+    lines.push('-'.repeat(118));
+    for (const m of (data.resumen_mensual || [])) {
+      lines.push([
+        _padR(m.periodo, 8), _padR(m.nombre, 18), _padL(fmtBs(m.tasa_bcv), 10),
+        _padL(fmtBs(m.saldo_inicial_ves), 16), _padL(fmtBs(m.entradas_ves), 16),
+        _padL(fmtBs(m.salidas_ves), 16), _padL(Number(m.saldo_final_und || 0).toFixed(2), 10),
+        _padL(fmtBs(m.saldo_final_ves), 16)
+      ].join(' | '));
+    }
+  } else {
+    lines.push([_padR('CODIGO', 13), _padR('DESCRIPCION', 32), _padL('INI.UND', 8), _padL('ENT.UND', 8), _padL('SAL.UND', 8), _padL('FIN.UND', 8), _padL('CPP BS', 13), _padL('FINAL BS', 16)].join(' | '));
+    lines.push('-'.repeat(118));
+    for (const it of (data.items || [])) {
+      lines.push([
+        _padR(it.codigo, 13), _padR(it.descripcion, 32),
+        _padL(Number(it.cant_inicial || 0).toFixed(2), 8), _padL(Number(it.cant_entradas || 0).toFixed(2), 8),
+        _padL(Number(it.cant_salidas || 0).toFixed(2), 8), _padL(Number(it.cant_final || 0).toFixed(2), 8),
+        _padL(fmtBs(it.costo_promedio_ves), 13), _padL(fmtBs(it.monto_final_ves), 16)
+      ].join(' | '));
+    }
+  }
+  lines.push('='.repeat(118));
+  const fileName = `DG67_LIBRO_INVENTARIO_${per}_${alm}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Archivo TXT descargado: ${fileName}`, 'success');
+}
+window.exportarReporteMensualInventarioTxt = exportarReporteMensualInventarioTxt;
+
+function exportarLibroComprasTxt() {
+  const periodo = document.getElementById('compras-periodo-select')?.value || '2026-10';
+  const compras = fiscalStateNew.compras || [];
+  if (compras.length === 0) {
+    showToast('No hay compras registradas en el período para exportar en TXT.', 'warning');
+    return;
+  }
+  const lines = _encabezadoTxtDG67(
+    `LIBRO ESPECIAL DE COMPRAS IVA (ART. 75-76 RLIVA) — PERIODO ${periodo}`,
+    `Total Operaciones: ${compras.length}`
+  );
+  lines.push([_padR('OP', 4), _padR('FECHA', 10), _padR('RIF', 13), _padR('PROVEEDOR', 28), _padR('FACTURA', 14), _padR('CONTROL', 12), _padL('BASE BS', 14), _padL('IVA BS', 12), _padL('TOTAL BS', 14)].join(' | '));
+  lines.push('-'.repeat(118));
+  let sBase = 0, sIva = 0, sTot = 0;
+  compras.forEach((c, i) => {
+    const b = Number(c.base_imponible_bs || 0), iv = Number(c.iva_bs || 0), t = Number(c.total_bs || (b + iv));
+    sBase += b; sIva += iv; sTot += t;
+    lines.push([
+      _padR(c.nro_operacion || (i + 1), 4), _padR(c.fecha, 10), _padR(c.rif, 13), _padR(c.razon_social, 28),
+      _padR(c.nro_factura, 14), _padR(c.nro_control || '-', 12), _padL(fmtBs(b), 14), _padL(fmtBs(iv), 12), _padL(fmtBs(t), 14)
+    ].join(' | '));
+  });
+  lines.push('-'.repeat(118));
+  lines.push(`TOTALES  |  BASE: Bs. ${fmtBs(sBase)}  |  CREDITO FISCAL IVA: Bs. ${fmtBs(sIva)}  |  TOTAL: Bs. ${fmtBs(sTot)}`);
+  lines.push('='.repeat(118));
+  const fileName = `LIBRO_COMPRAS_DG67_${periodo}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Libro de Compras TXT descargado: ${fileName}`, 'success');
+}
+window.exportarLibroComprasTxt = exportarLibroComprasTxt;
+
+function exportarLibroVentasTxt() {
+  const periodo = document.getElementById('ventas-periodo-select')?.value || '2026-10';
+  const ventas = fiscalStateNew.ventas || [];
+  if (ventas.length === 0) {
+    showToast('No hay ventas registradas en el período para exportar en TXT.', 'warning');
+    return;
+  }
+  const lines = _encabezadoTxtDG67(
+    `LIBRO ESPECIAL DE VENTAS IVA (ART. 77-78 RLIVA) — PERIODO ${periodo}`,
+    `Maquina Fiscal: Z0A0000176  |  Reportes Z: ${ventas.length}`
+  );
+  lines.push([_padR('FECHA', 10), _padR('REP. Z', 8), _padR('DESDE', 12), _padR('HASTA', 12), _padL('CANT', 5), _padR('ANULADAS', 16), _padL('EXENTO BS', 13), _padL('BASE BS', 14), _padL('DEBITO BS', 13), _padL('TOTAL BS', 15)].join(' | '));
+  lines.push('-'.repeat(118));
+  let sEx = 0, sBase = 0, sIva = 0, sTot = 0;
+  for (const v of ventas) {
+    const ex = Number(v.exento_bs || 0), b = Number(v.base_imponible_bs || 0), iv = Number(v.iva_bs || 0), t = Number(v.total_bs || (ex + b + iv));
+    sEx += ex; sBase += b; sIva += iv; sTot += t;
+    lines.push([
+      _padR(v.fecha, 10), _padR(v.numero_reporte_z || '-', 8), _padR(v.factura_desde || '-', 12), _padR(v.factura_hasta || '-', 12),
+      _padL(v.cantidad_comprobantes || 1, 5), _padR(v.facturas_anuladas_lista || '0', 16),
+      _padL(fmtBs(ex), 13), _padL(fmtBs(b), 14), _padL(fmtBs(iv), 13), _padL(fmtBs(t), 15)
+    ].join(' | '));
+  }
+  lines.push('-'.repeat(118));
+  lines.push(`TOTALES  |  EXENTO: Bs. ${fmtBs(sEx)}  |  BASE: Bs. ${fmtBs(sBase)}  |  DEBITO IVA: Bs. ${fmtBs(sIva)}  |  TOTAL: Bs. ${fmtBs(sTot)}`);
+  lines.push('='.repeat(118));
+  const fileName = `LIBRO_VENTAS_DG67_${periodo}.txt`;
+  descargarTxtOficialDG67(fileName, lines);
+  showToast(`✅ Libro de Ventas TXT descargado: ${fileName}`, 'success');
+}
+window.exportarLibroVentasTxt = exportarLibroVentasTxt;
+
+async function exportarRetencionesIslrTxt() {
+  const periodo = document.getElementById('islr-periodo-select')?.value || '2026-10';
+  try {
+    const res = await fetch(`/api/islr/export-excel-data?periodo=${encodeURIComponent(periodo)}`);
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      showToast('No hay comprobantes de retención ISLR para exportar en TXT.', 'warning');
+      return;
+    }
+    const lines = _encabezadoTxtDG67(
+      `RELACION DE COMPROBANTES DE RETENCION DE ISLR (DECRETO 1.808 / PA SNAT/2026/00093) — PERIODO ${periodo}`,
+      `Total Renglones: ${rows.length}`
+    );
+    lines.push([_padR('COMPROBANTE', 15), _padR('RIF RETENIDO', 13), _padR('PROVEEDOR', 26), _padR('FACTURA', 13), _padR('COD', 4), _padL('BASE BS', 14), _padL('%', 5), _padL('RETENIDO BS', 14)].join(' | '));
+    lines.push('-'.repeat(118));
+    let sBase = 0, sRet = 0;
+    for (const r of rows) {
+      const b = Number(r['BASE IMPONIBLE (BS)'] || 0);
+      const ret = Number(r['ISLR RETENIDO (BS)'] || 0);
+      sBase += b; sRet += ret;
+      lines.push([
+        _padR(r['N° COMPROBANTE (14 DÍGITOS)'], 15), _padR(r['RIF SUJETO RETENIDO'], 13),
+        _padR(r['RAZÓN SOCIAL PROVEEDOR'], 26), _padR(r['N° FACTURA'], 13),
+        _padR(r['CÓD. CONCEPTO'], 4), _padL(fmtBs(b), 14),
+        _padL(Number(r['% TARIFA ISLR'] || 0).toFixed(1), 5), _padL(fmtBs(ret), 14)
+      ].join(' | '));
+    }
+    lines.push('-'.repeat(118));
+    lines.push(`TOTALES  |  BASE OBJETO: Bs. ${fmtBs(sBase)}  |  TOTAL ISLR RETENIDO: Bs. ${fmtBs(sRet)}`);
+    lines.push('='.repeat(118));
+    const fileName = `RETENCIONES_ISLR_DG67_${periodo}.txt`;
+    descargarTxtOficialDG67(fileName, lines);
+    showToast(`✅ Retenciones ISLR TXT descargado: ${fileName}`, 'success');
+  } catch (err) {
+    showToast('Error generando TXT ISLR: ' + err.message, 'error');
+  }
+}
+window.exportarRetencionesIslrTxt = exportarRetencionesIslrTxt;
 
 
 

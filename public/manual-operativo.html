@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Guía Operativa de Inventarios — SUMA • INVERSIONES DG 67, C.A.</title>
+  <meta name="description" content="Manual operativo paso a paso de entradas, salidas, facturas pendientes, ajustes de inventario y toma física en SUMA • Inventario &amp; Fiscal.">
+  <link rel="icon" type="image/png" href="assets/brand/suma-isotipo.png">
+  <link rel="apple-touch-icon" href="assets/brand/suma-isotipo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-2: #1e293b;
+      --blue: #0284c7;
+      --blue-dark: #0369a1;
+      --cyan: #38bdf8;
+      --emerald: #059669;
+      --emerald-bg: #ecfdf5;
+      --rose: #be123c;
+      --rose-bg: #fff1f2;
+      --amber: #d97706;
+      --amber-bg: #fffbeb;
+      --surface: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #475569;
+      --subtle: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--surface);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .nowrap { white-space: nowrap; }
+
+    /* =========================================================================
+       PANTALLA DE ACCESO PROTEGIDO CON CLAVE
+       ========================================================================= */
+    #lock-screen {
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 20%, #1e293b 0%, #0f172a 55%, #020617 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #lock-screen::before {
+      content: '';
+      position: absolute;
+      width: 520px;
+      height: 520px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.14) 0%, transparent 70%);
+      top: -160px;
+      right: -120px;
+      pointer-events: none;
+    }
+
+    .lock-card {
+      width: 100%;
+      max-width: 460px;
+      background: #ffffff;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      position: relative;
+      z-index: 1;
+      transition: transform 0.2s ease;
+    }
+
+    .lock-card.shake {
+      animation: shakeX 0.36s ease;
+    }
+
+    @keyframes shakeX {
+      0%, 100% { transform: translateX(0); }
+      22% { transform: translateX(-8px); }
+      44% { transform: translateX(8px); }
+      66% { transform: translateX(-5px); }
+      84% { transform: translateX(5px); }
+    }
+
+    .lock-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 28px 26px 22px;
+      color: #ffffff;
+      border-bottom: 3px solid var(--blue);
+    }
+
+    .brand-lock-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .brand-isotipo {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.35));
+      flex-shrink: 0;
+    }
+
+    .brand-title-stack .suma-mark {
+      font-size: 1.42rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      line-height: 1.05;
+    }
+
+    .brand-title-stack .suma-mark span { color: var(--cyan); }
+
+    .brand-title-stack .ucg-sub {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .brand-title-stack .ucg-slogan {
+      font-size: 0.73rem;
+      color: #cbd5e1;
+      font-style: italic;
+      margin-top: 2px;
+    }
+
+    .lock-badge-entity {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #e0f2fe;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      max-width: 100%;
+    }
+
+    .lock-body {
+      padding: 26px 26px 24px;
+    }
+
+    .lock-body h1 {
+      font-size: 1.24rem;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+
+    .lock-body p.lock-desc {
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .clave-wrap {
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    .clave-input {
+      width: 100%;
+      padding: 12px 44px 12px 14px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 0.96rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--navy);
+      background: #f8fafc;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    .clave-input:focus {
+      outline: none;
+      border-color: var(--blue);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    }
+
+    .clave-toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--subtle);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .clave-toggle:hover { color: var(--navy); background: #e2e8f0; }
+
+    .lock-error {
+      display: none;
+      background: var(--rose-bg);
+      border: 1px solid #fecdd3;
+      color: var(--rose);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+    }
+
+    .lock-error.show { display: block; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    }
+    .btn-primary:hover { background: var(--blue-dark); }
+    .btn-primary:disabled { opacity: 0.65; cursor: wait; }
+
+    .btn-emerald {
+      background: var(--emerald);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.22);
+    }
+    .btn-emerald:hover { background: #047857; }
+
+    .btn-ghost-dark {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+    .btn-ghost-dark:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+    }
+
+    .btn-block { width: 100%; padding: 12px 18px; font-size: 0.94rem; }
+
+    .lock-footer {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--subtle);
+      flex-wrap: wrap;
+    }
+
+    .lock-footer a {
+      color: var(--blue);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .lock-footer a:hover { text-decoration: underline; }
+
+    /* =========================================================================
+       APLICACIÓN DEL MANUAL (DESBLOQUEADA)
+       ========================================================================= */
+    #manual-shell { display: none; min-height: 100vh; }
+    body.unlocked #lock-screen { display: none; }
+    body.unlocked #manual-shell { display: block; }
+
+    /* Topbar fija */
+    .manual-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--navy);
+      color: #ffffff;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.18);
+    }
+
+    .topbar-inner {
+      max-width: 1340px;
+      margin: 0 auto;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .topbar-brand img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.35));
+    }
+
+    .topbar-brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .topbar-brand-text strong {
+      font-size: 0.96rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    .topbar-brand-text strong span { color: var(--cyan); }
+
+    .topbar-brand-text small {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-actions .btn { padding: 8px 13px; font-size: 0.82rem; border-radius: 8px; }
+
+    .read-progress {
+      height: 3px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .read-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      transition: width 0.12s linear;
+    }
+
+    /* Pills móviles */
+    .mobile-toc {
+      display: none;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      gap: 8px;
+      position: sticky;
+      top: 59px;
+      z-index: 40;
+    }
+
+    .mobile-toc a {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: var(--navy);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .mobile-toc a.active {
+      background: var(--navy);
+      color: #ffffff;
+      border-color: var(--navy);
+    }
+
+    /* Grid principal */
+    .manual-layout {
+      max-width: 1340px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 272px minmax(0, 1fr);
+      gap: 28px;
+      padding: 26px 20px 64px;
+      align-items: start;
+    }
+
+    /* Sidebar de capítulos */
+    .manual-sidebar {
+      position: sticky;
+      top: 78px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 14px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+
+    .toc-heading {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--subtle);
+      padding: 0 10px 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    .toc-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .toc-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 9px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.83rem;
+      font-weight: 600;
+      transition: all 0.14s ease;
+    }
+
+    .toc-link:hover {
+      background: #f1f5f9;
+      color: var(--navy);
+    }
+
+    .toc-link.active {
+      background: #eff6ff;
+      color: var(--blue-dark);
+      font-weight: 800;
+    }
+
+    .toc-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: var(--navy);
+      font-size: 0.72rem;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .toc-link.active .toc-num {
+      background: var(--blue);
+      color: #ffffff;
+    }
+
+    .sidebar-tip {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      font-size: 0.76rem;
+      color: #0c4a6e;
+      line-height: 1.45;
+    }
+
+    .sidebar-tip strong { display: block; margin-bottom: 3px; color: var(--navy); }
+
+    /* Contenido principal */
+    .manual-content {
+      display: flex;
+      flex-direction: column;
+      gap: 26px;
+      min-width: 0;
+    }
+
+    /* Portada / Hero del manual */
+    .manual-hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 65%, #0c4a6e 100%);
+      border-radius: 16px;
+      padding: 30px 30px 26px;
+      color: #ffffff;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 4px solid var(--cyan);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+    }
+
+    .hero-top-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .hero-brand-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hero-brand-pill img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.38));
+    }
+
+    .hero-brand-pill .t1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .hero-brand-pill .t1 span { color: var(--cyan); }
+    .hero-brand-pill .t2 {
+      font-size: 0.72rem;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 700;
+    }
+
+    .hero-entity-chip {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .manual-hero h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.18;
+      margin-bottom: 10px;
+    }
+
+    .manual-hero p.hero-lead {
+      font-size: 0.96rem;
+      color: #cbd5e1;
+      max-width: 760px;
+      margin-bottom: 20px;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+    }
+
+    .hero-stat {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+
+    .hero-stat small {
+      display: block;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .hero-stat strong {
+      font-size: 0.88rem;
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    /* Secciones / Capítulos */
+    .chapter-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 28px 26px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+      scroll-margin-top: 84px;
+    }
+
+    .chapter-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .chapter-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--navy);
+      color: var(--cyan);
+      font-size: 1.08rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .chapter-kicker {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--blue);
+      margin-bottom: 2px;
+    }
+
+    .chapter-head h2 {
+      font-size: 1.32rem;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .chapter-intro {
+      color: var(--muted);
+      font-size: 0.93rem;
+      margin-bottom: 18px;
+    }
+
+    /* Mapa de flujo visual */
+    .flow-diagram {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0 20px;
+    }
+
+    .flow-node {
+      background: #f8fafc;
+      border: 1.5px solid var(--border);
+      border-top: 3px solid var(--blue);
+      border-radius: 12px;
+      padding: 14px 12px;
+      position: relative;
+      text-align: center;
+    }
+
+    .flow-node.emerald { border-top-color: var(--emerald); }
+    .flow-node.rose { border-top-color: var(--rose); }
+    .flow-node.amber { border-top-color: var(--amber); }
+
+    .flow-icon { font-size: 1.45rem; margin-bottom: 6px; display: block; }
+    .flow-title { font-size: 0.82rem; font-weight: 800; color: var(--navy); line-height: 1.2; margin-bottom: 4px; }
+    .flow-sub { font-size: 0.72rem; color: var(--subtle); line-height: 1.3; }
+
+    /* Lista de pasos numerados */
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 16px 0 20px;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-item h4 {
+      font-size: 0.94rem;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 3px;
+    }
+
+    .step-item p {
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    /* Mini Mockups Visuales de Pantalla */
+    .ui-mockup {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #ffffff;
+      margin: 18px 0;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    }
+
+    .ui-mockup-bar {
+      background: var(--navy);
+      color: #e2e8f0;
+      padding: 8px 14px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .ui-dots { display: inline-flex; gap: 5px; }
+    .ui-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .ui-mockup-body {
+      padding: 16px;
+      background: #f8fafc;
+    }
+
+    .mock-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+    }
+
+    .mock-field {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .mock-field label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--subtle);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .mock-field .val {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .mock-field .sub-usd {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--emerald);
+      margin-top: 1px;
+    }
+
+    .mock-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 7px;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .pill-emerald { background: var(--emerald); color: #ffffff; }
+    .pill-emerald-soft { background: var(--emerald-bg); color: #065f46; border: 1px solid #a7f3d0; }
+    .pill-rose-soft { background: var(--rose-bg); color: #9f1239; border: 1px solid #fecdd3; }
+    .pill-amber-soft { background: var(--amber-bg); color: #92400e; border: 1px solid #fde68a; }
+    .pill-blue-soft { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+    .pill-navy { background: var(--navy); color: #ffffff; }
+
+    /* Mockup de Sidebar Operador */
+    .role-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .role-box {
+      border-radius: 12px;
+      padding: 16px;
+      border: 1.5px solid var(--border);
+    }
+
+    .role-box.allowed {
+      background: #f0fdf4;
+      border-color: #86efac;
+    }
+
+    .role-box.restricted {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .role-box h4 {
+      font-size: 0.86rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .role-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+
+    .role-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--navy);
+      font-weight: 600;
+    }
+
+    /* Tarjetas Hazlo Así / Evita Este Error */
+    .do-dont-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .do-card, .dont-card {
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 0.84rem;
+    }
+
+    .do-card {
+      background: var(--emerald-bg);
+      border: 1px solid #a7f3d0;
+      border-left: 4px solid var(--emerald);
+    }
+
+    .dont-card {
+      background: var(--rose-bg);
+      border: 1px solid #fecdd3;
+      border-left: 4px solid var(--rose);
+    }
+
+    .do-card h5 {
+      color: #065f46;
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .dont-card h5 {
+      color: #9f1239;
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .do-card ul, .dont-card ul {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: #1e293b;
+    }
+
+    /* Callouts */
+    .callout {
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      font-size: 0.86rem;
+    }
+
+    .callout-icon { font-size: 1.3rem; line-height: 1.1; flex-shrink: 0; }
+    .callout strong { display: block; margin-bottom: 3px; }
+
+    .callout-info {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-left: 4px solid var(--blue);
+      color: #0c4a6e;
+    }
+
+    .callout-amber {
+      background: var(--amber-bg);
+      border: 1px solid #fde68a;
+      border-left: 4px solid var(--amber);
+      color: #78350f;
+    }
+
+    .callout-emerald {
+      background: var(--emerald-bg);
+      border: 1px solid #a7f3d0;
+      border-left: 4px solid var(--emerald);
+      color: #065f46;
+    }
+
+    /* Tablas limpias */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 16px 0;
+      background: #ffffff;
+    }
+
+    table.guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+
+    table.guide-table th {
+      background: #f1f5f9;
+      color: var(--navy);
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1.5px solid #cbd5e1;
+      white-space: nowrap;
+    }
+
+    table.guide-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: #1e293b;
+    }
+
+    table.guide-table tr:last-child td { border-bottom: none; }
+
+    /* Tarjetas de 3 columnas (Drawer / Formatos) */
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .mini-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--blue);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .mini-card.emerald { border-top-color: var(--emerald); }
+    .mini-card.navy { border-top-color: var(--navy); }
+    .mini-card.amber { border-top-color: var(--amber); }
+
+    .mini-card h4 {
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+
+    .mini-card p {
+      font-size: 0.81rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    /* Acordeón FAQ */
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    details.faq-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+
+    details.faq-item[open] {
+      background: #ffffff;
+      border-color: #93c5fd;
+    }
+
+    details.faq-item summary {
+      padding: 13px 16px;
+      font-weight: 800;
+      font-size: 0.88rem;
+      color: var(--navy);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    details.faq-item summary::-webkit-details-marker { display: none; }
+
+    details.faq-item summary::after {
+      content: '+';
+      font-size: 1.1rem;
+      color: var(--blue);
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    details.faq-item[open] summary::after { content: '−'; }
+
+    .faq-body {
+      padding: 0 16px 14px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px dashed var(--border);
+      padding-top: 10px;
+    }
+
+    /* Pie del manual */
+    .manual-footer {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: var(--subtle);
+    }
+
+    .manual-footer strong { color: var(--navy); }
+
+    /* =========================================================================
+       RESPONSIVE (TABLET Y MÓVIL)
+       ========================================================================= */
+    @media (max-width: 980px) {
+      .manual-layout {
+        grid-template-columns: 1fr;
+        padding: 16px 14px 48px;
+      }
+      .manual-sidebar { display: none; }
+      .mobile-toc { display: flex; }
+      .flow-diagram { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cards-3 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 680px) {
+      .manual-hero { padding: 22px 18px; }
+      .manual-hero h1 { font-size: 1.42rem; }
+      .chapter-card { padding: 20px 16px; }
+      .do-dont-grid, .role-split, .flow-diagram { grid-template-columns: 1fr; }
+      .topbar-inner { padding: 8px 12px; }
+      .topbar-actions .btn span.hide-sm { display: none; }
+    }
+
+    /* =========================================================================
+       MODO IMPRESIÓN / PDF LIMPIO (A4)
+       ========================================================================= */
+    @page {
+      size: A4 portrait;
+      margin: 13mm 13mm 15mm 13mm;
+    }
+
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      body { background: #ffffff !important; font-size: 11pt; }
+      #lock-screen,
+      .manual-topbar,
+      .mobile-toc,
+      .manual-sidebar,
+      .no-print { display: none !important; }
+      body:not(.unlocked) #manual-shell { display: none !important; }
+      body.unlocked #manual-shell { display: block !important; }
+      .manual-layout {
+        display: block !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+      }
+      .manual-hero {
+        box-shadow: none !important;
+        margin-bottom: 16px !important;
+        break-inside: avoid;
+      }
+      .chapter-card {
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 18px 20px !important;
+        margin-bottom: 14px !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .step-item, .ui-mockup, .do-dont-grid, .callout, .mini-card, details.faq-item {
+        break-inside: avoid;
+      }
+      .flow-diagram { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+      .cards-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .do-dont-grid, .role-split { grid-template-columns: 1fr 1fr !important; }
+      .chapter-break { page-break-before: always; break-before: page; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================================
+       PANTALLA DE ACCESO CON CLAVE (BLOQUEA LECTURA E IMPRESIÓN HASTA VALIDAR)
+       ========================================================================= -->
+  <section id="lock-screen" aria-label="Acceso protegido al Manual Operativo">
+    <div class="lock-card" id="lock-card">
+      <div class="lock-header">
+        <div class="brand-lock-row">
+          <img src="assets/brand/suma-isotipo.png" alt="SUMA+" class="brand-isotipo">
+          <div class="brand-title-stack">
+            <div class="suma-mark">SUMA<span>+</span></div>
+            <div class="ucg-sub">Unión Contable Global • Asesores Contables</div>
+            <div class="ucg-slogan">¡Unimos números, contamos éxitos!</div>
+          </div>
+        </div>
+        <div class="lock-badge-entity">
+          <span>🏢</span>
+          <span class="nowrap">INVERSIONES DG 67, C.A. (RIF: J-50700865-7)</span>
+        </div>
+      </div>
+
+      <div class="lock-body">
+        <h1>Guía Operativa de Inventarios</h1>
+        <p class="lock-desc">
+          Manual visual interactivo y descargable en PDF para el equipo de tienda y almacén. Ingrese la clave de acceso autorizada para consultar los procesos paso a paso.
+        </p>
+
+        <form id="form-manual-lock" autocomplete="off">
+          <label for="manual-clave-input" class="field-label">Clave de Acceso del Manual</label>
+          <div class="clave-wrap">
+            <input
+              type="password"
+              id="manual-clave-input"
+              class="clave-input"
+              placeholder="Ingrese la clave autorizada"
+              required
+              autofocus
+            >
+            <button type="button" id="btn-toggle-clave" class="clave-toggle" title="Mostrar u ocultar clave" aria-label="Mostrar u ocultar clave">👁️</button>
+          </div>
+
+          <div id="lock-error" class="lock-error" role="alert"></div>
+
+          <button type="submit" id="btn-unlock-manual" class="btn btn-primary btn-block">
+            🔓 Abrir Guía Operativa
+          </button>
+        </form>
+
+        <div class="lock-footer">
+          <span>🔒 Uso exclusivo del personal autorizado</span>
+          <a href="/">← Volver al Sistema SUMA</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       CONTENIDO DEL MANUAL OPERATIVO (VISIBLE SOLO TRAS VALIDAR CLAVE)
+       ========================================================================= -->
+  <div id="manual-shell">
+
+    <!-- Topbar Sticky -->
+    <header class="manual-topbar no-print">
+      <div class="topbar-inner">
+        <div class="topbar-brand">
+          <img src="assets/brand/suma-isotipo.png" alt="SUMA+">
+          <div class="topbar-brand-text">
+            <strong>SUMA<span>+</span> • Guía Operativa de Inventarios</strong>
+            <small class="nowrap">INVERSIONES DG 67, C.A. (RIF: J-50700865-7)</small>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn btn-emerald" onclick="imprimirManualPDF()" title="Guardar o imprimir este manual en formato PDF">
+            🖨️ <span>Descargar / Imprimir PDF</span>
+          </button>
+          <button type="button" class="btn btn-ghost-dark" onclick="bloquearManual()" title="Cerrar y volver a pedir clave">
+            🔒 <span class="hide-sm">Bloquear</span>
+          </button>
+          <a href="/" class="btn btn-ghost-dark" title="Regresar a la plataforma SUMA">
+            ← <span class="hide-sm">Volver al Sistema</span>
+          </a>
+        </div>
+      </div>
+      <div class="read-progress" aria-hidden="true">
+        <div class="read-progress-bar" id="read-progress-bar"></div>
+      </div>
+    </header>
+
+    <!-- Navegación rápida móvil -->
+    <nav class="mobile-toc no-print" id="mobile-toc" aria-label="Capítulos del manual">
+      <a href="#cap-inicio" class="active">0. Inicio</a>
+      <a href="#cap-entradas">1. Entradas</a>
+      <a href="#cap-pendientes">2. Facturas Pendientes</a>
+      <a href="#cap-salidas">3. Salidas</a>
+      <a href="#cap-ajustes">4. Ajustes</a>
+      <a href="#cap-toma-fisica">5. Toma Física</a>
+      <a href="#cap-archivos">6. Kardex y PDF/TXT</a>
+      <a href="#cap-faq">7. Preguntas</a>
+    </nav>
+
+    <div class="manual-layout">
+
+      <!-- Sidebar Desktop -->
+      <aside class="manual-sidebar no-print" aria-label="Índice de capítulos">
+        <div class="toc-heading">Contenido del Manual</div>
+        <ul class="toc-list" id="desktop-toc">
+          <li><a href="#cap-inicio" class="toc-link active"><span class="toc-num">0</span> Mapa y Perfil Operador</a></li>
+          <li><a href="#cap-entradas" class="toc-link"><span class="toc-num">1</span> Entradas de Mercancía</a></li>
+          <li><a href="#cap-pendientes" class="toc-link"><span class="toc-num">2</span> Facturas Pendientes</a></li>
+          <li><a href="#cap-salidas" class="toc-link"><span class="toc-num">3</span> Salidas de Mercancía</a></li>
+          <li><a href="#cap-ajustes" class="toc-link"><span class="toc-num">4</span> Ajustes de Inventario</a></li>
+          <li><a href="#cap-toma-fisica" class="toc-link"><span class="toc-num">5</span> Toma Física (Abierta)</a></li>
+          <li><a href="#cap-archivos" class="toc-link"><span class="toc-num">6</span> Kardex, PDF y TXT</a></li>
+          <li><a href="#cap-faq" class="toc-link"><span class="toc-num">7</span> Preguntas Frecuentes</a></li>
+        </ul>
+
+        <div class="sidebar-tip">
+          <strong>📄 ¿Desea tenerlo impreso?</strong>
+          Haga clic en <em>"Descargar / Imprimir PDF"</em> arriba y seleccione <strong>Guardar como PDF</strong> para conservar una copia portátil en tienda.
+        </div>
+      </aside>
+
+      <!-- Cuerpo Principal -->
+      <main class="manual-content">
+
+        <!-- HERO / PORTADA -->
+        <section class="manual-hero">
+          <div class="hero-top-meta">
+            <div class="hero-brand-pill">
+              <img src="assets/brand/suma-isotipo.png" alt="SUMA+">
+              <div>
+                <div class="t1">SUMA<span>+</span> • Inventario &amp; Fiscal</div>
+                <div class="t2">Unión Contable Global • Asesores Contables</div>
+              </div>
+            </div>
+            <div class="hero-entity-chip nowrap">INVERSIONES DG 67, C.A. (RIF: J-50700865-7)</div>
+          </div>
+
+          <h1>Manual de Procesos de Entradas, Salidas y Control de Inventarios</h1>
+          <p class="hero-lead">
+            Guía práctica paso a paso diseñada para el equipo operativo de tienda y almacén. Aquí aprenderá a registrar entradas y salidas sin errores, procesar facturas pendientes, aplicar ajustes justificados y trabajar en la Toma Física activa.
+          </p>
+
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <small>Alcance Operativo</small>
+              <strong>100% Gestión de Inventarios</strong>
+            </div>
+            <div class="hero-stat">
+              <small>Expresión Monetaria</small>
+              <strong>Bs. Principal + Ref. $ USD (BCV)</strong>
+            </div>
+            <div class="hero-stat">
+              <small>Estado Toma Física</small>
+              <strong>ACTA-INV-202610-01 • ABIERTA</strong>
+            </div>
+            <div class="hero-stat">
+              <small>Portal Oficial</small>
+              <strong class="mono" style="font-size:0.78rem;">suma-inventario.unioncontableglobal.com</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===============================================================
+             CAPÍTULO 0: MAPA VISUAL Y PERFIL OPERADOR
+             =============================================================== -->
+        <article id="cap-inicio" class="chapter-card">
+          <div class="chapter-head">
+            <div class="chapter-badge">0</div>
+            <div>
+              <div class="chapter-kicker">Bienvenida • Flujo Diario en Tienda</div>
+              <h2>Mapa Visual del Proceso y Acceso del Operador</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Cada movimiento de mercancía sigue un ciclo ordenado que actualiza automáticamente las existencias y el valor del inventario en <strong>Bolívares (Bs.)</strong> con su referencia simultánea en <strong>Dólares ($ USD)</strong>.
+          </p>
+
+          <div class="flow-diagram">
+            <div class="flow-node">
+              <span class="flow-icon">🧾</span>
+              <div class="flow-title">1. Llega Factura</div>
+              <div class="flow-sub">Mercancía física o factura pendiente</div>
+            </div>
+            <div class="flow-node emerald">
+              <span class="flow-icon">📥</span>
+              <div class="flow-title">2. Entrada</div>
+              <div class="flow-sub">Suma stock y actualiza costo promedio</div>
+            </div>
+            <div class="flow-node">
+              <span class="flow-icon">📦</span>
+              <div class="flow-title">3. Stock al Día</div>
+              <div class="flow-sub">Consulta existencias y Kardex</div>
+            </div>
+            <div class="flow-node rose">
+              <span class="flow-icon">📤</span>
+              <div class="flow-title">4. Salida</div>
+              <div class="flow-sub">Descuenta stock con validación en vivo</div>
+            </div>
+            <div class="flow-node amber">
+              <span class="flow-icon">📋</span>
+              <div class="flow-title">5. Toma Física</div>
+              <div class="flow-sub">Conteo real, precios y ajustes</div>
+            </div>
+          </div>
+
+          <div class="role-split">
+            <div class="role-box allowed">
+              <h4 style="color:#065f46;">✅ Lo que el Perfil Operador tiene habilitado</h4>
+              <ul class="role-list">
+                <li><span>📊</span> Dashboard Ejecutivo (resumen diario de inventario)</li>
+                <li><span>📦</span> Inventario al Día (consultas, alertas, crear artículos, Excel/TXT)</li>
+                <li><span>📥</span> Entradas de Mercancía (y bandeja de facturas pendientes)</li>
+                <li><span>📤</span> Salidas de Mercancía (ventas y salidas internas controladas)</li>
+                <li><span>📑</span> Kardex por Artículo (trazabilidad histórica, PDF y TXT)</li>
+                <li><span>📋</span> Toma Física de Inventario (conteo, precios y ajustes mientras esté ABIERTA)</li>
+              </ul>
+            </div>
+            <div class="role-box restricted">
+              <h4 style="color:#334155;">🔒 Módulos reservados a Administración / Contabilidad</h4>
+              <ul class="role-list">
+                <li><span>🚫</span> Libros Fiscales SENIAT (Compras, Ventas, Art. 177)</li>
+                <li><span>🚫</span> Retenciones de ISLR, XML SENIAT y Forma 30</li>
+                <li><span>🚫</span> Conciliación Fiscal y Panel de Tasa BCV Oficial</li>
+                <li><span>🚫</span> Sellado y Cierre definitivo del Acta de Toma Física</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 1: ENTRADAS DE MERCANCÍA
+             =============================================================== -->
+        <article id="cap-entradas" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">1</div>
+            <div>
+              <div class="chapter-kicker">Ingreso de Repuestos y Compras</div>
+              <h2>Registro Completo de Entradas de Mercancía</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Utilice el módulo <strong>📥 Entradas de Mercancía</strong> cada vez que reciba repuestos de un proveedor o deba incorporar unidades al almacén. El sistema suma las existencias y recalcula el <strong>Costo Promedio Ponderado (CPP)</strong> automáticamente.
+          </p>
+
+          <!-- Mini Mockup de Entrada -->
+          <div class="ui-mockup">
+            <div class="ui-mockup-bar">
+              <span>📥 Pantalla: Entradas de Mercancía — Datos del Documento</span>
+              <span class="ui-dots"><span></span><span></span><span></span></span>
+            </div>
+            <div class="ui-mockup-body">
+              <div class="mock-grid" style="margin-bottom: 10px;">
+                <div class="mock-field">
+                  <label>Tipo de Movimiento</label>
+                  <div class="val">Compra de Mercancía</div>
+                </div>
+                <div class="mock-field">
+                  <label>N° Factura / Soporte</label>
+                  <div class="val mono">00048215</div>
+                </div>
+                <div class="mock-field">
+                  <label>Fecha Emisión Factura</label>
+                  <div class="val mono">2026-11-18</div>
+                </div>
+                <div class="mock-field">
+                  <label>Fecha Recepción Física</label>
+                  <div class="val mono">2026-11-19</div>
+                </div>
+              </div>
+              <div class="mock-grid">
+                <div class="mock-field">
+                  <label>Repuesto / Artículo</label>
+                  <div class="val">FILTRO ACEITE PH-3614</div>
+                </div>
+                <div class="mock-field">
+                  <label>Cantidad Recibida</label>
+                  <div class="val mono">20 u.</div>
+                </div>
+                <div class="mock-field">
+                  <label>Costo Unitario (Bs. + Ref. USD)</label>
+                  <div class="val mono">Bs. 4.892,69</div>
+                  <div class="sub-usd mono">$5.50 USD (BCV)</div>
+                </div>
+                <div class="mock-field" style="background:#ecfdf5; border-color:#86efac;">
+                  <label style="color:#065f46;">Resultado Automático</label>
+                  <div class="val" style="color:#065f46;">+20 Stock • CPP Actualizado</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div>
+                <h4>Seleccione el Tipo de Movimiento</h4>
+                <p>Elija <strong>Compra de Mercancía</strong> para facturas de proveedores. Si se trata de una devolución o corrección de almacén, seleccione el subtipo correspondiente (ver Capítulo 4).</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div>
+                <h4>Complete las Fechas y el N° de Factura Exacto</h4>
+                <p>Coloque la <strong>Fecha de Emisión</strong> impresa en la factura y la <strong>Fecha de Recepción</strong> real en tienda. Escriba el <strong>N° de Factura</strong> sin espacios extra; el sistema bloquea duplicados automáticamente si esa factura ya fue ingresada.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div>
+                <h4>Seleccione el Proveedor y Agregue los Repuestos</h4>
+                <p>Busque cada producto por código o nombre con el botón <strong>+ Agregar Línea</strong>. Si un repuesto no existe todavía en el catálogo, créelo primero en <em>Inventario al Día → ➕ Nuevo Artículo</em>.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">4</div>
+              <div>
+                <h4>Indique Cantidad y Costo Unitario (Bs. / USD)</h4>
+                <p>Escriba la cantidad recibida y el costo unitario <strong>sin IVA</strong> (el sistema calcula el 16% de IVA aparte cuando es Compra gravada y muestra el total en Bs. y $ USD simultáneamente).</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">5</div>
+              <div>
+                <h4>Verifique el Total y Presione "Registrar Entrada"</h4>
+                <p>Compare el total calculado contra la factura física. Al guardar, el stock sube al instante y puede ver o descargar el comprobante en <strong>PDF</strong> o <strong>TXT</strong>.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="do-dont-grid">
+            <div class="do-card">
+              <h5>✔ Hazlo así</h5>
+              <ul>
+                <li>Verifica primero si la factura ya aparece en la bandeja de <strong>Facturas Pendientes</strong> (Capítulo 2).</li>
+                <li>Registra el costo unitario limpio (base sin IVA) para mantener el Costo Promedio exacto.</li>
+                <li>Confirma que el total en Bs. coincida con la factura antes de guardar.</li>
+              </ul>
+            </div>
+            <div class="dont-card">
+              <h5>✘ Evita este error</h5>
+              <ul>
+                <li>No registres la misma factura dos veces cambiando ceros a la izquierda (el sistema lo bloqueará).</li>
+                <li>No cargues gastos de servicios (luz, internet, honorarios) como entradas de repuestos.</li>
+                <li>No mezcles facturas de dos proveedores distintos en una sola entrada.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 2: FACTURAS PENDIENTES POR DAR ENTRADA
+             =============================================================== -->
+        <article id="cap-pendientes" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">2</div>
+            <div>
+              <div class="chapter-kicker">Sincronización Compras → Almacén</div>
+              <h2>Manejo de Facturas Pendientes por Dar Entrada</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Cuando administración registra una factura de compra antes de que los repuestos sean detallados en tienda, dicha factura aparece automáticamente en la parte superior del módulo <strong>📥 Entradas de Mercancía</strong> como <strong>Factura Pendiente por Dar Entrada</strong>.
+          </p>
+
+          <!-- Mockup Bandeja Pendientes -->
+          <div class="ui-mockup">
+            <div class="ui-mockup-bar">
+              <span>📋 Bandeja: Facturas de Compra Pendientes por Dar Entrada</span>
+              <span class="mock-pill pill-amber-soft" style="font-size:0.68rem;">2 pendientes</span>
+            </div>
+            <div class="ui-mockup-body">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+                <div>
+                  <div style="font-size:0.84rem; font-weight:800; color:#0f172a;">DISTRIBUIDORA AUTOMOTRIZ CENTRO, C.A.</div>
+                  <div style="font-size:0.76rem; color:#475569;" class="mono">Factura: 00091420 • Fecha: 2026-11-15 • Base: Bs. 285.400,00 ($320.82 USD)</div>
+                </div>
+                <span class="mock-pill pill-emerald">📥 Detallar Entrada ➔</span>
+              </div>
+              <div style="background:#ecfdf5; border:1.5px solid #86efac; border-radius:9px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <span style="font-size:0.8rem; font-weight:700; color:#065f46;">
+                  ✅ Vinculada a Factura #00091420 — Datos de cabecera precargados automáticamente
+                </span>
+                <span class="mock-pill pill-rose-soft" style="font-size:0.72rem;">✕ Cancelar Vinculación</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div>
+                <h4>Revise el Panel Superior de Facturas Pendientes</h4>
+                <p>Al abrir <strong>Entradas de Mercancía</strong>, revise la tabla superior. Si está vacía, significa que no hay facturas por recibir; si muestra filas, cada una representa mercancía pendiente por detallar.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div>
+                <h4>Pulse "📥 Detallar Entrada ➔" en la Factura Correcta</h4>
+                <p>El sistema precarga automáticamente el <strong>Proveedor</strong>, <strong>N° de Factura</strong>, <strong>N° de Control</strong> y <strong>Fecha de Emisión</strong>, mostrando un banner verde de confirmación.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div>
+                <h4>Cargue los Repuestos y Cantidades Físicas Recibidas</h4>
+                <p>Agregue cada artículo que llegó en esa factura con su cantidad y costo unitario. Verifique que el subtotal de las líneas coincida con la base indicada en la factura pendiente.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">4</div>
+              <div>
+                <h4>Guarde la Entrada para Cerrar el Pendiente</h4>
+                <p>Al presionar <strong>Registrar Entrada</strong>, la factura desaparece de la bandeja de pendientes y queda vinculada de forma permanente con el almacén.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">💡</span>
+            <div>
+              <strong>¿Seleccionó la factura equivocada por error?</strong>
+              Presione el botón <strong>✕ Cancelar Vinculación</strong> en el banner verde para limpiar el formulario sin afectar ni borrar la factura pendiente.
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 3: SALIDAS DE MERCANCÍA
+             =============================================================== -->
+        <article id="cap-salidas" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">3</div>
+            <div>
+              <div class="chapter-kicker">Despachos, Ventas y Control de Existencias</div>
+              <h2>Registro de Salidas de Mercancía</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Use <strong>📤 Salidas de Mercancía</strong> para registrar despachos por venta o retiros internos autorizados. El sistema valida el stock disponible en tiempo real para impedir saldos negativos.
+          </p>
+
+          <!-- Mockup Validación Stock -->
+          <div class="ui-mockup">
+            <div class="ui-mockup-bar">
+              <span>📤 Pantalla: Salidas — Validación de Existencias en Vivo</span>
+              <span class="ui-dots"><span></span><span></span><span></span></span>
+            </div>
+            <div class="ui-mockup-body">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div style="background:#ffffff; border:1.5px solid #86efac; border-radius:9px; padding:10px 12px;">
+                  <div style="font-size:0.78rem; font-weight:800; color:#0f172a;">BUJÍA IRIDIUM BKR6EIX</div>
+                  <div style="font-size:0.76rem; color:#475569; margin:4px 0;" class="mono">Stock Actual: 12 u. • Salida: 4 u.</div>
+                  <span class="mock-pill pill-emerald-soft">✅ Stock suficiente (Quedan 8 u.)</span>
+                </div>
+                <div style="background:#ffffff; border:1.5px solid #fecdd3; border-radius:9px; padding:10px 12px;">
+                  <div style="font-size:0.78rem; font-weight:800; color:#0f172a;">PASTILLAS DE FRENO D-1284</div>
+                  <div style="font-size:0.76rem; color:#475569; margin:4px 0;" class="mono">Stock Actual: 2 u. • Salida: 5 u.</div>
+                  <span class="mock-pill pill-rose-soft">⛔ STOCK INSUFICIENTE (Bloqueado)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="guide-table">
+              <thead>
+                <tr>
+                  <th>Tipo de Salida</th>
+                  <th>Cuándo utilizarlo</th>
+                  <th>Cálculo de IVA</th>
+                  <th>Soporte requerido</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Venta de Mercancía</strong></td>
+                  <td>Despacho facturado a cliente de tienda o mostrador.</td>
+                  <td><span class="mock-pill pill-blue-soft">16% IVA (Gravada)</span></td>
+                  <td>N° Factura / Ticket Fiscal exacto</td>
+                </tr>
+                <tr>
+                  <td><strong>Retiro / Autoconsumo</strong></td>
+                  <td>Repuesto usado en vehículo o equipo propio de la empresa.</td>
+                  <td><span class="mock-pill pill-amber-soft">0% (Salida Interna)</span></td>
+                  <td>Nota interna y observación clara</td>
+                </tr>
+                <tr>
+                  <td><strong>Merma / Deterioro</strong></td>
+                  <td>Pieza rota, vencida o dañada no apta para la venta.</td>
+                  <td><span class="mock-pill pill-amber-soft">0% (Salida Interna)</span></td>
+                  <td>Motivo detallado en Observaciones</td>
+                </tr>
+                <tr>
+                  <td><strong>Devolución a Proveedor</strong></td>
+                  <td>Mercancía defectuosa que regresa al proveedor.</td>
+                  <td><span class="mock-pill pill-amber-soft">0% (Control Almacén)</span></td>
+                  <td>N° Nota / Referencia del proveedor</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div>
+                <h4>Elija el Tipo de Salida y la Fecha Correcta</h4>
+                <p>Indique si es <strong>Venta</strong> o una <strong>Salida Interna</strong>. Al cambiar el tipo, SUMA ajusta automáticamente si aplica IVA (16%) o si es operación interna (0%).</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div>
+                <h4>Ingrese el N° de Factura o Referencia y el Cliente</h4>
+                <p>En ventas, coloque el número exacto de factura o ticket emitido en tienda. Si el mismo número ya fue registrado anteriormente, el sistema alertará para evitar salidas duplicadas.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div>
+                <h4>Seleccione los Repuestos y Valide el Stock en Verde</h4>
+                <p>Verifique que cada línea muestre disponibilidad suficiente. Si aparece <strong>⛔ INSUFICIENTE</strong>, revise si faltó registrar una entrada de compra o verifique el conteo en Toma Física antes de despachar.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="do-dont-grid">
+            <div class="do-card">
+              <h5>✔ Hazlo así</h5>
+              <ul>
+                <li>Registra las salidas el mismo día de la entrega para mantener el stock real al día.</li>
+                <li>Usa siempre el tipo correcto: nunca cargues una merma o daño como si fuera una Venta.</li>
+              </ul>
+            </div>
+            <div class="dont-card">
+              <h5>✘ Evita este error</h5>
+              <ul>
+                <li>No intentes forzar salidas sin stock: primero verifica si hay una factura de compra pendiente por entrar.</li>
+                <li>No omitas la observación cuando registres retiros internos o piezas dañadas.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 4: AJUSTES DE INVENTARIO
+             =============================================================== -->
+        <article id="cap-ajustes" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">4</div>
+            <div>
+              <div class="chapter-kicker">Corrección Controlada de Existencias</div>
+              <h2>Procedimiento para Casos de Ajuste de Inventario</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Un <strong>Ajuste de Inventario</strong> solo se realiza cuando el stock físico real en estantería difiere del stock registrado en el sistema y ya se descartó que falte registrar una compra o una venta. Use esta guía para decidir el canal exacto:
+          </p>
+
+          <div class="table-wrap">
+            <table class="guide-table">
+              <thead>
+                <tr>
+                  <th>Situación encontrada en almacén</th>
+                  <th>Dónde registrarlo</th>
+                  <th>Acción en SUMA</th>
+                  <th>Efecto en Kardex</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Diferencia durante el levantamiento físico actual</strong> (hay más o menos piezas en estantería que en sistema)</td>
+                  <td><span class="mock-pill pill-navy">📋 Toma Física</span></td>
+                  <td>Actualizar <strong>Cantidad Física Real</strong> en el artículo (mientras el acta esté <strong>ABIERTA</strong>).</td>
+                  <td>Genera 1 ajuste neto automático (sobrante o faltante) sin duplicados.</td>
+                </tr>
+                <tr>
+                  <td><strong>Pieza nueva encontrada físicamente</strong> que no existe en el catálogo</td>
+                  <td><span class="mock-pill pill-navy">📋 Toma Física</span></td>
+                  <td>Pulsar <strong>➕ Nuevo Repuesto</strong>, ingresar código, descripción, cantidad física y costo/precio.</td>
+                  <td>Crea el artículo y registra su entrada inicial de inventario.</td>
+                </tr>
+                <tr>
+                  <td><strong>Repuesto roto, dañado o deteriorado</strong> durante operación diaria</td>
+                  <td><span class="mock-pill pill-rose-soft">📤 Salidas</span></td>
+                  <td>Seleccionar tipo <strong>Merma / Deterioro</strong> o <strong>Ajuste de Salida</strong> + escribir justificación obligatoria.</td>
+                  <td>Descuenta stock al costo promedio (0% IVA) dejando soporte en Kardex.</td>
+                </tr>
+                <tr>
+                  <td><strong>Sobrante puntual o corrección autorizada</strong> fuera de Toma Física</td>
+                  <td><span class="mock-pill pill-emerald-soft">📥 Entradas</span></td>
+                  <td>Seleccionar tipo <strong>Ajuste de Inventario (Entrada)</strong> + motivo en Observaciones.</td>
+                  <td>Incrementa el stock con trazabilidad del usuario y fecha.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout-amber">
+            <span class="callout-icon">⚠️</span>
+            <div>
+              <strong>Regla de Oro Antes de Hacer Cualquier Ajuste</strong>
+              Antes de ajustar una diferencia de stock, siga siempre estos 3 chequeos rápidos:
+              <br>1) Revisar la bandeja de <strong>Facturas Pendientes por Dar Entrada</strong> (¿llegó mercancía sin cargar?).
+              <br>2) Consultar el <strong>📑 Kardex por Artículo</strong> (¿se cargó una venta o entrada duplicada o en otro código similar?).
+              <br>3) Contar físicamente dos veces la estantería y anotar el motivo exacto en <strong>Observaciones</strong>.
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 5: TOMA FÍSICA DE INVENTARIO (ACTIVA / ABIERTA)
+             =============================================================== -->
+        <article id="cap-toma-fisica" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">5</div>
+            <div>
+              <div class="chapter-kicker">Expediente Activo • Adecuaciones Finales</div>
+              <h2>Uso de la Sección de Toma Física (En Ejecución)</h2>
+            </div>
+          </div>
+
+          <div class="callout callout-emerald">
+            <span class="callout-icon">🟢</span>
+            <div>
+              <strong>ESTADO ACTUAL: EXPEDIENTE ACTIVO Y ABIERTO (<span class="mono">ACTA-INV-202610-01</span>)</strong>
+              La Toma Física permanece <strong>ABIERTA</strong> para que el equipo culmine el conteo de repuestos, la actualización de costos/precios y las adecuaciones finales de stock. <strong>No debe crear ni solicitar una nueva acta:</strong> ingrese directamente al módulo y continúe trabajando sobre el listado activo.
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            El perfil <strong>Operador</strong> tiene acceso directo a <strong>📋 Toma Física</strong> para verificar existencias, corregir datos maestros, ajustar cantidades reales y dar de alta piezas faltantes mientras el expediente continúe abierto.
+          </p>
+
+          <!-- 3 Bloques del Panel de Auditoría -->
+          <div class="cards-3">
+            <div class="mini-card navy">
+              <h4>1. Datos Maestros</h4>
+              <p>Verifique y corrija el código OEM, descripción comercial, categoría, marca y ubicación física en estantería (pasillo/anaquel).</p>
+            </div>
+            <div class="mini-card emerald">
+              <h4>2. Conteo Físico Real</h4>
+              <p>Ingrese la cantidad exacta contada en tienda. SUMA calcula la diferencia contra el stock teórico y registra el ajuste limpio automáticamente.</p>
+            </div>
+            <div class="mini-card">
+              <h4>3. Costos y Precios (Bs. / USD)</h4>
+              <p>Actualice el costo unitario y precio de venta en USD; el sistema proyecta al instante el valor en <strong>Bolívares (Bs.)</strong> a tasa BCV.</p>
+            </div>
+          </div>
+
+          <!-- Mockup Toma Física -->
+          <div class="ui-mockup">
+            <div class="ui-mockup-bar">
+              <span>📋 Toma Física • Barra de Trabajo Rápido en Tienda</span>
+              <span class="mock-pill pill-emerald" style="font-size:0.68rem;">✓ ACTA ABIERTA</span>
+            </div>
+            <div class="ui-mockup-body">
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                <span class="mock-pill pill-blue-soft">⚡ Modo Ajuste Rápido (Editar en línea)</span>
+                <span class="mock-pill pill-emerald-soft">➕ Nuevo Repuesto</span>
+                <span class="mock-pill pill-amber-soft">🔍 Filtrar: Pendientes / Con Diferencia</span>
+                <span class="mock-pill pill-navy">📥 Excel / 📝 TXT</span>
+              </div>
+              <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:9px; padding:11px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                  <div style="font-size:0.83rem; font-weight:800; color:#0f172a;">AMORTIGUADOR DELANTERO KYB-3341</div>
+                  <div class="mono" style="font-size:0.75rem; color:#475569;">Stock Teórico: 6 u. → Conteo Físico: <strong>8 u.</strong> • Diferencia: <strong style="color:#059669;">+2 u. (Sobrante)</strong></div>
+                </div>
+                <span class="mock-pill pill-emerald">✓ Guardado y Verificado</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div>
+                <h4>Busque por Código, Nombre o Filtre los Pendientes</h4>
+                <p>Use el buscador superior o el filtro <strong>Pendientes</strong> para recorrer ordenadamente cada anaquel sin perder el avance.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div>
+                <h4>Elija entre "⚡ Modo Ajuste Rápido" o el Panel Detallado</h4>
+                <p>Para conteos ágiles en fila, active <strong>⚡ Modo Ajuste Rápido</strong> y digite la cantidad contada directo en la tabla. Si necesita actualizar descripción, ubicación, costo o precio, haga clic sobre el repuesto para abrir el panel lateral de 3 bloques.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div>
+                <h4>¿Re-contó un artículo y cambió el número? Edítelo con tranquilidad</h4>
+                <p>Mientras la Toma Física esté <strong>ABIERTA</strong>, puede volver a editar la cantidad física de un artículo ya verificado. SUMA reemplaza el ajuste anterior por la nueva diferencia neta real, <strong>sin duplicar movimientos en el Kardex</strong>.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">4</div>
+              <div>
+                <h4>Agregue Piezas No Catalogadas con "➕ Nuevo Repuesto"</h4>
+                <p>Si encuentra en estantería un artículo que no existe en el sistema, regístrelo allí mismo con su código único, descripción, cantidad contada y costo/precio.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">5</div>
+              <div>
+                <h4>Notifique a Administración al Terminar Todas las Adecuaciones</h4>
+                <p>Cuando el 100% de los repuestos haya sido contado y revisado, avise a Administración/Gerencia para que ejecuten el <strong>Sellado y Cierre Formal</strong> del acta. Una vez sellada, el acta pasará a solo lectura.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="do-dont-grid">
+            <div class="do-card">
+              <h5>✔ Hazlo así</h5>
+              <ul>
+                <li>Marca cada artículo como verificado al confirmar su conteo físico real.</li>
+                <li>Usa los filtros <strong>Pendientes</strong> y <strong>Diferencias</strong> al final del día para revisar tu progreso.</li>
+                <li>Descarga un respaldo en <strong>Excel</strong> o <strong>TXT</strong> si necesitas validar listas en papel.</li>
+              </ul>
+            </div>
+            <div class="dont-card">
+              <h5>✘ Evita este error</h5>
+              <ul>
+                <li>No dejes artículos con costo en <strong>$0.00</strong> si conoces su costo de reposición.</li>
+                <li>No crees un código duplicado para una pieza que ya existe con otro nombre: búscala primero por número de parte.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 6: KARDEX Y EMISIÓN DE ARCHIVOS (PDF / TXT / EXCEL)
+             =============================================================== -->
+        <article id="cap-archivos" class="chapter-card chapter-break">
+          <div class="chapter-head">
+            <div class="chapter-badge">6</div>
+            <div>
+              <div class="chapter-kicker">Consultas y Respaldos Operativos</div>
+              <h2>Kardex por Artículo y Descarga de Archivos (PDF / TXT / Excel)</h2>
+            </div>
+          </div>
+
+          <p class="chapter-intro">
+            Todos los documentos y reportes exportados desde el sistema salen emitidos exclusivamente a nombre de <strong class="nowrap">INVERSIONES DG 67, C.A. (RIF: J-50700865-7)</strong> con doble expresión monetaria (Bs. y $ USD).
+          </p>
+
+          <div class="cards-3">
+            <div class="mini-card navy">
+              <h4>🖨️ Archivos PDF / Impresión</h4>
+              <p><strong>Dónde:</strong> Kardex por Artículo y Detalle de cualquier Movimiento.<br><strong>Uso:</strong> Comprobante formal listo para imprimir, firmar en tienda o archivar en carpeta.</p>
+            </div>
+            <div class="mini-card">
+              <h4>📝 Archivos TXT Estructurados</h4>
+              <p><strong>Dónde:</strong> Inventario al Día, Kardex, Toma Física y Detalle de Movimiento.<br><strong>Uso:</strong> Texto liviano y plano para auditorías rápidas, envío por correo/WhatsApp o respaldo ligero.</p>
+            </div>
+            <div class="mini-card emerald">
+              <h4>📊 Hojas Excel (.xlsx)</h4>
+              <p><strong>Dónde:</strong> Inventario al Día y Toma Física.<br><strong>Uso:</strong> Listas de conteo, filtrado de stock mínimo, control de precios y análisis en hoja de cálculo.</p>
+            </div>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">🔎</span>
+            <div>
+              <strong>Cómo consultar el historial exacto de un repuesto (Kardex)</strong>
+              Ingrese a <strong>📑 Kardex por Artículo</strong>, escriba el código o nombre del repuesto y selecciónelo. Verá en orden cronológico cada entrada, salida y ajuste con su saldo resultante en unidades, costo unitario y valor total en <strong>Bs.</strong> y <strong>$ USD</strong>.
+            </div>
+          </div>
+        </article>
+
+        <!-- ===============================================================
+             CAPÍTULO 7: PREGUNTAS FRECUENTES
+             =============================================================== -->
+        <article id="cap-faq" class="chapter-card">
+          <div class="chapter-head">
+            <div class="chapter-badge">7</div>
+            <div>
+              <div class="chapter-kicker">Resolución Rápida de Dudas</div>
+              <h2>Preguntas Frecuentes en Tienda</h2>
+            </div>
+          </div>
+
+          <div class="faq-list">
+            <details class="faq-item">
+              <summary>¿Por qué no puedo ver los módulos de Libros Fiscales o Retenciones ISLR?</summary>
+              <div class="faq-body">
+                El perfil <strong>Operador</strong> está diseñado específicamente para trabajar sin distracciones en <strong>Gestión de Inventarios</strong> (Dashboard, Inventario al Día, Entradas, Salidas, Kardex y Toma Física). Los módulos tributarios SENIAT están restringidos al perfil de Administración y Contabilidad para proteger las declaraciones oficiales.
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>El sistema dice "Stock Insuficiente" al registrar una salida, pero tengo la pieza en la mano. ¿Qué hago?</summary>
+              <div class="faq-body">
+                Primero revise la bandeja de <strong>Facturas Pendientes por Dar Entrada</strong> en el módulo de Entradas para confirmar si la compra aún no se ha cargado al inventario. Si ya se cargó (o la pieza existía previamente sin contar), corrija la existencia real desde <strong>📋 Toma Física</strong> mientras el acta siga abierta y luego registre la salida.
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>Me equivoqué al contar un repuesto en Toma Física y ya lo guardé. ¿Se duplica el ajuste si lo corrijo?</summary>
+              <div class="faq-body">
+                No. Mientras la Toma Física esté en estado <strong>ABIERTA</strong>, puede volver a editar la cantidad física real las veces que necesite. SUMA recalcula automáticamente la diferencia neta contra el stock base y sustituye el ajuste anterior sin generar duplicados.
+              </div>
+            </details>
+
+            <details class="faq-item">
+              <summary>¿Cómo descargo este manual en PDF para tenerlo en el teléfono o imprimirlo?</summary>
+              <div class="faq-body">
+                Haga clic en el botón verde <strong>🖨️ Descargar / Imprimir PDF</strong> ubicado en la barra superior de esta misma ventana. En el cuadro de impresión del navegador seleccione <strong>"Guardar como PDF"</strong> (o su impresora de oficina) y confirme. El formato ya viene diagramado en hoja A4 limpia.
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <!-- PIE DE DOCUMENTO -->
+        <footer class="manual-footer">
+          <div>
+            <strong>SUMA • Inventario &amp; Fiscal</strong> — Guía Operativa exclusiva para <strong class="nowrap">INVERSIONES DG 67, C.A. (RIF: J-50700865-7)</strong>
+          </div>
+          <div>
+            Plataforma desarrollada por <strong>Unión Contable Global</strong> (Asesores Contables) • <em>¡Unimos números, contamos éxitos!</em>
+          </div>
+        </footer>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'suma_manual_operativo_ok';
+      const lockForm = document.getElementById('form-manual-lock');
+      const claveInput = document.getElementById('manual-clave-input');
+      const lockError = document.getElementById('lock-error');
+      const lockCard = document.getElementById('lock-card');
+      const btnUnlock = document.getElementById('btn-unlock-manual');
+      const btnToggle = document.getElementById('btn-toggle-clave');
+
+      function desbloquearVista() {
+        document.body.classList.add('unlocked');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        iniciarObservadorCapitulos();
+      }
+
+      if (sessionStorage.getItem(STORAGE_KEY) === '1') {
+        desbloquearVista();
+      }
+
+      if (btnToggle && claveInput) {
+        btnToggle.addEventListener('click', function () {
+          const oculto = claveInput.type === 'password';
+          claveInput.type = oculto ? 'text' : 'password';
+          btnToggle.textContent = oculto ? '🙈' : '👁️';
+          claveInput.focus();
+        });
+      }
+
+      if (lockForm) {
+        lockForm.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          const clave = (claveInput.value || '').trim();
+          if (!clave) return;
+
+          lockError.classList.remove('show');
+          btnUnlock.disabled = true;
+          btnUnlock.textContent = '⏳ Verificando clave...';
+
+          try {
+            const resp = await fetch('/api/manual/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clave })
+            });
+            const data = await resp.json().catch(() => ({}));
+
+            if (resp.ok && data.ok) {
+              sessionStorage.setItem(STORAGE_KEY, '1');
+              claveInput.value = '';
+              desbloquearVista();
+            } else {
+              mostrarError(data.error || 'Clave incorrecta. Solicite la clave autorizada a la administración de INVERSIONES DG 67, C.A.');
+            }
+          } catch (err) {
+            mostrarError('No se pudo validar la clave con el servidor. Verifique su conexión e intente de nuevo.');
+          } finally {
+            btnUnlock.disabled = false;
+            btnUnlock.textContent = '🔓 Abrir Guía Operativa';
+          }
+        });
+      }
+
+      function mostrarError(msg) {
+        lockError.textContent = msg;
+        lockError.classList.add('show');
+        lockCard.classList.remove('shake');
+        void lockCard.offsetWidth;
+        lockCard.classList.add('shake');
+        claveInput.select();
+      }
+
+      window.bloquearManual = function () {
+        sessionStorage.removeItem(STORAGE_KEY);
+        document.body.classList.remove('unlocked');
+        if (claveInput) {
+          claveInput.value = '';
+          setTimeout(() => claveInput.focus(), 60);
+        }
+      };
+
+      window.imprimirManualPDF = function () {
+        document.querySelectorAll('details.faq-item').forEach(d => d.setAttribute('open', 'open'));
+        window.print();
+      };
+
+      window.addEventListener('beforeprint', function () {
+        document.querySelectorAll('details.faq-item').forEach(d => d.setAttribute('open', 'open'));
+      });
+
+      function actualizarBarraLectura() {
+        const bar = document.getElementById('read-progress-bar');
+        if (!bar || !document.body.classList.contains('unlocked')) return;
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        const pct = Math.min(100, Math.max(0, (scrollTop / maxScroll) * 100));
+        bar.style.width = pct.toFixed(1) + '%';
+      }
+
+      window.addEventListener('scroll', actualizarBarraLectura, { passive: true });
+
+      function iniciarObservadorCapitulos() {
+        const sections = document.querySelectorAll('article.chapter-card[id]');
+        const desktopLinks = document.querySelectorAll('#desktop-toc a');
+        const mobileLinks = document.querySelectorAll('#mobile-toc a');
+        if (!sections.length || !('IntersectionObserver' in window)) return;
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const targetHref = '#' + entry.target.id;
+              desktopLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === targetHref));
+              mobileLinks.forEach(a => {
+                const isActive = a.getAttribute('href') === targetHref;
+                a.classList.toggle('active', isActive);
+                if (isActive && a.scrollIntoView) {
+                  a.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+              });
+            }
+          });
+        }, { rootMargin: '-20% 0px -65% 0px', threshold: 0.05 });
+
+        sections.forEach(sec => observer.observe(sec));
+        actualizarBarraLectura();
+      }
+    })();
+  </script>
+</body>
+</html>

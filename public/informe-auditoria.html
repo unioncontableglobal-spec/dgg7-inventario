@@ -417,6 +417,29 @@
       </div>
     </div>
   </div>
+  <script>
+    (function () {
+      const token = sessionStorage.getItem('dg67_token') || localStorage.getItem('dg67_token') || '';
+      const rawUser = sessionStorage.getItem('dg67_user') || localStorage.getItem('dg67_user') || '';
+      try {
+        const u = rawUser ? JSON.parse(rawUser) : null;
+        const r = String(u?.rol || '').toUpperCase();
+        if (r === 'OPERADOR' || r === 'VENDEDOR') {
+          window.location.replace('/');
+          return;
+        }
+      } catch (_) {}
+      fetch('/api/auth/verify', {
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+        credentials: 'same-origin'
+      }).then(r => r.json()).then(d => {
+        const rol = String(d?.user?.rol || '').toUpperCase();
+        if (!d?.ok || rol === 'OPERADOR' || rol === 'VENDEDOR') {
+          window.location.replace('/');
+        }
+      }).catch(() => {});
+    })();
+  </script>
 </body>
 </html>
 

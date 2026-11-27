@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261126_v1">
+  <link rel="stylesheet" href="style.css?v=20261126_v3">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -502,6 +502,15 @@
             <span>Ejercicio Fiscal: <strong>2026</strong></span>
           </span>
 
+          <a href="/manual-operativo.html" target="_blank" rel="noopener" class="btn btn-action-manual" id="btn-manual-operativo"
+            title="Abrir Manual Operativo Visual de Gestión de Inventarios (Protegido con clave y descarga PDF)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span>Guía Operativa</span>
+          </a>
+
           <a href="javascript:void(0)" onclick="exportarInventarioExcel(event)" class="btn btn-action-excel" id="btn-export-excel"
             title="Exportar existencias y valoración a Excel">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -718,74 +727,31 @@
             </div>
           </div>
 
-          <!-- Fila 4: 2 Paneles Grandes: Top Más Vendidos y Distribución por Categorías -->
-          <div class="dashboard-split" style="margin-bottom: 24px;">
-            <!-- Top 10 Productos Más Vendidos -->
-            <div class="panel-card" style="border-top: 4px solid #059669;">
-              <div class="panel-header" style="justify-content: space-between; align-items: center;">
-                <h3
-                  style="margin: 0; font-size: 0.95rem; color: #0B2447; display: flex; align-items: center; gap: 6px;">
-                  <span>🏆 Top 10 Productos Más Vendidos (Mayor Rotación)</span>
-                </h3>
-                <span
-                  style="font-size: 0.72rem; color: #059669; font-weight: 800; background: #ecfdf5; padding: 2px 8px; border-radius: 4px;">Demanda Activa</span>
-              </div>
-              <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
-                <table class="data-table" id="table-top-vendidos" style="margin: 0; font-size: 0.8rem;">
-                  <thead>
-                    <tr>
-                      <th style="width: 36px; text-align: center;">#</th>
-                      <th>CÓDIGO & DESCRIPCIÓN</th>
-                      <th class="text-right">VENDIDAS</th>
-                      <th class="text-right" id="th-top-facturado">FACTURADO (BS. / USD)</th>
-                      <th class="text-right">STOCK DISP.</th>
-                      <th style="width: 45px; text-align: center;"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-top-vendidos">
-                    <tr>
-                      <td colspan="6" class="text-center">Cargando productos más vendidos...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <!-- Top Categories Card -->
-            <div class="panel-card" style="border-top: 4px solid #19A7CE;">
-              <div class="panel-header">
-                <h3 style="margin: 0; font-size: 0.95rem; color: #0B2447; display: flex; align-items: center; gap: 6px;">
-                  <span>📦 Distribución por Categorías Principales</span>
-                </h3>
-              </div>
-              <div class="category-list" id="category-bars" style="padding: 10px 4px;">
-                <div class="loading-spinner">Cargando categorías...</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Fila 5: Últimos Movimientos Registrados (Ancho Completo) -->
-          <div class="panel-card" style="margin-bottom: 24px; border-top: 4px solid #0B2447;">
+          <!-- Fila 4: Top 10 Productos Más Vendidos (Vista Ejecutiva Limpia) -->
+          <div class="panel-card" style="margin-bottom: 24px; border-top: 3px solid #059669;">
             <div class="panel-header" style="justify-content: space-between; align-items: center;">
-              <h3 style="margin: 0; font-size: 0.95rem; color: #0B2447; display: flex; align-items: center; gap: 6px;">
-                <span>📋 Últimos Movimientos Registrados en Almacén y Ventas</span>
+              <h3
+                style="margin: 0; font-size: 0.96rem; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+                <span>🏆 Top 10 Productos Más Vendidos (Mayor Rotación)</span>
               </h3>
-              <button class="btn-text" onclick="switchTab('tab-movimientos')" style="font-weight: 700; color: #0B2447;">Ver todos en auditoría &rarr;</button>
+              <span
+                style="font-size: 0.72rem; color: #059669; font-weight: 800; background: #ecfdf5; padding: 3px 10px; border-radius: 6px; border: 1px solid #a7f3d0;">Demanda Activa</span>
             </div>
-            <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
-              <table class="data-table" id="table-recent-movs">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+              <table class="data-table" id="table-top-vendidos" style="margin: 0; font-size: 0.82rem;">
                 <thead>
                   <tr>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Documento</th>
-                    <th>Proveedor / Cliente</th>
-                    <th class="text-right">Cant.</th>
+                    <th style="width: 40px; text-align: center;">#</th>
+                    <th>CÓDIGO &amp; DESCRIPCIÓN</th>
+                    <th class="text-right">VENDIDAS</th>
+                    <th class="text-right" id="th-top-facturado">FACTURADO (BS. / USD)</th>
+                    <th class="text-right">STOCK DISP.</th>
+                    <th style="width: 50px; text-align: center;"></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="tbody-top-vendidos">
                   <tr>
-                    <td colspan="5" class="text-center">Cargando movimientos...</td>
+                    <td colspan="6" class="text-center">Cargando productos más vendidos...</td>
                   </tr>
                 </tbody>
               </table>
@@ -801,9 +767,15 @@
               <p class="subtitle">Maestro de artículos, balance de existencias y valoración fiscal en doble expresión monetaria.</p>
             </div>
             <div class="header-buttons">
+              <button type="button" class="btn btn-primary" onclick="abrirModalCrearProductoTomaFisica()"
+                id="btn-inv-nuevo-articulo"
+                style="background:#0284c7; border:1px solid #0284c7; color:#ffffff; font-weight:700;"
+                title="Registrar un nuevo artículo en el catálogo de inventario">
+                ➕ Nuevo Artículo
+              </button>
               <button type="button" class="btn btn-secondary" onclick="switchTab('tab-configuracion')"
                 title="Ir a Configuración de Tasas Oficiales BCV">
-                ⚙️ Configurar Tasas BCV
+                ⚙️ Tasas BCV
               </button>
               <button type="button" class="btn btn-primary" onclick="abrirModalReporteMensualInventario()"
                 id="btn-tab-reportes-mensuales"
@@ -817,8 +789,12 @@
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                Descargar Excel
+                Excel
               </a>
+              <button type="button" class="btn btn-secondary" onclick="exportarInventarioTxt()" id="btn-tab-export-txt"
+                title="Descargar listado tabular de inventario en archivo plano (.TXT)">
+                📝 TXT
+              </button>
               <a href="/reporte-seniat.html" target="_blank" class="btn btn-outline-pdf" id="btn-tab-export-pdf"
                 title="Generar Informe Oficial SENIAT en PDF">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -828,7 +804,7 @@
                   <line x1="16" y1="17" x2="8" y2="17"></line>
                   <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                Informe PDF (SENIAT)
+                PDF (SENIAT)
               </a>
             </div>
           </div>
@@ -930,17 +906,7 @@
 
             </div>
 
-            <!-- Sub-barra informativa de control de tabla -->
-            <div class="table-meta"
-              style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:#f8fafc; padding:8px 18px; border-bottom:1px solid #e2e8f0; font-size:0.75rem;">
-              <span style="color:#64748b; font-weight:600;">
-                📊 Costo Promedio Ponderado Móvil (CPP) en Bolívares con referencia en Divisas ($ USD)
-              </span>
-              <div id="inv-bcv-summary-badge" style="display:none;"></div>
-              <span style="color:#0f172a; font-weight:700;">
-                Inventario en Línea • Ejercicio 2026
-              </span>
-            </div>
+            <div id="inv-bcv-summary-badge" style="display:none;"></div>
             <div class="table-responsive table-scroll">
               <table class="data-table" id="table-inventario">
                 <thead>
@@ -952,17 +918,15 @@
                     <th>ALMACÉN</th>
                     <th class="text-right">STOCK MÍN.</th>
                     <th class="text-right">STOCK ACTUAL</th>
-                    <th class="text-right" style="color:#0f172a;">COSTO UNIT. (BS)</th>
-                    <th class="text-right">COSTO UNIT. ($)</th>
-                    <th class="text-right" style="color:#059669;">VALOR TOTAL (BS)</th>
-                    <th class="text-right">VALOR TOTAL ($)</th>
+                    <th class="text-right" style="color:#0f172a;">COSTO UNIT. (Bs. / USD)</th>
+                    <th class="text-right" style="color:#059669;">VALOR TOTAL (Bs. / USD)</th>
                     <th class="text-center">ESTADO</th>
                     <th class="text-center">ACCIÓN</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-inventario">
                   <tr>
-                    <td colspan="13" class="text-center">Cargando inventario...</td>
+                    <td colspan="11" class="text-center">Cargando inventario...</td>
                   </tr>
                 </tbody>
               </table>
@@ -988,11 +952,11 @@
           <div class="panel-card" style="margin-bottom: 20px; border-top: 4px solid #0A5CF5; background: #ffffff;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
               <div>
-                <strong style="color: #0B2447; font-size: 1.02rem; display: flex; align-items: center; gap: 8px;">
-                  <span>⚖️ Conciliación de Compras: Almacén Físico ↔ Libro de Compras Fiscal</span>
-                  <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 11px;">CRUCE EN TIEMPO REAL</span>
+                <strong style="color: #0f172a; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                  <span>📥 Facturas Pendientes por Dar Entrada en Almacén</span>
+                  <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 11px;">EN TIEMPO REAL</span>
                 </strong>
-                <span style="font-size: 0.78rem; color: #64748b;">Verifica qué facturas registradas en el Libro de Compras ya ingresaron al almacén y cuáles faltan por detallar ítem por ítem.</span>
+                <span style="font-size: 0.78rem; color: #64748b;">Seleccione cualquier factura pendiente para precargar los datos y detallar los artículos recibidos.</span>
               </div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <label style="font-size: 0.78rem; font-weight: 700; color: #475569;">Período:</label>
@@ -1232,7 +1196,7 @@
 
                       <div class="form-field">
                         <label for="ent-subtipo">Tipificación de Entrada *</label>
-                        <select id="ent-subtipo" required>
+                        <select id="ent-subtipo" required onchange="onCambioSubtipoEntrada()">
                           <option value="COMPRA_NACIONAL">📥 Compra Nacional (Factura Fiscal)</option>
                           <option value="NOTA_RECEPCION">📦 Nota Recepción / Entrega</option>
                           <option value="DEVOLUCION_VENTA">🔄 Devolución en Venta (NC)</option>
@@ -1362,7 +1326,7 @@
                 <div class="form-grid" style="grid-template-columns: repeat(4, 1fr);">
                   <div class="form-field">
                     <label for="sal-subtipo">Tipo de Salida (Art. 177 RISLR) *</label>
-                    <select id="sal-subtipo" required
+                    <select id="sal-subtipo" required onchange="calculateExitTotals()"
                       style="font-weight:700; color:#0f172a; background:#fff1f2; border-color:#fecdd3;">
                       <option value="VENTA">📤 Venta (Factura / Máquina Fiscal Z0A0000176)</option>
                       <option value="AUTOCONSUMO">🔧 Autoconsumo Interno</option>
@@ -1625,16 +1589,20 @@
             </div>
             <div class="header-buttons">
               <button class="btn btn-secondary" onclick="switchTab('tab-configuracion')">
-                ⚙️ Configurar Tasas BCV
+                ⚙️ Tasas BCV
+              </button>
+              <button class="btn btn-secondary" onclick="exportarKardexTxt()"
+                title="Descargar ficha Kardex del artículo en formato plano (.TXT)">
+                📝 Exportar TXT
               </button>
               <button class="btn btn-navy" onclick="imprimirKardexProducto()"
-                title="Imprimir Ficha Oficial de Kardex SENIAT en PDF">
+                title="Imprimir Ficha Oficial de Kardex en PDF">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="6 9 6 2 18 2 18 9"></polyline>
                   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                   <rect x="6" y="14" width="12" height="8"></rect>
                 </svg>
-                🖨️ Imprimir Ficha Kardex Oficial (PDF)
+                🖨️ Imprimir Ficha Kardex (PDF)
               </button>
             </div>
           </div>
@@ -1866,17 +1834,20 @@
                 Conciliación de existencias físicas en tiempo real, ajustes de Kardex (Octubre 2026) y actualización de costos y precios de venta.
               </p>
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <button type="button" class="btn btn-sm" id="btn-crear-repuesto-top" onclick="abrirModalCrearProductoTomaFisica()" style="display:flex; align-items:center; gap:6px; font-weight:800; height:36px; padding:0 14px; background:#0284c7; border:1px solid #0284c7; border-radius:8px; color:#ffffff; box-shadow:0 1px 3px rgba(2,132,199,0.25); cursor:pointer;" title="Registrar un nuevo código o repuesto en la Toma Física">
                 <span>➕ Nuevo Repuesto</span>
               </button>
-              <button type="button" class="btn btn-secondary" onclick="descargarMatrizAuditoria()" style="display:flex; align-items:center; gap:8px; font-weight:700; height:36px; padding:0 14px; background:#fff; border:1.5px solid #cbd5e1; border-radius:8px; color:#0B2447; box-shadow:0 1px 3px rgba(0,0,0,0.05);" title="Exportar Matriz de Auditoría a Excel">
+              <button type="button" class="btn btn-secondary" onclick="exportarTomaFisicaTxt()" style="display:flex; align-items:center; gap:6px; font-weight:700; height:36px; padding:0 12px; background:#fff; border:1.5px solid #cbd5e1; border-radius:8px; color:#0f172a;" title="Exportar Toma Física a archivo plano (.TXT)">
+                <span>📝 Exportar (.TXT)</span>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="descargarMatrizAuditoria()" style="display:flex; align-items:center; gap:8px; font-weight:700; height:36px; padding:0 14px; background:#fff; border:1.5px solid #cbd5e1; border-radius:8px; color:#0f172a; box-shadow:0 1px 3px rgba(0,0,0,0.05);" title="Exportar Matriz de Toma Física a Excel">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Exportar Matriz (.XLSX)</span>
+                <span>Exportar (.XLSX)</span>
               </button>
             </div>
           </div>
@@ -1960,7 +1931,7 @@
               <button type="button" class="btn btn-sm btn-secondary" id="btn-configurar-acta-banner" onclick="abrirModalAperturaActa()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
                 ✏️ Configurar Acta
               </button>
-              <button type="button" class="btn btn-sm btn-navy" onclick="abrirModalActaOficial()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
+              <button type="button" class="btn btn-sm btn-navy" id="btn-ver-acta-banner" onclick="abrirModalActaOficial()" style="font-size: 0.74rem; font-weight: 700; padding: 5px 12px;">
                 📄 Ver Acta Oficial
               </button>
             </div>
@@ -1990,51 +1961,24 @@
             <span class="badge" style="background:#059669; color:#fff; font-weight:800; font-size:0.75rem; padding:4px 12px; border-radius:12px;">ACCESO AUTORIZADO</span>
           </div>
 
-          <!-- 1. TARJETA DE PROGRESO GENERAL Y SEGUIMIENTO EN TIEMPO REAL -->
+          <!-- 1. TARJETA COMPACTA DE PROGRESO GENERAL -->
           <div class="pzero-progress-card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
               <div>
-                <strong style="color:#0f172a; font-size:1.05rem; display:block;">Progreso de Conciliación de Stock</strong>
-                <span style="font-size:0.78rem; color:#64748b;">Avance de la toma física y conciliación de existencias en almacén</span>
+                <strong style="color:#0f172a; font-size:0.98rem; display:block;">Progreso de Toma Física y Conciliación de Stock</strong>
+                <span style="font-size:0.76rem; color:#64748b;">Tasa BCV Cierre: <strong id="pzero-kpi-tasa" style="color:#0284c7;">Bs. 889,58</strong></span>
               </div>
-              <div style="text-align:right;">
-                <span id="pzero-progreso-texto" style="font-size:1.15rem; font-weight:800; color:#059669; font-family:monospace;">
+              <div style="text-align:right; display:flex; align-items:center; gap:10px;">
+                <span id="pzero-progreso-texto" style="font-size:1.05rem; font-weight:800; color:#059669; font-family:monospace;">
                   0 / 733 (0.0%)
                 </span>
+                <span style="display:none;"><strong id="pzero-kpi-total">0</strong><strong id="pzero-kpi-auditados">0</strong><strong id="pzero-kpi-pendientes">0</strong><strong id="pzero-kpi-diferencias">0</strong><strong id="pzero-kpi-inactivos">0</strong></span>
               </div>
             </div>
 
             <!-- Barra Visual de Progreso -->
             <div class="pzero-progress-track">
               <div class="pzero-progress-bar" id="pzero-barra-progreso" style="width: 0%;"></div>
-            </div>
-
-            <!-- Chips de Métricas Globales -->
-            <div class="pzero-kpi-chips">
-              <div class="pzero-chip">
-                <span>📦 Total Catálogo:</span>
-                <strong id="pzero-kpi-total">733</strong>
-              </div>
-              <div class="pzero-chip chip-success">
-                <span>✅ Auditados:</span>
-                <strong id="pzero-kpi-auditados">0</strong>
-              </div>
-              <div class="pzero-chip chip-pending">
-                <span>⏳ Pendientes:</span>
-                <strong id="pzero-kpi-pendientes">733</strong>
-              </div>
-              <div class="pzero-chip chip-warning">
-                <span>⚠️ Con Diferencias:</span>
-                <strong id="pzero-kpi-diferencias">0</strong>
-              </div>
-              <div class="pzero-chip chip-muted">
-                <span>🔒 Inactivos:</span>
-                <strong id="pzero-kpi-inactivos">0</strong>
-              </div>
-              <div class="pzero-chip" style="margin-left:auto; background:#f0f9ff; border-color:#bae6fd; color:#0284c7;" title="Tasa Oficial BCV de Cierre para la Toma Física y Conciliación Fiscal">
-                <span>🏛️ Tasa Cierre BCV:</span>
-                <strong id="pzero-kpi-tasa">Bs. 889,58</strong>
-              </div>
             </div>
           </div>
 
@@ -2224,10 +2168,9 @@
 
               <!-- BLOQUE A: AJUSTE DE EXISTENCIAS FÍSICAS (CANTIDADES & ESTATUS) -->
               <div class="pzero-zone-card zone-a">
-                <div class="pzero-zone-title">
-                  <span>📦 BLOQUE A: Ajuste de Existencias Físicas</span>
+                <div class="pzero-zone-title" style="margin-bottom:10px;">
+                  <span>📦 BLOQUE A: Conteo Físico y Ajuste de Stock</span>
                 </div>
-                <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Contraste de conteo real contra el stock teórico del sistema. Las diferencias generan asientos en Kardex para Octubre 2026.</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
                   <!-- Stock Sistema -->
@@ -2272,8 +2215,7 @@
                     <div>
                       <label style="font-size:0.70rem; font-weight:700; color:#0B2447; display:block; margin-bottom:2px;">📋 Acta Oficial Vinculada (Art. 177 RISLR):</label>
                       <select id="drawer-acta-select" class="form-control font-mono font-bold" style="font-size:0.75rem; padding:5px 8px; background:#eff6ff; border-color:#93c5fd; color:#1e40af;">
-                        <option value="ACTA-INV-202610-01" selected>ACTA-INV-202610-01 (Toma Física Octubre 2026)</option>
-                        <option value="OTRA">✏️ Otra Acta Interna Específica...</option>
+                        <option value="ACTA-INV-202610-01" selected>ACTA-INV-202610-01 (Toma Física Activa)</option>
                       </select>
                     </div>
                     <div>
@@ -2283,11 +2225,11 @@
                   </div>
                 </div>
 
-                <!-- Toggle Soft Delete (Inactivar Código) -->
+                <!-- Toggle Inactivar Producto -->
                 <div style="background:#fff1f2; border:1px solid #fecdd3; border-radius:8px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between;">
                   <div>
-                    <strong style="font-size:0.78rem; color:#9f1239; display:block;">Desactivar / Inactivar Producto</strong>
-                    <span style="font-size:0.7rem; color:#be123c;">Aplica Soft Delete en Turso si la mercancía ya no existe (mantiene facturas pasadas).</span>
+                    <strong style="font-size:0.78rem; color:#9f1239; display:block;">Desactivar / Inactivar Artículo</strong>
+                    <span style="font-size:0.7rem; color:#be123c;">Oculta el artículo en nuevas entradas/salidas preservando su historial de Kardex.</span>
                   </div>
                   <label class="pzero-switch">
                     <input type="checkbox" id="drawer-toggle-inactivo" onchange="onToggleInactivoDrawer(this)">
@@ -2298,14 +2240,10 @@
 
               <!-- BLOQUE B: ESTRUCTURA DE COSTOS (COMPRAS) [Doble Expresión Bs. + USD] -->
               <div class="pzero-zone-card zone-b">
-                <div class="pzero-zone-title">
+                <div class="pzero-zone-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                   <span>💲 BLOQUE B: Estructura de Costos (Compras)</span>
+                  <span style="font-size:0.7rem; color:#0284c7; font-weight:700;">BCV: Bs. <span id="drawer-costo-tasa-bcv-val">889.58</span></span>
                 </div>
-                <div style="font-size:0.72rem; color:#0369a1; font-weight:700; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:5px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                  <span>🏛️ Tasa BCV Cierre Fiscal (Oct 2026):</span>
-                  <strong style="color:#0c4a6e;">Bs. <span id="drawer-costo-tasa-bcv-val">889.58</span> / USD (31/10/2026)</strong>
-                </div>
-                <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Valoración de inventario conforme al Art. 177 RISLR. Ingrese el Costo S/IVA en Bolívares (Bs.) o el Costo Total para autocalcular el IVA (16%).</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
                   <!-- Costo S/IVA Bs -->
@@ -2333,14 +2271,10 @@
 
               <!-- BLOQUE C: ESTRUCTURA DE PRECIOS (VENTAS) [Doble Expresión Bs. + USD] -->
               <div class="pzero-zone-card zone-c">
-                <div class="pzero-zone-title">
+                <div class="pzero-zone-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                   <span>🏷️ BLOQUE C: Estructura de Precios (Ventas)</span>
+                  <span style="font-size:0.7rem; color:#0284c7; font-weight:700;">BCV: Bs. <span id="drawer-precio-tasa-bcv-val">889.58</span></span>
                 </div>
-                <div style="font-size:0.72rem; color:#0369a1; font-weight:700; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:5px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                  <span>🏛️ Tasa BCV Cierre Fiscal (Oct 2026):</span>
-                  <strong style="color:#0c4a6e;">Bs. <span id="drawer-precio-tasa-bcv-val">889.58</span> / USD (31/10/2026)</strong>
-                </div>
-                <p style="font-size:0.75rem; color:#64748b; margin:0 0 12px 0;">Precios de venta sugeridos para el mostrador de DG67, salidas de tienda y facturación por máquina fiscal.</p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
                   <!-- Precio Venta S/IVA Bs -->
@@ -2437,6 +2371,9 @@
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
                 Exportar Excel
+              </button>
+              <button class="btn btn-secondary" onclick="exportarLibroComprasTxt()" title="Exportar Libro de Compras en formato texto estructurado (.txt)">
+                📝 TXT
               </button>
             </div>
           </div>
@@ -2546,7 +2483,7 @@
               <select id="compras-tipo-select" onchange="loadLibroCompras()">
                 <option value="TODOS">Todos los Tipos de Servicio</option>
                 <option value="MERCANCIA_REPUESTOS">📦 Mercancía / Repuestos</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Asesoría</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Tributarios</option>
                 <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles</option>
                 <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios</option>
                 <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas / Máquinas Fiscales</option>
@@ -2638,6 +2575,9 @@
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
                 Exportar Excel
+              </button>
+              <button class="btn btn-secondary" onclick="exportarLibroVentasTxt()" title="Exportar Libro de Ventas en formato texto estructurado (.txt)">
+                📝 TXT
               </button>
             </div>
           </div>
@@ -3005,7 +2945,7 @@
               <select id="prov-panel-tipo" onchange="filterProveedoresPanel()">
                 <option value="TODOS">Todos los Tipos de Servicio</option>
                 <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (053/055)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Tributarios (053/055)</option>
                 <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (002/004)</option>
                 <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas y Servicios Generales (053/055)</option>
                 <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas y Máquinas Fiscales (053/055)</option>
@@ -3300,7 +3240,7 @@
                 <select id="prov-filter-tipo" onchange="filterProveedoresFiscalTable()">
                   <option value="TODOS">Todos los Tipos de Servicio</option>
                   <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario)</option>
-                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría</option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Tributarios</option>
                   <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles</option>
                   <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas y Servicios Generales</option>
                   <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Máquinas Fiscales y Sistemas</option>
@@ -3345,42 +3285,46 @@
         <!-- 12. TAB: COMPROBANTES DE RETENCIÓN DE ISLR (PA SNAT/2026/00093)        -->
         <!-- ====================================================================== -->
         <section id="tab-retenciones-islr" class="tab-pane">
-          <!-- Banner Identidad Corporativa Unión Contable Global + PA SNAT/2026/00093 -->
+          <!-- Banner Comprobantes de Retención ISLR (INVERSIONES DG 67, C.A. • PA SNAT/2026/00093) -->
           <div class="islr-brand-banner"
-            style="background: linear-gradient(135deg, #0B2447 0%, #3F5B8F 100%); color: #FFFFFF; border-bottom: 3px solid #19A7CE; border-radius: 10px; padding: 14px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; box-shadow: 0 4px 14px rgba(11, 36, 71, 0.16);">
+            style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #FFFFFF; border-bottom: 3px solid #0284c7; border-radius: 10px; padding: 14px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);">
             <div style="display: flex; align-items: center; gap: 14px;">
-              <div style="background: rgba(255,255,255,0.12); border: 1.5px solid #19A7CE; padding: 6px 12px; border-radius: 6px; font-weight: 900; color: #FFFFFF; font-size: 1.1rem; letter-spacing: 1px;">
+              <div style="background: rgba(56,189,248,0.12); border: 1.5px solid #38bdf8; padding: 6px 12px; border-radius: 6px; font-weight: 900; color: #FFFFFF; font-size: 1.1rem; letter-spacing: 1px;">
                 DG 67
               </div>
               <div>
                 <div
-                  style="font-size: 0.72rem; font-weight: 800; color: #19A7CE; letter-spacing: 0.08em; text-transform: uppercase;">
+                  style="font-size: 0.72rem; font-weight: 800; color: #38bdf8; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;">
                   INVERSIONES DG 67, C.A. • RIF: J-50700865-7
                 </div>
                 <h1 style="font-size: 1.18rem; font-weight: 800; color: #FFFFFF; margin: 2px 0;">
                   Comprobantes de Retención ISLR
                 </h1>
-                <div style="font-size: 0.76rem; color: #E5E7EB;">
+                <div style="font-size: 0.76rem; color: #cbd5e1;">
                   SENIAT PA SNAT/2026/00093 y Decreto 1.808 • Numeración 14 dígitos • Sustraendo UT Bs. <span id="lbl-ut-vigente">43,00</span>
                 </div>
               </div>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button id="btn-nuevo-comprobante-islr" class="btn" style="background: #19A7CE; color: #FFFFFF; font-weight: 800; border: none;"
+              <button id="btn-nuevo-comprobante-islr" class="btn" style="background: #0284c7; color: #FFFFFF; font-weight: 800; border: none;"
                 onclick="openModalEmitirRetencionISLR()">
                 + Emitir Comprobante ISLR
               </button>
               <button class="btn"
-                style="background: rgba(255,255,255,0.14); color: #FFFFFF; border: 1px solid #19A7CE; font-weight: 700;"
+                style="background: rgba(255,255,255,0.12); color: #FFFFFF; border: 1px solid #38bdf8; font-weight: 700;"
                 onclick="openModalConfigISLR()">
                 ⚙️ Parámetros UT / Imprenta Digital
               </button>
-              <button class="btn" style="background: #FFFFFF; color: #0B2447; font-weight: 800;"
+              <button class="btn" style="background: #FFFFFF; color: #0f172a; font-weight: 800;"
                 onclick="exportarXMLSeniatISLR()">
                 📄 Exportar XML SENIAT
               </button>
               <button class="btn btn-action-excel" onclick="exportarExcelISLR()">
                 📊 Exportar Excel
+              </button>
+              <button class="btn" style="background: rgba(255,255,255,0.12); color: #FFFFFF; border: 1px solid rgba(255,255,255,0.28); font-weight: 700;"
+                onclick="exportarRetencionesIslrTxt()" title="Exportar relación de Retenciones ISLR en formato TXT">
+                📝 TXT
               </button>
             </div>
           </div>
@@ -3663,7 +3607,11 @@
       <div class="modal-body" id="modal-mov-body">
         <div class="loading-spinner">Cargando detalles...</div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-secondary" onclick="exportarMovimientoComprobanteTxt()" title="Descargar comprobante del movimiento en texto plano (.txt)">📝 Descargar TXT</button>
+          <button class="btn btn-navy" onclick="imprimirMovimientoComprobantePdf()" title="Imprimir o guardar comprobante del movimiento en PDF">🖨️ Imprimir Comprobante (PDF)</button>
+        </div>
         <button class="btn btn-secondary" onclick="closeModal('modal-mov-detail')">Cerrar</button>
       </div>
     </div>
@@ -4019,7 +3967,7 @@
                   Gasto:</label>
                 <select id="m-comp-tipo" class="form-control">
                   <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario Tienda)</option>
-                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría (053/055)</option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Tributarios (053/055)</option>
                   <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios Profesionales No Mercantiles (002/004)</option>
                   <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (053/055)</option>
                   <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Sistemas, Software y Máquinas Fiscales (053/055)</option>
@@ -4331,7 +4279,7 @@
               <label>Clasificación de Servicio / Actividad (Decreto 1.808):</label>
               <select id="m-prov-tipo" class="form-control" onchange="actualizarSugerenciaIslrProveedor(true)">
                 <option value="MERCANCIA_REPUESTOS">📦 Repuestos / Mercancía (Inventario - No retiene ISLR)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Asesoría Administrativa (053/055)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables y Administrativos (053/055)</option>
                 <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios Profesionales No Mercantiles (002/004)</option>
                 <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Ejecución Obras y Servicios (053/055)</option>
                 <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos, Sistemas y Máquinas Fiscales (053/055)</option>
@@ -4687,14 +4635,14 @@
               </div>
             </div>
             <div>
-              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Contador Público Colegiado (Receptor Contable / Asesor Externo):</label>
+              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Contador Público Colegiado (Receptor Contable):</label>
               <div style="background: #ffffff; border: 1px solid #93c5fd; border-radius: 6px; padding: 7px 10px; font-size: 0.82rem; font-weight: 700; color: #1e40af; display: flex; align-items: center; justify-content: space-between;">
-                <span>Lcda. Liliana Chacón • CPC (Unión Contable Global)</span>
+                <span>Contador Público Colegiado (C.P.C.) — Receptor Contable</span>
                 <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px;">RECEPTOR CONTABLE</span>
               </div>
             </div>
             <div style="font-size: 0.70rem; color: #64748b; margin-top: 8px; line-height: 1.35; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-              📌 <em>Nota legal:</em> El conteo físico es practicado exclusivamente por el personal y gerencia de <strong>Inversiones DG 67, C.A.</strong>, quienes son enteramente responsables de la información suministrada. <strong>Unión Contable Global</strong> recibe las cantidades para fines de registro de ajustes en Kardex y conciliación fiscal.
+              📌 <em>Nota legal:</em> El conteo físico es practicado exclusivamente por el personal y gerencia de <strong>INVERSIONES DG 67, C.A.</strong>, quienes son enteramente responsables de la información suministrada para fines de registro de ajustes en Kardex y conciliación fiscal.
             </div>
           </div>
 
@@ -4777,15 +4725,15 @@
               </div>
             </div>
             <div>
-              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Receptor Contable (Unión Contable Global):</label>
+              <label style="font-size: 0.70rem; font-weight: 700; color: #1e40af; display: block; margin-bottom: 3px;">Receptor Contable (C.P.C.):</label>
               <div style="background: #ffffff; border: 1px solid #93c5fd; border-radius: 6px; padding: 7px 10px; font-size: 0.82rem; font-weight: 700; color: #1e40af;">
-                Lcda. Liliana Chacón • CPC (Unión Contable Global) - Receptor de Datos de Inventario
+                Contador Público Colegiado (C.P.C.) — Receptor de Datos de Inventario
               </div>
             </div>
 
             <label style="display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 0.75rem; color: #334155; cursor: pointer;">
               <input type="checkbox" id="cierre-declaracion-jurada" required style="margin-top: 2px;">
-              <span><strong>Declaración de Conformidad:</strong> Certifico que el conteo físico de existencias ha finalizado y que la información remitida a Unión Contable Global para el ajuste del Kardex y conciliación fiscal es fidedigna y verificada en almacén por Inversiones DG 67, C.A.</span>
+              <span><strong>Declaración de Conformidad:</strong> Certifico que el conteo físico de existencias ha finalizado y que la información registrada para el ajuste del Kardex y conciliación fiscal es fidedigna y verificada en almacén por INVERSIONES DG 67, C.A.</span>
             </label>
           </div>
 
@@ -5244,7 +5192,7 @@
                 <label style="color: #0B2447; font-weight: 800;">⚖️ Tipo de Servicio (Auto-Código XML):</label>
                 <select id="m-islr-tipo-servicio" class="form-control font-bold" onchange="aplicarServicioYContribuyenteEnModalISLR(true)"
                   style="border: 1.5px solid #3F5B8F; background: #ffffff;">
-                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Asesoría Contable / Admin (053/055)</option>
+                  <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Admin (053/055)</option>
                   <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (002/004)</option>
                   <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (053/055)</option>
                   <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos / Sistemas (053/055)</option>
@@ -5722,6 +5670,7 @@
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary" onclick="cargarReporteMensualInventario()" title="Recalcular datos del servidor">🔄 Actualizar</button>
             <button type="button" class="btn btn-emerald" onclick="exportarReporteMensualInventarioExcel()" title="Descargar Excel (.xlsx) con Detalle Art. 177 + Hoja Consolidado Ene–Dic">📥 Exportar Excel (.xlsx)</button>
+            <button type="button" class="btn btn-secondary" onclick="exportarReporteMensualInventarioTxt()" title="Descargar Reporte Mensual de Inventario en formato TXT">📝 Exportar TXT</button>
             <button type="button" class="btn btn-outline-pdf" onclick="abrirPdfArt177DesdeModal()" title="Abrir Libro Oficial Imprimible SENIAT (PDF)">🖨️ Libro Oficial / PDF Art. 177</button>
           </div>
         </div>
@@ -6171,7 +6120,7 @@
               <select id="det-modal-tipo-servicio" class="form-control" style="font-size: 0.82rem; font-weight: 800;" onchange="sincronizarDetalleHaciaStaging('tipo_servicio', this.value)">
                 <option value="MERCANCIA_REPUESTOS">📦 Mercancía / Repuestos (Afecta Stock e Inventario)</option>
                 <option value="ACTIVO_FIJO_EQUIPOS">🏢 Activos Fijos / Equipos (Solo Crédito Fiscal)</option>
-                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Asesoría (ISLR 053/055)</option>
+                <option value="SERVICIOS_CONTABLES_Y_LEGALES">⚖️ Servicios Contables / Tributarios (ISLR 053/055)</option>
                 <option value="HONORARIOS_NO_MERCANTILES">🎓 Honorarios No Mercantiles (ISLR 002/004)</option>
                 <option value="CONTRATISTAS_OBRAS_SERVICIOS">🛠️ Contratistas / Obras y Servicios (ISLR 053/055)</option>
                 <option value="SERVICIOS_TECNICOS_Y_SISTEMAS">💻 Servicios Técnicos y Sistemas (ISLR 053/055)</option>
@@ -6245,8 +6194,8 @@
   <!-- Notification Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="extractor-compras.js?v=20261126_v1"></script>
-  <script src="app.js?v=20261126_v2"></script>
+  <script src="extractor-compras.js?v=20261126_v3"></script>
+  <script src="app.js?v=20261126_v3"></script>
 </body>
 
 </html>

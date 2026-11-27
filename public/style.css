@@ -12,8 +12,8 @@
   --suma-dark: #0f172a;
   --suma-blue: #0284c7;
   --suma-cyan: #38bdf8;
-  --ucg-navy: #0B2447;
-  /* Navy Corporativo Ejecutivo */
+  --ucg-navy: #0f172a;
+  /* Navy Corporativo Ejecutivo SUMA+ */
   --ucg-navy-dark: #0f172a;
   /* Slate 900 Oscuro */
   --ucg-blue-accent: #0284c7;
@@ -4974,6 +4974,8 @@ body {
 .modal-header div[style*="color:#bae6fd"],
 .modal-header span[style*="color: #7dd3fc"],
 .modal-header span[style*="color: #38bdf8"],
+.modal-header div[style*="color: #38bdf8"],
+.modal-header div[style*="color:#38bdf8"],
 .modal-header span[style*="color: #19A7CE"],
 .modal-header span[style*="color: #fde68a"] {
   color: #475569 !important;
@@ -5104,15 +5106,21 @@ div[style*="border-top: 4px solid"] {
   background: #1d4ed8 !important;
 }
 
-/* 5. 5 KPI Cards Ejecutivos del Dashboard */
+/* 5. 5 KPI Cards Ejecutivos del Dashboard (Paleta Unificada SUMA+) */
 .kpi-card-rich {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
-  border-radius: 8px !important;
+  border-top: 3px solid #0284c7 !important;
+  border-radius: 10px !important;
   padding: 14px 16px !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
   position: relative !important;
 }
+
+.kpi-card-rich.border-navy { border-top-color: #0f172a !important; }
+.kpi-card-rich.border-emerald { border-top-color: #059669 !important; }
+.kpi-card-rich.border-cyan { border-top-color: #0284c7 !important; }
+.kpi-card-rich.border-amber { border-top-color: #d97706 !important; }
 
 .kpi-card-rich::before {
   display: none !important;
@@ -5133,10 +5141,30 @@ div[style*="border-top: 4px solid"] {
 .kpi-rich-icon {
   width: 28px !important;
   height: 28px !important;
-  border-radius: 6px !important;
-  background: #f1f5f9 !important;
-  color: #475569 !important;
+  border-radius: 7px !important;
   font-size: 0.85rem !important;
+}
+
+/* Botón Guía Operativa en Topbar (SUMA+ Educación) */
+.btn-action-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+.btn-action-manual:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
 }
 
 .kpi-rich-val:not(#kpi-dash-alertas) {

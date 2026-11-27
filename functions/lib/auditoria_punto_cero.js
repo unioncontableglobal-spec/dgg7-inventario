@@ -7,40 +7,66 @@
  */
 
 export async function getListadoAuditoriaEnVivo(db) {
-  const sql = `
-    SELECT 
-      p.id AS producto_id,
-      p.codigo,
-      p.descripcion,
-      COALESCE(p.unidad_medida, 'UND') AS unidad_medida,
-      COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
-      COALESCE(c.nombre, 'GENERAL') AS categoria,
-      COALESCE(v.stock_actual, 0) AS stock_actual,
-      COALESCE(p.costo_referencial_usd, 0) AS costo_historico_s_iva,
-      COALESCE(p.precio_venta_usd, 0) AS precio_venta_guardado,
-      COALESCE(p.stock_auditado_fisico, v.stock_actual, 0) AS stock_auditado_fisico,
-      COALESCE(p.auditado, 0) AS auditado,
-      p.fecha_auditoria,
-      p.usuario_auditoria,
-      COALESCE(p.inactivo, 0) AS inactivo,
-      COALESCE(p.activo, 1) AS activo,
-      COALESCE(
-        NULLIF(p.precio_venta_usd, 0),
-        (SELECT md.precio_unitario_divisa 
-         FROM movimiento_detalles md 
-         JOIN movimientos m ON md.movimiento_id = m.id 
-         WHERE md.producto_id = p.id AND m.tipo = 'SALIDA_VENTA' AND md.precio_unitario_divisa > 0 
-         ORDER BY m.fecha DESC, m.id DESC LIMIT 1),
-        ROUND(COALESCE(p.costo_referencial_usd, 0) * 1.30, 2)
-      ) AS precio_venta_s_iva
-    FROM productos p
-    LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id
-    LEFT JOIN categorias c ON p.categoria_id = c.id
-    LEFT JOIN almacenes a ON p.almacen_id = a.id
-    ORDER BY p.codigo ASC
-  `;
+  const [res, ajustesRes] = await Promise.all([
+    db.execute(`
+      SELECT 
+        p.id AS producto_id,
+        p.codigo,
+        p.descripcion,
+        COALESCE(p.unidad_medida, 'UND') AS unidad_medida,
+        COALESCE(a.nombre, 'PRINCIPAL') AS almacen,
+        COALESCE(c.nombre, 'GENERAL') AS categoria,
+        COALESCE(v.stock_actual, 0) AS stock_actual,
+        COALESCE(p.costo_referencial_usd, 0) AS costo_historico_s_iva,
+        COALESCE(p.precio_venta_usd, 0) AS precio_venta_guardado,
+        COALESCE(p.stock_auditado_fisico, v.stock_actual, 0) AS stock_auditado_fisico,
+        COALESCE(p.auditado, 0) AS auditado,
+        p.fecha_auditoria,
+        p.usuario_auditoria,
+        COALESCE(p.inactivo, 0) AS inactivo,
+        COALESCE(p.activo, 1) AS activo,
+        COALESCE(
+          NULLIF(p.precio_venta_usd, 0),
+          (SELECT md.precio_unitario_divisa 
+           FROM movimiento_detalles md 
+           JOIN movimientos m ON md.movimiento_id = m.id 
+           WHERE md.producto_id = p.id AND m.tipo = 'SALIDA_VENTA' AND md.precio_unitario_divisa > 0 
+           ORDER BY m.fecha DESC, m.id DESC LIMIT 1),
+          ROUND(COALESCE(p.costo_referencial_usd, 0) * 1.30, 2)
+        ) AS precio_venta_s_iva
+      FROM productos p
+      LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      LEFT JOIN almacenes a ON p.almacen_id = a.id
+      ORDER BY p.codigo ASC
+    `),
+    db.execute(`
+      SELECT 
+        md.producto_id,
+        ROUND(COALESCE(SUM(CASE
+          WHEN m.tipo = 'ENTRADA_AJUSTE'
+            OR (m.tipo = 'AJUSTE' AND (
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%POSITIVO%' OR
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%ENTRADA%' OR
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%SOBRANTE%' OR
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%OMISION%' OR
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%RECLASIF%' OR
+              UPPER(COALESCE(m.subtipo, '')) LIKE '%DEVOLUCION%'
+            )) THEN md.cantidad
+          ELSE -md.cantidad
+        END), 0), 2) AS ajuste_neto
+      FROM movimientos m
+      JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      WHERE m.tipo IN ('AJUSTE', 'ENTRADA_AJUSTE', 'SALIDA_AJUSTE')
+        AND strftime('%Y-%m', m.fecha) = '2026-10'
+      GROUP BY md.producto_id
+    `).catch(() => ({ rows: [] }))
+  ]);
 
-  const res = await db.execute(sql);
+  const ajustesMap = new Map();
+  for (const ar of (ajustesRes.rows || [])) {
+    ajustesMap.set(Number(ar.producto_id), Number(ar.ajuste_neto || 0));
+  }
 
   let totalProductos = 0;
   let totalAuditados = 0;
@@ -60,7 +86,9 @@ export async function getListadoAuditoriaEnVivo(db) {
       ? Number(Number(r.stock_auditado_fisico).toFixed(2))
       : stockActual;
 
-    const diff = Number((stockFisico - stockActual).toFixed(2));
+    const ajusteActa = ajustesMap.get(Number(r.producto_id)) || 0;
+    const diffPendiente = Number((stockFisico - stockActual).toFixed(2));
+    const diff = diffPendiente !== 0 ? diffPendiente : ajusteActa;
     if (diff !== 0 && isAuditado) conDiferencia++;
 
     const costoSIVA = Number(Number(r.costo_historico_s_iva).toFixed(2)) || 0;
@@ -248,7 +276,50 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
   const isAuditado = Number(auditado) === 1 ? 1 : 0;
 
   let movimientoGenerado = null;
-  const diff = Number((cantReal - stockActual).toFixed(2));
+  let prevAjusteNeto = 0;
+  const prevMovIdsToReplace = [];
+
+  if (tieneFisico) {
+    const prevAjRes = await db.execute({
+      sql: `
+        SELECT m.id AS mov_id, m.tipo, COALESCE(m.subtipo, '') AS subtipo, md.cantidad,
+               (SELECT COUNT(*) FROM movimiento_detalles md2 WHERE md2.movimiento_id = m.id) AS total_detalles
+        FROM movimientos m
+        JOIN movimiento_detalles md ON m.id = md.movimiento_id
+        WHERE m.tipo = 'AJUSTE'
+          AND COALESCE(m.nro_control, '') = 'CTRL-AUD-OCT26'
+          AND (m.numero_documento LIKE 'AJUSTE-ENTRADA-%' OR m.numero_documento LIKE 'AJUSTE-SALIDA-%')
+          AND strftime('%Y-%m', m.fecha) = ?
+          AND md.producto_id = ?
+      `,
+      args: [periodo, p.id]
+    }).catch(() => ({ rows: [] }));
+
+    for (const row of (prevAjRes.rows || [])) {
+      if (Number(row.total_detalles) === 1) {
+        const subU = String(row.subtipo || '').toUpperCase();
+        const isPos = row.tipo === 'ENTRADA_AJUSTE' ||
+          (row.tipo === 'AJUSTE' && (
+            subU.includes('POSITIVO') || subU.includes('ENTRADA') ||
+            subU.includes('SOBRANTE') || subU.includes('OMISION') ||
+            subU.includes('RECLASIF') || subU.includes('DEVOLUCION')
+          ));
+        prevAjusteNeto += isPos ? Number(row.cantidad || 0) : -Number(row.cantidad || 0);
+        prevMovIdsToReplace.push(Number(row.mov_id));
+      }
+    }
+
+    if (prevMovIdsToReplace.length > 0) {
+      const ph = prevMovIdsToReplace.map(() => '?').join(',');
+      await db.batch([
+        { sql: `DELETE FROM movimiento_detalles WHERE movimiento_id IN (${ph})`, args: prevMovIdsToReplace },
+        { sql: `DELETE FROM movimientos WHERE id IN (${ph})`, args: prevMovIdsToReplace }
+      ]).catch(() => {});
+    }
+  }
+
+  const stockBaseSinAjuste = Number((stockActual - prevAjusteNeto).toFixed(2));
+  const diff = tieneFisico ? Number((cantReal - stockBaseSinAjuste).toFixed(2)) : 0;
   const timestamp = Date.now().toString().slice(-6);
 
   if (tieneFisico && diff !== 0) {
@@ -419,18 +490,31 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
     ]
   });
 
-  const statsRes = await db.execute(`
-    SELECT 
-      COUNT(*) AS total,
-      SUM(CASE WHEN auditado = 1 THEN 1 ELSE 0 END) AS auditados,
-      SUM(CASE WHEN inactivo = 1 OR activo = 0 THEN 1 ELSE 0 END) AS inactivos
-    FROM productos
-  `);
+  const [statsRes, diffCountRes] = await Promise.all([
+    db.execute(`
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN auditado = 1 THEN 1 ELSE 0 END) AS auditados,
+        SUM(CASE WHEN inactivo = 1 OR activo = 0 THEN 1 ELSE 0 END) AS inactivos
+      FROM productos
+    `),
+    db.execute({
+      sql: `
+      SELECT COUNT(DISTINCT md.producto_id) AS con_dif
+      FROM movimientos m
+      JOIN movimiento_detalles md ON m.id = md.movimiento_id
+      WHERE m.tipo IN ('AJUSTE', 'ENTRADA_AJUSTE', 'SALIDA_AJUSTE')
+        AND strftime('%Y-%m', m.fecha) = ?
+    `,
+      args: [periodo]
+    }).catch(() => ({ rows: [{ con_dif: 0 }] }))
+  ]);
 
   const total = Number(statsRes.rows[0]?.total || 0);
   const auditados = Number(statsRes.rows[0]?.auditados || 0);
   const pendientes = Math.max(0, total - auditados);
   const porcentaje = total > 0 ? Number(((auditados / total) * 100).toFixed(1)) : 0;
+  const conDiferenciaStock = Number(diffCountRes.rows[0]?.con_dif || 0);
 
   return {
     success: true,
@@ -447,7 +531,7 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
       almacen: nuevoAlmNombre,
       stock_actual: cantReal,
       stock_fisico: cantReal,
-      diferencia: 0,
+      diferencia: diff,
       costo_s_iva_usd: nuevoCosto,
       costo_iva_usd: Number((nuevoCosto * 0.16).toFixed(2)),
       costo_total_usd: Number((nuevoCosto * 1.16).toFixed(2)),
@@ -462,6 +546,7 @@ export async function actualizarProductoAuditoria(productoId, payload, db) {
       auditados,
       pendientes,
       porcentaje_auditado: porcentaje,
+      con_diferencia_stock: conDiferenciaStock,
       inactivos: Number(statsRes.rows[0]?.inactivos || 0)
     }
   };

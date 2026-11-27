@@ -38,11 +38,13 @@ const TURSO_URL = 'libsql://inventario-dg67-unioncontableglobal-spec.aws-us-east
 const TURSO_AUTH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTI3NzEzNTEsImlkIjoiMDFhMTY5N2YtYTAwMS03MjNlLWI5NTYtNWExYjA0Yjk2OGI5Iiwia2lkIjoiUVl1M2JpWWk5QUZtZXY4TmZod0x4Z0FDMG9RQ0VGNXBfemt5MmxMZHdkVSIsInJpZCI6ImM4YzJkOTQzLTFmMjctNDBkYi1iNTk1LTI1OTAyNGRkYzUzOSJ9.kYMvoWFHgysur-aq2okfAawMCpTmjCa8wld7JH9kkN9esWS9sZSRNMU0RfnUABAr9mq_WHBw2_ps2LueRoH-Aw';
 
 const AUTH_SALT = 'DG67_UCG_SALT_2026';
+const MANUAL_ACCESS_KEYS = ['DG67-MANUAL', 'SUMA-DG67', 'DG67-2026'];
+const workerLoginAttempts = new Map();
 
-function getDb() {
+function getDb(env) {
   return createClient({
-    url: TURSO_URL,
-    authToken: TURSO_AUTH_TOKEN
+    url: env?.TURSO_DATABASE_URL || TURSO_URL,
+    authToken: env?.TURSO_AUTH_TOKEN || TURSO_AUTH_TOKEN
   });
 }
 
@@ -50,6 +52,107 @@ async function hashPassword(password) {
   const enc = new TextEncoder().encode(password + AUTH_SALT);
   const buf = await crypto.subtle.digest('SHA-256', enc);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function toBase64Url(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(b64) {
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + pad);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function signAuthToken(payloadObj) {
+  const payloadB64 = toBase64Url(JSON.stringify(payloadObj));
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(AUTH_SALT + '_HMAC_V1'),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+  const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${payloadB64}.${sigHex}`;
+}
+
+async function verifyAuthToken(tokenStr) {
+  if (!tokenStr || typeof tokenStr !== 'string' || !tokenStr.includes('.')) return null;
+  const parts = tokenStr.split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, sigHex] = parts;
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(AUTH_SALT + '_HMAC_V1'),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+    const expectedHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (sigHex !== expectedHex) return null;
+    const payload = JSON.parse(fromBase64Url(payloadB64));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseCookies(cookieHeader) {
+  const map = {};
+  if (!cookieHeader) return map;
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > 0) {
+      map[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  }
+  return map;
+}
+
+async function extractSessionUser(request) {
+  const authHeader = request.headers.get('Authorization') || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.slice(7).trim();
+    const verified = await verifyAuthToken(bearer);
+    if (verified) return verified;
+  }
+  const cookies = parseCookies(request.headers.get('Cookie') || '');
+  if (cookies.suma_session) {
+    const verified = await verifyAuthToken(cookies.suma_session);
+    if (verified) return verified;
+  }
+  const fallbackRole = String(request.headers.get('X-Suma-Role') || '').trim().toUpperCase();
+  if (fallbackRole) {
+    return { rol: fallbackRole, legacy: true };
+  }
+  return null;
+}
+
+function isOperadorBlockedRoute(path, method) {
+  if (path.startsWith('/api/fiscal/') && path !== '/api/fiscal/cruce-compras-entradas') return true;
+  if (path.startsWith('/api/cruce/')) return true;
+  if (path.startsWith('/api/islr/')) return true;
+  if (path === '/api/tasas-bcv/diaria' || path === '/api/tasas-bcv/revalorizar-cierre') return true;
+  if (path === '/api/reportes/libro-inventario-seniat' || path === '/api/reportes/mes-a-mes') return true;
+  if (path.startsWith('/api/export/libro-')) return true;
+  if (
+    path === '/api/auditoria/toma-fisica/cerrar' ||
+    path === '/api/auditoria/toma-fisica/reabrir' ||
+    path === '/api/auditoria/toma-fisica/apertura' ||
+    path === '/api/auditoria/acta-oficial'
+  ) return true;
+  if ((path === '/api/proveedores' || path.startsWith('/api/proveedores/')) && method !== 'GET') return true;
+  return false;
 }
 
 function parseAlicuotaDecimal(val, defaultVal = 0.16) {
@@ -157,22 +260,23 @@ async function isPeriodoDeclarado(periodo, db) {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Suma-Role',
   'Cache-Control': 'no-cache, no-store, must-revalidate'
 };
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      ...corsHeaders
+      ...corsHeaders,
+      ...extraHeaders
     }
   });
 }
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
@@ -184,17 +288,18 @@ export async function onRequest(context) {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Suma-Role',
         'Access-Control-Max-Age': '86400'
       }
     });
   }
 
-  const db = getDb();
+  const db = getDb(env);
+  const isHttps = url.protocol === 'https:';
 
   try {
     // ----------------------------------------------------
-    // AUTHENTICATION & HEALTH
+    // AUTHENTICATION, MANUAL KEY & HEALTH
     // ----------------------------------------------------
     if (path === '/api/health' && method === 'GET') {
       const [nowRes, empRes] = await Promise.all([
@@ -221,10 +326,47 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/auth/verify' && method === 'GET') {
-      return jsonResponse({ ok: true, active: true });
+      const authUser = await extractSessionUser(request);
+      return jsonResponse({
+        ok: true,
+        active: Boolean(authUser),
+        authenticated: Boolean(authUser && !authUser.legacy),
+        usuario: authUser || null
+      });
+    }
+
+    if (path === '/api/manual/verify' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const claveRaw = String(body?.clave || '').trim();
+      if (!claveRaw) {
+        return jsonResponse({ ok: false, error: 'Ingrese la clave de acceso del manual.' }, 400);
+      }
+      const claveUpper = claveRaw.toUpperCase();
+      const envKey = String(env?.MANUAL_ACCESS_KEY || '').trim().toUpperCase();
+      const allowedKeys = envKey ? [...MANUAL_ACCESS_KEYS, envKey] : MANUAL_ACCESS_KEYS;
+      if (allowedKeys.includes(claveUpper)) {
+        return jsonResponse({ ok: true, mensaje: 'Acceso autorizado al Manual Operativo de Gestión de Inventarios.' });
+      }
+      const hashedClave = await hashPassword(claveRaw);
+      const userKeyRes = await db.execute({
+        sql: 'SELECT id, rol FROM usuarios WHERE password_hash = ? AND activo = 1 LIMIT 1',
+        args: [hashedClave]
+      }).catch(() => ({ rows: [] }));
+      if (userKeyRes.rows.length > 0) {
+        return jsonResponse({ ok: true, mensaje: 'Acceso autorizado al Manual Operativo de Gestión de Inventarios.' });
+      }
+      return jsonResponse({ ok: false, error: 'Clave incorrecta. Solicite la clave vigente a Administración o use su contraseña de usuario.' }, 401);
     }
 
     if (path === '/api/auth/login' && method === 'POST') {
+      const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+      const nowMs = Date.now();
+      const rec = workerLoginAttempts.get(clientIp);
+      if (rec && rec.lockUntil && nowMs < rec.lockUntil) {
+        const mins = Math.ceil((rec.lockUntil - nowMs) / 60000);
+        return jsonResponse({ error: `Demasiados intentos fallidos. Intente de nuevo en ${mins} minuto(s).` }, 429);
+      }
+
       let body;
       try {
         body = await request.json();
@@ -243,6 +385,10 @@ export async function onRequest(context) {
       });
 
       if (result.rows.length === 0) {
+        const prev = workerLoginAttempts.get(clientIp) || { count: 0 };
+        prev.count += 1;
+        if (prev.count >= 5) prev.lockUntil = nowMs + 15 * 60 * 1000;
+        workerLoginAttempts.set(clientIp, prev);
         return jsonResponse({ error: 'Usuario o contraseña incorrectos. Verifique sus credenciales.' }, 401);
       }
 
@@ -251,18 +397,25 @@ export async function onRequest(context) {
         return jsonResponse({ error: 'Cuenta de usuario inactiva. Comuníquese con Unión Contable Global.' }, 403);
       }
 
+      workerLoginAttempts.delete(clientIp);
+
       await db.execute({
         sql: "UPDATE usuarios SET ultimo_acceso = datetime('now') WHERE id = ?",
         args: [user.id]
       });
 
-      const tokenBytes = new Uint8Array(24);
-      crypto.getRandomValues(tokenBytes);
-      const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const token = await signAuthToken({
+        id: user.id,
+        usuario: user.usuario,
+        rol: String(user.rol || '').toUpperCase(),
+        exp: Date.now() + 24 * 60 * 60 * 1000
+      });
+
+      const cookieStr = `suma_session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${isHttps ? '; Secure' : ''}`;
 
       return jsonResponse({
         ok: true,
-        mensaje: 'Acceso autorizado al Sistema de Entradas, Salidas y Kardex DG 67',
+        mensaje: 'Acceso autorizado al Sistema SUMA • Inventario & Fiscal',
         token,
         usuario: {
           id: user.id,
@@ -271,14 +424,24 @@ export async function onRequest(context) {
           email: user.email,
           rol: user.rol
         }
-      });
+      }, 200, { 'Set-Cookie': cookieStr });
     }
 
     if (path === '/api/auth/logout' && method === 'POST') {
+      const clearCookie = `suma_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${isHttps ? '; Secure' : ''}`;
       return jsonResponse({
         ok: true,
         mensaje: 'Sesión finalizada y destruida con éxito.'
-      });
+      }, 200, { 'Set-Cookie': clearCookie });
+    }
+
+    // Control de acceso por Rol (RBAC) para proteger módulos fiscales frente a perfil OPERADOR
+    const authUser = await extractSessionUser(request);
+    const activeRole = String(authUser?.rol || '').toUpperCase();
+    if ((activeRole === 'OPERADOR' || activeRole === 'VENDEDOR') && isOperadorBlockedRoute(path, method)) {
+      return jsonResponse({
+        error: 'Acceso restringido: su perfil Operador tiene acceso exclusivo al módulo de Gestión de Inventarios y Toma Física.'
+      }, 403);
     }
 
     // ----------------------------------------------------
@@ -353,7 +516,7 @@ export async function onRequest(context) {
               ROUND(SUM(COALESCE(NULLIF(md.total_linea_bs, 0), NULLIF(md.total_linea_divisa, 0) * m.tasa_bcv, md.cantidad * COALESCE(NULLIF(md.precio_unitario_divisa, 0), NULLIF(md.costo_unitario_usd, 0), 2.5) * m.tasa_bcv)), 2) as monto_ventas_bs
             FROM movimientos m
             JOIN movimiento_detalles md ON m.id = md.movimiento_id
-            WHERE m.tipo = 'SALIDA_VENTA'
+            WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
             GROUP BY substr(m.fecha, 1, 7)
           ) vent ON t.periodo = vent.mes
           ORDER BY t.periodo ASC
@@ -371,7 +534,7 @@ export async function onRequest(context) {
           LEFT JOIN categorias c ON p.categoria_id = c.id
           JOIN movimiento_detalles md ON p.id = md.producto_id
           JOIN movimientos m ON md.movimiento_id = m.id
-          WHERE m.tipo = 'SALIDA_VENTA'
+          WHERE m.tipo = 'SALIDA_VENTA' AND COALESCE(m.subtipo, 'VENTA') = 'VENTA'
           GROUP BY p.id
           ORDER BY unidades_vendidas DESC
           LIMIT 10
@@ -483,15 +646,6 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/proveedores' && method === 'GET') {
-      // Depuración de registro residual obsoleto de la carga inicial (ID 32 J-000256862-3) si no tiene facturas ni movimientos
-      await db.execute(`
-        DELETE FROM proveedores 
-        WHERE id = 32 
-          AND rif = 'J-000256862-3' 
-          AND NOT EXISTS (SELECT 1 FROM libro_compras WHERE proveedor_id = 32)
-          AND NOT EXISTS (SELECT 1 FROM movimientos WHERE proveedor_id = 32)
-      `).catch(() => {});
-
       const res = await db.execute(`
         SELECT 
           p.id, p.rif, p.razon_social,
@@ -678,6 +832,7 @@ export async function onRequest(context) {
       const alm = url.searchParams.get('almacen');
       const est = url.searchParams.get('estado');
       const fechaCorte = url.searchParams.get('fecha_corte');
+      const incluirInactivos = url.searchParams.get('incluir_inactivos') === '1';
       const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
 
       let sql;
@@ -716,29 +871,29 @@ export async function onRequest(context) {
             p.precio_venta_usd,
             ROUND(COALESCE(SUM(CASE 
               WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
                    THEN md.cantidad 
               WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
                    THEN -md.cantidad 
               ELSE 0 
             END), 0), 2) AS stock_actual,
             ROUND(COALESCE(SUM(CASE 
               WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
                    THEN md.cantidad 
               WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
                    THEN -md.cantidad 
               ELSE 0 
             END), 0) * p.costo_referencial_usd, 2) AS valor_total_usd,
             CASE 
               WHEN COALESCE(SUM(CASE 
                 WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
-                     OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%SINCERACION%')) 
+                     OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
                      THEN md.cantidad 
                 WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
-                     OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                     OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
                      THEN -md.cantidad 
                 ELSE 0 
               END), 0) <= p.stock_minimo THEN 'SOLICITAR MATERIAL'
@@ -752,6 +907,9 @@ export async function onRequest(context) {
           WHERE 1=1
         `;
         args.push(fechaCorte);
+        if (!incluirInactivos) {
+          sql += ` AND COALESCE(p.inactivo, 0) = 0 AND COALESCE(p.activo, 1) = 1`;
+        }
 
         if (q) {
           sql += ` AND (p.codigo LIKE ? OR p.descripcion LIKE ?)`;
@@ -789,6 +947,9 @@ export async function onRequest(context) {
           LEFT JOIN productos p ON p.id = v.producto_id
           WHERE 1=1
         `;
+        if (!incluirInactivos) {
+          sql += ` AND COALESCE(p.inactivo, 0) = 0 AND COALESCE(p.activo, 1) = 1`;
+        }
 
         if (q) {
           sql += ` AND (v.codigo LIKE ? OR v.descripcion LIKE ?)`;
@@ -1623,6 +1784,11 @@ export async function onRequest(context) {
         }
       }
 
+      // Revalorizar únicamente períodos NO DECLARADOS y sin sobrescribir tasas diarias históricas ya asentadas (> 0)
+      const condAbiertoMov = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = substr(movimientos.fecha, 1, 7) AND d.estatus = 'DECLARADO') AND substr(movimientos.fecha, 1, 7) > '2026-09'`;
+      const condAbiertoLC = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_compras.periodo AND d.estatus = 'DECLARADO') AND libro_compras.periodo > '2026-09'`;
+      const condAbiertoLV = `NOT EXISTS (SELECT 1 FROM declaraciones_iva d WHERE d.periodo = libro_ventas.periodo AND d.estatus = 'DECLARADO') AND libro_ventas.periodo > '2026-09'`;
+
       await db.execute(`
         UPDATE movimientos
         SET tasa_bcv = COALESCE(
@@ -1635,6 +1801,7 @@ export async function onRequest(context) {
               movimientos.fecha_tasa_bcv,
               movimientos.fecha
             )
+        WHERE (${condAbiertoMov}) AND COALESCE(tasa_bcv, 0) <= 0
       `);
 
       await db.execute(`
@@ -1646,6 +1813,8 @@ export async function onRequest(context) {
             costo_unitario_bs = ROUND(COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) * COALESCE((SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id), 889.58), 2),
             costo_unitario_ves = ROUND(COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) * COALESCE((SELECT m.tasa_bcv FROM movimientos m WHERE m.id = movimiento_detalles.movimiento_id), 889.58), 2)
         WHERE COALESCE(NULLIF(costo_unitario_divisa, 0), costo_unitario_usd, 0) > 0
+          AND COALESCE(tasa_bcv_operacion, 0) <= 0
+          AND movimiento_id IN (SELECT id FROM movimientos WHERE ${condAbiertoMov})
       `).catch(() => {});
 
       await db.execute(`
@@ -1655,9 +1824,10 @@ export async function onRequest(context) {
               libro_compras.tasa_bcv,
               889.58
             ),
-            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2),
-            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2),
-            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), NULLIF(libro_compras.tasa_bcv, 0), 889.58), 2)
+            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2),
+            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2),
+            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE(NULLIF(libro_compras.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_compras.periodo), 889.58), 2)
+        WHERE (${condAbiertoLC}) AND COALESCE(tasa_bcv, 0) <= 0
       `);
 
       await db.execute(`
@@ -1667,15 +1837,16 @@ export async function onRequest(context) {
               libro_ventas.tasa_bcv,
               889.58
             ),
-            exento_divisa = ROUND(COALESCE(exento_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
-            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
-            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2),
-            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE((SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), NULLIF(libro_ventas.tasa_bcv, 0), 889.58), 2)
+            exento_divisa = ROUND(COALESCE(exento_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+            base_imponible_divisa = ROUND(COALESCE(base_imponible_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+            monto_iva_divisa = ROUND(COALESCE(iva_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2),
+            total_divisa = ROUND(COALESCE(total_bs, 0) / COALESCE(NULLIF(libro_ventas.tasa_bcv, 0), (SELECT t.tasa_bcv FROM tasas_bcv_periodo t WHERE t.periodo = libro_ventas.periodo), 889.58), 2)
+        WHERE (${condAbiertoLV}) AND COALESCE(tasa_bcv, 0) <= 0
       `);
 
       return jsonResponse({
         success: true,
-        message: 'Revalorización de cierres ejecutada exitosamente en Bs. y $ USD.'
+        message: 'Tasas de cierre actualizadas con resguardo de períodos cerrados y tasas diarias históricas.'
       });
     }
 
@@ -1825,6 +1996,31 @@ export async function onRequest(context) {
         parsedItems.push({ ...it, producto_id: pid, cantidad: qty });
       }
 
+      // Precarga en bloque de stock actual y costo referencial (0 consultas N+1)
+      const uniqueProdIds = Array.from(new Set(parsedItems.map(it => it.producto_id)));
+      const phIds = uniqueProdIds.map(() => '?').join(',');
+      const prodsSnapRes = await db.execute({
+        sql: `SELECT p.id AS producto_id, p.codigo, p.descripcion, COALESCE(p.costo_referencial_usd, 0) AS costo_referencial_usd, COALESCE(v.stock_actual, 0) AS stock_actual
+              FROM productos p
+              LEFT JOIN vista_inventario_actual v ON p.id = v.producto_id
+              WHERE p.id IN (${phIds})`,
+        args: uniqueProdIds
+      });
+      const prodSnapMap = new Map();
+      for (const r of (prodsSnapRes.rows || [])) {
+        prodSnapMap.set(Number(r.producto_id), {
+          codigo: r.codigo,
+          descripcion: r.descripcion,
+          costo_referencial_usd: Number(r.costo_referencial_usd || 0),
+          stock_actual: Number(r.stock_actual || 0)
+        });
+      }
+      for (const pid of uniqueProdIds) {
+        if (!prodSnapMap.has(pid)) {
+          return jsonResponse({ error: 'Uno de los artículos seleccionados no existe en el catálogo.' }, 400);
+        }
+      }
+
       const isAjusteSalida = (tipo === 'AJUSTE' && !subUpper.includes('POSITIVO') && !subUpper.includes('SOBRANTE') && !subUpper.includes('ENTRADA') && !subUpper.includes('OMISION') && !subUpper.includes('RECLASIF') && !subUpper.includes('DEVOLUCION'));
       if (tipo === 'SALIDA_VENTA' || isAjusteSalida) {
         const requestedByProd = new Map();
@@ -1832,15 +2028,8 @@ export async function onRequest(context) {
           requestedByProd.set(it.producto_id, (requestedByProd.get(it.producto_id) || 0) + it.cantidad);
         }
         for (const [pid, qtyReq] of requestedByProd.entries()) {
-          const stRes = await db.execute({
-            sql: "SELECT codigo, descripcion, stock_actual FROM vista_inventario_actual WHERE producto_id = ? LIMIT 1",
-            args: [pid]
-          });
-          if (stRes.rows.length === 0) {
-            return jsonResponse({ error: 'Uno de los artículos seleccionados no existe en el catálogo.' }, 400);
-          }
-          const stRow = stRes.rows[0];
-          const disp = Number(stRow.stock_actual || 0);
+          const stRow = prodSnapMap.get(pid);
+          const disp = Number(stRow?.stock_actual || 0);
           if (disp < qtyReq) {
             return jsonResponse({
               error: `Stock insuficiente para [${stRow.codigo}] ${stRow.descripcion}: disponible ${disp} unds, solicitado ${qtyReq} unds.`
@@ -1879,52 +2068,75 @@ export async function onRequest(context) {
         }
       }
 
-      // VALIDACIÓN ANTI-DUPLICADOS PARA VENTAS
+      // VALIDACIÓN ANTI-DUPLICADOS PARA SALIDAS (Global para facturas de VENTA fiscal; por fecha+subtipo para salidas internas)
+      const esVentaFiscal = (tipo === 'SALIDA_VENTA' && subUpper === 'VENTA');
       if (tipo === 'SALIDA_VENTA') {
-        const dupVta = await db.execute({
-          sql: `SELECT id FROM movimientos WHERE tipo = 'SALIDA_VENTA' AND fecha = ? AND (UPPER(TRIM(numero_documento)) = UPPER(?) ${numFacturaNum ? 'OR numero_factura_numerico = ?' : ''}) LIMIT 1`,
-          args: numFacturaNum ? [fecha, docClean, numFacturaNum] : [fecha, docClean]
-        });
-        if (dupVta.rows.length > 0) {
-          return jsonResponse({
-            error: `La factura de venta N° ${docClean} ya fue registrada en la fecha ${fecha}.`,
-            duplicado: true
-          }, 409);
+        if (esVentaFiscal) {
+          const dupVta = await db.execute({
+            sql: `SELECT id, fecha FROM movimientos
+                  WHERE tipo = 'SALIDA_VENTA'
+                    AND COALESCE(subtipo, 'VENTA') = 'VENTA'
+                    AND (UPPER(TRIM(numero_documento)) = UPPER(?) ${numFacturaNum ? 'OR (numero_factura_numerico IS NOT NULL AND numero_factura_numerico = ?)' : ''})
+                  LIMIT 1`,
+            args: numFacturaNum ? [docClean, numFacturaNum] : [docClean]
+          });
+          if (dupVta.rows.length > 0) {
+            return jsonResponse({
+              error: `La factura de venta N° ${docClean} ya fue registrada previamente (Fecha: ${dupVta.rows[0].fecha}).`,
+              duplicado: true
+            }, 409);
+          }
+        } else {
+          const dupInt = await db.execute({
+            sql: `SELECT id FROM movimientos WHERE tipo = 'SALIDA_VENTA' AND subtipo = ? AND fecha = ? AND UPPER(TRIM(numero_documento)) = UPPER(?) LIMIT 1`,
+            args: [subtipoNorm, fecha, docClean]
+          });
+          if (dupInt.rows.length > 0) {
+            return jsonResponse({
+              error: `Ya existe una salida interna (${subtipoNorm}) con el documento N° ${docClean} en la fecha ${fecha}.`,
+              duplicado: true
+            }, 409);
+          }
         }
       }
 
+      const estatusInicial = (tipo === 'SALIDA_VENTA' && !esVentaFiscal) ? 'NO_APLICA_INTERNO' : 'PENDIENTE_UCG';
       const headerResult = await db.execute({
         sql: `INSERT INTO movimientos 
               (tipo, subtipo, fecha, fecha_factura, tasa_bcv_factura, numero_documento, numero_factura_numerico, nro_control, usuario_responsable,
                documento_afectado, tasa_bcv, fecha_tasa_bcv, moneda_operacion, metodo_valoracion, proveedor_id, observaciones,
                estatus_conciliacion)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE_UCG')
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               RETURNING id`,
         args: [
           tipo, subtipoNorm, fecha, fecha_factura || fecha, Number(tasa_bcv_factura) > 0 ? Number(tasa_bcv_factura) : tasaNum,
           docClean, numFacturaNum, ctrlNorm, usuarioNorm,
           documento_afectado || '', tasaNum, fechaTasaMes, body.moneda_operacion || 'USD', metodoVal,
-          proveedor_id ? parseInt(proveedor_id, 10) : null, observaciones || ''
+          proveedor_id ? parseInt(proveedor_id, 10) : null, observaciones || '', estatusInicial
         ]
       });
 
       const movimientoId = Number(headerResult.rows[0]?.id || headerResult.lastInsertRowid);
-      const aplicaIvaMov = (tipo === 'ENTRADA_COMPRA' || tipo === 'SALIDA_VENTA');
+      const aplicaIvaMov = (tipo === 'ENTRADA_COMPRA' && !subUpper.includes('AJUSTE')) ||
+                           (tipo === 'SALIDA_VENTA' && (subUpper === 'VENTA' || subUpper.includes('RETIRO')));
       const pctIvaMov = aplicaIvaMov ? 0.16 : 0;
 
       const detailStatements = [];
+      const runningStockCpp = new Map();
+      for (const [pid, snap] of prodSnapMap.entries()) {
+        runningStockCpp.set(pid, { stock: snap.stock_actual, costoUsd: snap.costo_referencial_usd });
+      }
+
       for (const it of parsedItems) {
         const pid = it.producto_id;
         const qty = it.cantidad;
         const tasaItem = Number(it.tasa_bcv_operacion || tasaNum) > 0 ? Number(it.tasa_bcv_operacion || tasaNum) : tasaNum;
+        const snap = runningStockCpp.get(pid);
 
         let cDivisa = parseFloat(it.costo_unitario_divisa || it.costo_unitario_usd || 0);
         let cBs = parseFloat(it.costo_unitario_bs || it.costo_unitario_ves || 0);
         if (cDivisa <= 0 && cBs > 0) cDivisa = Number((cBs / tasaItem).toFixed(2));
-        if (cDivisa <= 0) {
-          const pRes = await db.execute({ sql: "SELECT costo_referencial_usd FROM productos WHERE id = ?", args: [pid] });
-          cDivisa = Number(pRes.rows[0]?.costo_referencial_usd || 0);
-        }
+        if (cDivisa <= 0) cDivisa = Number(snap?.costoUsd || 0);
         if (cBs <= 0) cBs = Number((cDivisa * tasaItem).toFixed(2));
 
         const precioUnitDiv = parseFloat(it.precio_unitario_divisa || cDivisa);
@@ -1956,10 +2168,26 @@ export async function onRequest(context) {
             totBs, totDiv
           ]
         });
+
+        // Recalcular Costo Promedio Ponderado (CPP) y actualizar productos.costo_referencial_usd en el mismo batch atómico
+        if (tipo === 'ENTRADA_COMPRA' && cDivisa > 0 && snap) {
+          const stockAnt = Math.max(0, Number(snap.stock || 0));
+          const costoAnt = Number(snap.costoUsd || 0);
+          const nuevoStock = stockAnt + qty;
+          const nuevoCppUsd = (stockAnt > 0 && costoAnt > 0)
+            ? Number((((stockAnt * costoAnt) + (qty * cDivisa)) / nuevoStock).toFixed(4))
+            : Number(cDivisa.toFixed(4));
+          snap.stock = nuevoStock;
+          snap.costoUsd = nuevoCppUsd;
+          detailStatements.push({
+            sql: "UPDATE productos SET costo_referencial_usd = ? WHERE id = ?",
+            args: [Number(nuevoCppUsd.toFixed(2)), pid]
+          });
+        }
       }
 
       try {
-        await db.batch(detailStatements);
+        await db.batch(detailStatements, 'write');
       } catch (batchErr) {
         await db.execute({ sql: "DELETE FROM movimientos WHERE id = ?", args: [movimientoId] }).catch(() => {});
         throw batchErr;
@@ -1967,15 +2195,19 @@ export async function onRequest(context) {
 
       let resultadoCruce = null;
       if (tipo === 'SALIDA_VENTA') {
-        const zId = body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null;
-        if (zId) {
-          await db.execute({
-            sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
-            args: [zId, movimientoId]
-          });
-          resultadoCruce = await conciliarReporteZ(zId, db);
+        if (esVentaFiscal) {
+          const zId = body.libro_ventas_id ? parseInt(body.libro_ventas_id, 10) : null;
+          if (zId) {
+            await db.execute({
+              sql: "UPDATE movimientos SET libro_ventas_id = ?, estatus_conciliacion = 'CONCILIADO' WHERE id = ?",
+              args: [zId, movimientoId]
+            });
+            resultadoCruce = await conciliarReporteZ(zId, db);
+          } else {
+            resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+          }
         } else {
-          resultadoCruce = await conciliarVentaIndividual(movimientoId, db);
+          resultadoCruce = { estatus: 'NO_APLICA_INTERNO', mensaje: 'Salida interna registrada sin afectación a Reporte Z.' };
         }
       } else if (tipo === 'ENTRADA_COMPRA') {
         let lcId = body.libro_compras_id || null;
@@ -2208,7 +2440,7 @@ export async function onRequest(context) {
         sql += ` AND lc.aplica_inventario = ?`;
         args.push(Number(aplicaInventario) ? 1 : 0);
       }
-      sql += ` ORDER BY lc.fecha ASC, lc.nro_operacion ASC, lc.id ASC`;
+      sql += ` GROUP BY lc.id ORDER BY lc.fecha ASC, lc.nro_operacion ASC, lc.id ASC`;
       const res = await db.execute({ sql, args });
       return jsonResponse(res.rows);
     }
@@ -2478,9 +2710,7 @@ export async function onRequest(context) {
       }
 
       // 2. Verificar si ya existe movimiento de almacén para esta factura
-      let numFacturaNum = null;
-      const matchNum = cleanFact.match(/(\d+)/);
-      if (matchNum) numFacturaNum = parseInt(matchNum[1], 10);
+      const numFacturaNum = normalizeFactNum(cleanFact);
 
       const dupCheck = await db.execute({
         sql: `SELECT id FROM movimientos 
@@ -2724,8 +2954,7 @@ export async function onRequest(context) {
       let obs = body.observaciones_cruce || (esMercancia ? (matchMovId ? `Cruzado con Entrada #${matchMovId}` : 'Declarada en SENIAT. Pendiente por recibir físicamente en almacén.') : 'Gasto operativo / servicio.');
 
       if (esMercancia && !matchMovId) {
-        const numClean = String(nro_factura).replace(/\D/g, '');
-        const numInt = numClean ? parseInt(numClean, 10) : null;
+        const numInt = normalizeFactNum(nro_factura);
         if (numInt || nro_factura) {
           try {
             const matchMov = await db.execute({
@@ -3367,7 +3596,6 @@ export async function onRequest(context) {
     }
 
     if (path === '/api/islr/conceptos' && method === 'GET') {
-      await syncCatalogoConceptosISLR(db);
       return jsonResponse(CATALOGO_CONCEPTOS_ISLR);
     }
 
@@ -3481,7 +3709,7 @@ export async function onRequest(context) {
         sql += ` AND lc.rif = ?`;
         args.push(rif);
       }
-      sql += ` ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
+      sql += ` GROUP BY lc.id ORDER BY lc.aplica_inventario ASC, lc.periodo DESC, lc.fecha DESC`;
       const result = await db.execute({ sql, args });
       const enriched = (result.rows || []).map(f => {
         const tipoSrv = f.tipo_servicio && !['MERCANCIA_REPUESTOS', 'ACTIVO_FIJO_EQUIPOS', 'GASTOS_OPERATIVOS_VARIOS'].includes(f.tipo_servicio)
@@ -3796,11 +4024,7 @@ export async function onRequest(context) {
           ]
         });
 
-        // Limpiar detalles viejos para insertar los nuevos
-        await db.execute({
-          sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?",
-          args: [retencionId]
-        });
+        // Los detalles se reemplazan atómicamente en db.batch más abajo
       } else {
         // INSERCIÓN NUEVA: Asignar nuevo comprobante para una factura que no ha sido retenida
         const insHeader = await db.execute({
@@ -3844,8 +4068,15 @@ export async function onRequest(context) {
         retencionId = Number(insHeader.lastInsertRowid);
       }
 
+      const islrDetailStmts = [];
+      if (existingComp) {
+        islrDetailStmts.push({
+          sql: "DELETE FROM retenciones_islr_detalles WHERE retencion_id = ?",
+          args: [retencionId]
+        });
+      }
       for (const it of processedItems) {
-        await db.execute({
+        islrDetailStmts.push({
           sql: `
             INSERT INTO retenciones_islr_detalles (
               retencion_id, libro_compra_id, nro_operacion,
@@ -3865,6 +4096,9 @@ export async function onRequest(context) {
             it.sustraendo_bs, it.impuesto_retenido_bs
           ]
         });
+      }
+      if (islrDetailStmts.length > 0) {
+        await db.batch(islrDetailStmts, 'write');
       }
 
       if (cleanRif) {
@@ -3954,9 +4188,10 @@ export async function onRequest(context) {
 
     if (path === '/api/islr/export-xml' && method === 'GET') {
       const periodo = url.searchParams.get('periodo') || '2026-10';
+      const forzar = url.searchParams.get('forzar') === '1' || url.searchParams.get('forzar') === 'true';
       const targetPeriodo = periodo === 'TODOS' ? '2026-10' : periodo;
       const data = await obtenerDatosXmlISLR(db, targetPeriodo);
-      if (data.total_lineas === 0 || (Array.isArray(data.errores_validacion) && data.errores_validacion.length > 0)) {
+      if (data.total_lineas === 0 || (!forzar && Array.isArray(data.errores_validacion) && data.errores_validacion.length > 0)) {
         return jsonResponse({
           error: data.total_lineas === 0
             ? `No hay retenciones válidas para exportar XML en el período ${targetPeriodo}.`
@@ -4187,24 +4422,44 @@ export async function onRequest(context) {
             p.stock_minimo as "STOCK_MIN",
             ROUND(COALESCE(SUM(CASE 
               WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
                    THEN md.cantidad 
               WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
-                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
                    THEN -md.cantidad 
               ELSE 0 
             END), 0), 2) as "STOCK_ACTUAL",
             p.costo_referencial_usd as "COSTO_REF_USD",
-            ROUND(p.costo_referencial_usd * ?, 2) as "COSTO_UNIT_BS"
+            ROUND(p.costo_referencial_usd * ?, 2) as "COSTO_UNIT_BS",
+            ? as "TASA_BCV_APLICADA",
+            ROUND(COALESCE(SUM(CASE 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   THEN md.cantidad 
+              WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   THEN -md.cantidad 
+              ELSE 0 
+            END), 0) * p.costo_referencial_usd * ?, 2) as "VALOR_TOTAL_BS",
+            ROUND(COALESCE(SUM(CASE 
+              WHEN m.tipo IN ('INVENTARIO_INICIAL', 'ENTRADA_COMPRA', 'ENTRADA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%POSITIVO%' OR m.subtipo LIKE '%ENTRADA%' OR m.subtipo LIKE '%SOBRANTE%' OR m.subtipo LIKE '%OMISION%' OR m.subtipo LIKE '%RECLASIF%' OR m.subtipo LIKE '%DEVOLUCION%' OR m.subtipo LIKE '%SINCERACION%')) 
+                   THEN md.cantidad 
+              WHEN m.tipo IN ('SALIDA_VENTA', 'SALIDA_AJUSTE')
+                   OR (m.tipo = 'AJUSTE' AND (m.subtipo LIKE '%NEGATIVO%' OR m.subtipo LIKE '%SALIDA%' OR m.subtipo LIKE '%MERMA%' OR m.subtipo LIKE '%DANO%' OR m.subtipo LIKE '%FALTANTE%' OR m.subtipo LIKE '%OBSOLESCENCIA%' OR m.subtipo LIKE '%AUTOCONSUMO%' OR m.subtipo LIKE '%RETIRO%' OR m.subtipo LIKE '%MUESTRA%' OR m.subtipo = 'AJUSTE_INVENTARIO')) 
+                   THEN -md.cantidad 
+              ELSE 0 
+            END), 0) * p.costo_referencial_usd, 2) as "VALOR_TOTAL_USD"
           FROM productos p
           LEFT JOIN categorias c ON p.categoria_id = c.id
           LEFT JOIN almacenes a ON p.almacen_id = a.id
           LEFT JOIN movimiento_detalles md ON p.id = md.producto_id
           ${joinCond}
+          WHERE COALESCE(p.inactivo, 0) = 0 AND COALESCE(p.activo, 1) = 1
           GROUP BY p.id
           ORDER BY p.codigo ASC
         `,
-        args: fecha_corte ? [tasaCorte, fecha_corte] : [tasaCorte]
+        args: fecha_corte ? [tasaCorte, tasaCorte, tasaCorte, fecha_corte] : [tasaCorte, tasaCorte, tasaCorte]
       });
 
       const headers = Object.keys(result.rows[0] || {});
@@ -4216,7 +4471,7 @@ export async function onRequest(context) {
       return new Response(csvContent, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="INVENTARIO_DG67_${fecha_corte || 'OCTUBRE_2026'}.csv"`,
+          'Content-Disposition': `attachment; filename="INVENTARIO_DG67_${fecha_corte || 'AL_DIA'}.csv"`,
           ...corsHeaders
         }
       });
